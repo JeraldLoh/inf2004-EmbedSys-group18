@@ -1,0 +1,114 @@
+#ifndef SYSTEM_TYPES_H
+#define SYSTEM_TYPES_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef uint32_t system_time_ms_t;
+typedef uint32_t command_id_t;
+typedef uint32_t goal_id_t;
+typedef uint32_t authority_generation_t;
+
+typedef enum
+{
+    SYSTEM_MODE_STARTUP = 0,
+    SYSTEM_MODE_IDLE,
+    SYSTEM_MODE_AUTO,
+    SYSTEM_MODE_MANUAL,
+    SYSTEM_MODE_CALIBRATION,
+    SYSTEM_MODE_STOPPED,
+    SYSTEM_MODE_FAULT
+} system_mode_t;
+
+typedef enum
+{
+    MISSION_IDLE = 0,
+    MISSION_TRACK_LINE,
+    MISSION_JUNCTION_APPROACH,
+    MISSION_JUNCTION_EXECUTE,
+    MISSION_VERIFY_LINE,
+    MISSION_OBSTACLE_STOP,
+    MISSION_SCAN,
+    MISSION_PLAN_BYPASS,
+    MISSION_BYPASS,
+    MISSION_RECOVERY,
+    MISSION_SAFE_STOP
+} mission_state_t;
+
+typedef enum
+{
+    TERRAIN_UNKNOWN = 0,
+    TERRAIN_LEVEL,
+    TERRAIN_ASCENDING,
+    TERRAIN_CREST,
+    TERRAIN_DESCENDING,
+    TERRAIN_SETTLING,
+    TERRAIN_INVALID
+} terrain_state_t;
+
+typedef enum
+{
+    ROUTE_COMMAND_NONE = 0,
+    ROUTE_COMMAND_LEFT,
+    ROUTE_COMMAND_RIGHT,
+    ROUTE_COMMAND_STRAIGHT,
+    ROUTE_COMMAND_UTURN
+} route_command_t;
+
+typedef enum
+{
+    ROUTE_LIFECYCLE_NONE = 0,
+    ROUTE_LIFECYCLE_PENDING,
+    ROUTE_LIFECYCLE_RESERVED,
+    ROUTE_LIFECYCLE_CONSUMED,
+    ROUTE_LIFECYCLE_EXPIRED,
+    ROUTE_LIFECYCLE_CANCELLED
+} route_lifecycle_t;
+
+typedef enum
+{
+    MOTION_SOURCE_NONE = 0,
+    MOTION_SOURCE_LINE,
+    MOTION_SOURCE_JUNCTION,
+    MOTION_SOURCE_OBSTACLE,
+    MOTION_SOURCE_MANUAL,
+    MOTION_SOURCE_CALIBRATION
+} motion_source_t;
+
+typedef enum
+{
+    MOTION_GOAL_FORWARD = 0,
+    MOTION_GOAL_REVERSE,
+    MOTION_GOAL_PIVOT_LEFT,
+    MOTION_GOAL_PIVOT_RIGHT
+} motion_goal_type_t;
+
+typedef enum
+{
+    MOTION_RESULT_ACCEPTED = 0,
+    MOTION_RESULT_REJECTED,
+    MOTION_RESULT_PROGRESS,
+    MOTION_RESULT_COMPLETED,
+    MOTION_RESULT_CANCELLED,
+    MOTION_RESULT_TIMEOUT,
+    MOTION_RESULT_ABORTED,
+    MOTION_RESULT_FAULT
+} motion_result_code_t;
+
+typedef uint32_t stop_reason_mask_t;
+
+enum
+{
+    STOP_REASON_NONE = 0U,
+    STOP_REASON_PHYSICAL = (1UL << 0),
+    STOP_REASON_REMOTE = (1UL << 1),
+    STOP_REASON_OBSTACLE = (1UL << 2),
+    STOP_REASON_MOTION_FAULT = (1UL << 3),
+    STOP_REASON_MANUAL_EXPIRED = (1UL << 4),
+    STOP_REASON_CONTROLLER_FAULT = (1UL << 5),
+    STOP_REASON_SENSOR_CRITICAL = (1UL << 6),
+    STOP_REASON_RECOVERY_FAILED = (1UL << 7),
+    STOP_REASON_ROUTE_REQUIRED = (1UL << 8)
+};
+
+#endif
