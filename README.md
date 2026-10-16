@@ -18,21 +18,6 @@ The buddy-owned subsystem folders are named `buddy1_comms`, `buddy2_motion`,
 find their primary areas quickly. Shared code remains in `app`, `contracts`,
 `config`, `platform`, `diagnostics`, and `tests`.
 
-## G0 limitation
-
-The professor's exact micro T-Kernel template has not been verified. Therefore,
-the framework does not invent `main()`, task creation, interrupt-safe calls,
-network integration, or a Pico firmware `CMakeLists.txt`. Those integration
-files must be added only after the real template, startup hook, kernel APIs, and
-CYW43/lwIP backend are confirmed.
-
-## Electrical limitation
-
-Signals entering the Pico are required to be 3.3 V-domain safe, but that has
-not been physically verified. G1 remains open. Do not use this framework as
-evidence that the HC-SR04 echo, GP28 jumper, IR outputs, common ground, or power
-arrangement are safe.
-
 ## Review workflow
 
 Buddy 5 leads integration review. All five buddies may contribute to the
