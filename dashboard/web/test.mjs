@@ -39,3 +39,30 @@ test('connection settings validate before changing a session',()=>{
  assert.doesNotThrow(()=>validateConnection('ws://localhost:9001','group18/robot1'));
  for(const [url,prefix] of [['http://localhost:9001','group18/robot1'],['ws://localhost:9001','bad/#'],['ws://localhost:9001','bad\x00topic'],['ws://user:pass@localhost:9001','group18/robot1']]) assert.throws(()=>validateConnection(url,prefix));
 });
+
+
+test('last readings remain visible but stale at heartbeat expiry and transport loss',()=>{
+ const s=new RobotState();s.connected=true;
+ s.receive('heartbeat','{"schema":1,"demo":true,"seq":1}',0);
+ s.receive('telemetry','{"schema":1,"demo":true,"speed_percent":42,"distance_cm":93}',14);
+ let v=s.telemetryView(14.5);assert.equal(v.fresh,true);assert.equal(v.values.speed_percent,42);
+ v=s.telemetryView(15);assert.equal(v.fresh,false);assert.equal(v.values.distance_cm,93);
+ s.connectionLost();v=s.telemetryView(16);
+ assert.equal(s.status(16),'disconnected');assert.equal(v.fresh,false);assert.equal(v.values.speed_percent,42);
+ s.connectionRestored();assert.equal(s.status(16),'waiting');
+ assert.equal(s.telemetryView(16).fresh,false);
+ s.receive('heartbeat','{"schema":1,"demo":true,"seq":2}',16);
+ assert.equal(s.telemetryView(16).fresh,true);
+ s.disconnect();assert.equal(s.telemetryView(17).values,null);
+});
+
+test('fresh heartbeat alone does not make old telemetry fresh',()=>{
+ const s=new RobotState();s.connected=true;
+ s.receive('heartbeat','{"schema":1,"demo":false,"seq":1}',0);
+ s.receive('telemetry','{"schema":1,"demo":false,"speed_percent":0,"distance_cm":80}',0);
+ s.receive('heartbeat','{"schema":1,"demo":false,"seq":2}',5);
+ const v=s.telemetryView(5);assert.equal(v.fresh,false);assert.equal(v.age,5);
+ assert.equal(v.values.distance_cm,80);
+ s.receive('telemetry','{"schema":1,"demo":false,"speed_percent":20,"distance_cm":81}',5);
+ assert.equal(s.telemetryView(5).fresh,true);
+});

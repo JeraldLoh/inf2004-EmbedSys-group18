@@ -7,6 +7,13 @@ export class RobotState {
  constructor(){this.disconnect();}
  disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.demo=null;this.result=null;this.received=0;}
  status(now){return !this.connected?'disconnected':this.lastHeartbeat===null?'waiting':now-this.lastHeartbeat<15?'online':'offline';}
+ connectionLost(){this.connected=false;this.result=null;}
+ connectionRestored(){this.connected=true;this.lastHeartbeat=null;this.result=null;}
+ telemetryView(now){
+  const age=this.telemetryAt===null?null:Math.max(0,now-this.telemetryAt);
+  return {values:this.telemetry,age,fresh:age!==null&&age<3&&this.status(now)==='online'};
+ }
+
  receive(topic,payload,now,retained=false){
   if(retained)return false;
   if(payload.length>1024)throw new Error('Message too large');

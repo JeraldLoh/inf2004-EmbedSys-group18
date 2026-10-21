@@ -63,3 +63,13 @@ CONNECT/SUBACK/heartbeat/telemetry roundtrip passed on isolated port 19001.
 Desktop and 390px mobile layouts checked in browser; preview stop,
 mode exit/control locking, and invalid settings validation checked.
 Pico end-to-end operation remains untested. User broker was not restarted.
+
+## Stale readings
+
+After 15 seconds without a heartbeat, Communication Unavailable is shown and
+command controls lock. Last received telemetry remains visible, dimmed and
+labelled STALE with its age. The distance card shows the last reception time.
+Broker transport loss also preserves the last values; reconnect waits for a
+fresh heartbeat. Explicit operator disconnect or a new settings session resets
+readings. Sensor freshness uses the existing three-second threshold; telemetry
+cannot refresh heartbeat liveness.

@@ -62,7 +62,7 @@ Existing testing/host CMake suites continue to cover team portable foundations.
 
 Binary codecs, 200 ms combined telemetry, common fault mask, out-of-range event
 logging and integrated timing are deferred to the next requirement-change phase.
-Dashboard stale-reading presentation also needs checking against FR7/FR8.
+Dashboard retains last readings with stale labels after link loss and shows last reception time; see the dated test log for scope and remaining hardware checks.
 
 ### Host test runner
 
@@ -74,3 +74,11 @@ See testing/subsystem1/TEST_LOG.md for the dated source/build evidence.
 The generated files currently use placeholder network settings. Fill the ignored
 config/wifi_secrets.h and rebuild the B1_DEMO_RUN=1 profile before hardware use.
 Do not flash the unsuffixed inactive image expecting Buddy 1 telemetry.
+
+### Heartbeat diagnostics (TEST=1)
+
+Serial lines `[HB] generated_ms=... publish_attempt_ms=... result=...` distinguish
+bridge timestamps from publish attempts; result=0 is local lwIP acceptance only.
+Compare these with received heartbeat uptime values and broker reception logs.
+A producer mutex miss now retries next iteration rather than skipping an interval.
+This source regression is tested; physical 5-second timing still needs a retest.

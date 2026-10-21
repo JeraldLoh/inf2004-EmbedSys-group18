@@ -15,4 +15,15 @@ typedef unsigned char UB; typedef int PRI; typedef void (*FP)(int,void*);
 typedef struct {FP task; PRI itskpri; UW stksz,tskatr;} T_CTSK;
 ID tk_cre_tsk(const T_CTSK*); ER tk_sta_tsk(ID,int); ER tk_del_tsk(ID);
 ER tk_slp_tsk(int);
+#define TA_TFIFO 0
+#define TA_INHERIT 1
+#define TMO_POL 0
+typedef struct { unsigned int lo,hi; } SYSTIM;
+typedef struct { unsigned int mtxatr; } T_CMTX;
+typedef struct { unsigned int mbfatr,maxmsz,bufsz; } T_CMBF;
+ER tk_get_otm(SYSTIM*); ER tk_loc_mtx(ID,int); ER tk_unl_mtx(ID);
+ID tk_cre_mtx(const T_CMTX*); ID tk_cre_mbf(const T_CMBF*);
+ER tk_del_mtx(ID); ER tk_del_mbf(ID);
+ER tk_snd_mbf(ID,const void*,unsigned int,int); INT tk_rcv_mbf(ID,void*,int);
+ER tk_dly_tsk(unsigned int);
 #endif

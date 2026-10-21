@@ -61,11 +61,11 @@ void b1_network_restore(const b1_packet *p) {
  if(!occupied[p->kind]) { slots[p->kind]=*p;occupied[p->kind]=1; }
  tk_unl_mtx(guard);
 }
-static void put(unsigned int kind,const char *text,unsigned int at) {
- if(!lock()) return;
+static int put(unsigned int kind,const char *text,unsigned int at) {
+ if(!lock()) return 0;
  slots[kind].kind=kind; slots[kind].created_ms=at;
  strncpy(slots[kind].text,text,B1_PAYLOAD_MAX-1); slots[kind].text[B1_PAYLOAD_MAX-1]=0;
- occupied[kind]=1; tk_unl_mtx(guard);
+ occupied[kind]=1; tk_unl_mtx(guard); return 1;
 }
 int b1_receive_vehicle(b1_command *c) {
  vehicle_msg m;
@@ -100,9 +100,10 @@ void b1_telemetry_task(int stacd,void *exinf) {
    put(B1_RESULT,text,now);
   }
   if((unsigned int)(now-hb_at)>=5000) {
-   hb_at=now;
-   tm_sprintf((UB*)text,(const UB*)"{\"schema\":1,\"seq\":%u,\"uptime_ms\":%u,\"demo\":%s}",seq++,now,B1_DEMO?"true":"false");
-   put(B1_HEARTBEAT,text,now);
+   /* Do not advance the timer until the outgoing slot actually accepted it.
+    * A nonblocking mutex miss retries next loop instead of losing 5 seconds. */
+   tm_sprintf((UB*)text,(const UB*)"{\"schema\":1,\"seq\":%u,\"uptime_ms\":%u,\"demo\":%s}",seq,now,B1_DEMO?"true":"false");
+   if(put(B1_HEARTBEAT,text,now)) { hb_at=now; ++seq; }
   }
   if((unsigned int)(now-tel_at)>=1000) {
    b1_snapshot s; int valid=0; tel_at=now;

@@ -1,7 +1,7 @@
 import {RobotState,validateCommand} from './state.mjs';
 import {MqttConnection,validateConnection} from './mqtt.mjs';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;
-let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=true,simSpeed=30,simSeq=0,previousStatus='';
+let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=true,simSpeed=30,simSeq=0,previousStatus='',lastUpdateText='';
 let prefix='group18/robot1',endpoint='ws://localhost:9001';
 try{const saved=JSON.parse(localStorage.getItem('rover18.connection'));if(saved){prefix=saved.prefix||prefix;endpoint=saved.endpoint||endpoint;}}catch{}
 function log(message,type='system'){
@@ -10,7 +10,7 @@ function log(message,type='system'){
  li.append(time,tag,text);$('events').prepend(li);while($('events').children.length>50)$('events').lastChild.remove();$('event-count').textContent=String($('events').children.length).padStart(2,'0');
 }
 const client=new MqttConnection({
- onState(status){connecting=status==='connecting';if(status==='connected'){state.disconnect();state.connected=true;history=[];log('Subscribed. Listening for the rover heartbeat.','broker');}else if(status==='disconnected'){if(state.connected&&!preview)log('Broker disconnected. Commands are disabled.','warning');state.disconnect();}render();},
+ onState(status){connecting=status==='connecting';if(status==='connected'){state.connectionRestored();log('Subscribed. Listening for the rover heartbeat.','broker');}else if(status==='disconnected'){if(state.connected&&!preview)log('Broker disconnected. Commands are disabled.','warning');state.connectionLost();}render();},
  onLog:log,
  onMessage(message){
   if(preview||!message.topic.startsWith(prefix+'/'))return;
@@ -20,7 +20,7 @@ const client=new MqttConnection({
 function receive(topic,payload,time,retained=false){
  try{
   if(!state.receive(topic,payload,time,retained))return;
-  if(topic==='telemetry'){history.push({time,speed:state.telemetry.speed_percent});if(history.length>180)history.shift();}
+  if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';history.push({time,speed:state.telemetry.speed_percent});if(history.length>180)history.shift();}
   if(topic==='command_result'){
    const result=state.result.status;
    $('command-feedback').textContent=preview?'Preview only · '+result:'Robot result: '+result+' · physical execution unconfirmed.';
@@ -29,7 +29,7 @@ function receive(topic,payload,time,retained=false){
  }catch(error){log('Ignored message: '+error.message,'warning');}
  render();
 }
-function reset(){state=new RobotState();history=[];previousStatus='';$('command-feedback').textContent='Controls unlock after a fresh heartbeat.';}
+function reset(){state=new RobotState();history=[];previousStatus='';lastUpdateText='';$('command-feedback').textContent='Controls unlock after a fresh heartbeat.';}
 function setPreview(value){
  clearInterval(previewTimer);client.disconnect();preview=value;reset();
  document.body.classList.toggle('preview',preview);
@@ -60,14 +60,16 @@ function send(command){
  }catch(error){$('command-feedback').textContent=error.message;log(error.message,'warning');}
 }
 function render(){
- const t=now(),status=state.status(t),fresh=state.telemetryAt!==null&&t-state.telemetryAt<3&&status==='online';
- const names={disconnected:connecting?'Connecting to broker…':'Ready when you are',waiting:'Broker connected · waiting for rover',online:preview?'Preview running · sample data':'Rover heartbeat received',offline:'Rover heartbeat lost'};
+ const t=now(),status=state.status(t),view=state.telemetryView(t),fresh=view.fresh;
+ const names={disconnected:connecting?'Connecting to broker…':view.values?'Communication Unavailable':'Ready when you are',waiting:'Broker connected · waiting for rover',online:preview?'Preview running · sample data':'Rover heartbeat received',offline:'Communication Unavailable'};
  $('session-status').textContent=names[status];
- $('session-detail').textContent=preview?'Visual demo only. Your robot is not being controlled.':status==='online'?'Telemetry link is active.':status==='offline'?'No heartbeat for 15 seconds. Commands locked.':status==='waiting'?'The Pico has not sent a fresh heartbeat yet.':'Connect your broker to bring the rover online.';
+ $('session-detail').textContent=preview?'Visual demo only. Your robot is not being controlled.':status==='online'?'Telemetry link is active.':status==='offline'?'No heartbeat for 15 seconds. Last readings are stale. Commands locked.':status==='waiting'?'The Pico has not sent a fresh heartbeat yet.':view.values?'Broker unavailable. Last readings are stale. Commands locked.':'Connect your broker to bring the rover online.';
  $('main-dot').className='status-dot '+(status==='online'?'online':status==='offline'?'offline':'');
  $('mode-badge').textContent=preview?'PREVIEW / SIMULATED':state.demo===true?'FIRMWARE / SIMULATED':state.demo===false?'LIVE / ROBOT DATA':'NO LIVE FEED';
- $('speed-value').textContent=fresh?state.telemetry.speed_percent:'—';$('distance-value').textContent=fresh?state.telemetry.distance_cm:'—';
- $('speed-note').textContent=fresh?(preview?'Generated preview readings':state.demo?'Sample firmware readings':'Fresh rover telemetry'):state.telemetry?'Telemetry stale · values hidden':'Awaiting telemetry';
+ $('speed-value').textContent=view.values?view.values.speed_percent:'—';$('distance-value').textContent=view.values?view.values.distance_cm:'—';
+ $('speed-note').textContent=fresh?(preview?'Generated preview readings':state.demo?'Sample firmware readings':'Fresh rover telemetry'):view.values?'STALE · last reading · '+view.age.toFixed(1)+' s old':'Awaiting telemetry';
+ $('distance-note').textContent=view.values?(fresh?'Last update: ':'STALE · last update: ')+lastUpdateText+' · '+view.age.toFixed(1)+' s ago':'Sensor reading · team-defined';
+ for(const id of ['speed-value','distance-value'])$(id).closest('.metric').classList.toggle('stale',!!view.values&&!fresh);
  $('heartbeat-value').textContent=state.lastHeartbeat===null?'—':(t-state.lastHeartbeat).toFixed(1);
  $('heartbeat-note').textContent=status==='offline'?'15 s timeout reached':'5 s cadence / 15 s timeout';
  $('message-value').textContent=String(state.received).padStart(2,'0');

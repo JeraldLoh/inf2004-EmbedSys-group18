@@ -71,6 +71,13 @@ void mqtt_utk_poll(int link_up) {
   if(b1_network_take(k,&packet)) {
    err_t result=mqtt_publish(client,topics[k],packet.text,(u16_t)strlen(packet.text),0,0,0,0);
    if(result!=ERR_OK) b1_network_restore(&packet);
+#if APP_TEST
+   /* Queued into lwIP, not a delivery acknowledgement. Compare with broker logs.
+    * Only heartbeat attempts are logged; routine telemetry does not flood USB. */
+   if(k==B1_HEARTBEAT)
+    tm_printf((UB*)"[HB] generated_ms=%u publish_attempt_ms=%u result=%d\n",
+              packet.created_ms,now,(int)result);
+#endif
   }
  }
 }
