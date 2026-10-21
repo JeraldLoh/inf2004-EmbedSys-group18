@@ -11,6 +11,21 @@ The course folder is `subsystem5`; future `drv_sonar.c/.h` and optional
 `drv_servo.c/.h` go directly here. Current lifecycle hooks return `E_NOSPT` and
 target tests are SKIP placeholders. No trigger, servo or manoeuvre is started.
 
+Hardware-independent logic ported from Buddy 5's standalone prototype (no GPIO,
+PWM, interrupts or kernel calls; uses no libm, since the image is not linked
+with it):
+
+| File | Purpose |
+|---|---|
+| `range.c/.h` | Reading status (ok / no-echo / too-close / fault) and median-of-N filter |
+| `obstacle.c/.h` | Scan geometry: angle+distance to x/y, obstacle width, bypass side choice |
+| `avoidance.c/.h` | Non-blocking detect, scan, decide, bypass, reacquire state machine (section 6.5) |
+
+`avoidance.h` defines `av_platform_t`, the callback table that the future
+sonar/servo drivers and the controller/motion adapters fill in. Avoidance only
+proposes motion through those callbacks; it never drives PWM itself. Host tests:
+`../../testing/host/subsystem5/` (target `obstacle_avoidance_host_tests`).
+
 GP6/GP7 and optional GP12 remain the provisional Week 6 section 2 baseline;
 verify the harness because another report section used GP2/GP3. The physical
 scan mechanism/range and fallback calibration remain unverified. Avoidance

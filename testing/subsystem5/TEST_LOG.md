@@ -23,3 +23,4 @@ under docs/template-reference and are not results for this team.
 
 | Date | Test ID | Commit/profile | Tester | Result | Evidence | Notes |
 |---|---|---|---|---|---|---|
+| 2026-10-21 | S5-H01 host unit tests (range, obstacle, avoidance) | branch buddy5, testing/host CTest, Release, zig cc | Buddy 5 | PASS, 248 checks, 0 failures; all 4 host suites pass | ctest output in branch commit notes | Host only: simulated sonar/servo/motion/line. No target build, flash or hardware run. |

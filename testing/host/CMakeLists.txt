@@ -52,3 +52,28 @@ endif()
 
 add_test(NAME perception_math_host_tests
          COMMAND perception_math_host_tests)
+
+add_executable(obstacle_avoidance_host_tests
+    subsystem5/test_main.c
+    subsystem5/test_range.c
+    subsystem5/test_obstacle.c
+    subsystem5/test_avoidance.c
+    ../../app_program/subsystem5/range.c
+    ../../app_program/subsystem5/obstacle.c
+    ../../app_program/subsystem5/avoidance.c
+)
+
+target_include_directories(obstacle_avoidance_host_tests PRIVATE
+    ../../app_program/subsystem5
+)
+
+if(MSVC)
+    target_compile_options(obstacle_avoidance_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(obstacle_avoidance_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    target_link_libraries(obstacle_avoidance_host_tests PRIVATE m)
+endif()
+
+add_test(NAME obstacle_avoidance_host_tests
+         COMMAND obstacle_avoidance_host_tests)
