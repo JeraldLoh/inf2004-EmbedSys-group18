@@ -1,7 +1,8 @@
 # Architecture Baseline
 
-Status: implementation framework candidate; team confirmation and G0 remain
-open.
+Status: inactive course-template framework candidate. Course source inspection
+is complete for layout/startup/network ownership; G0 runtime qualification and
+G1 remain open. No application tasks or drivers are started.
 
 ## Runtime authority
 
@@ -22,11 +23,20 @@ open.
 | Sonar/obstacle | Buddy 5 | Range/profile evidence and avoidance proposals |
 | Vehicle Controller | Shared; Buddy 5 integration lead | Authorised motion and system state |
 
-The corresponding future implementation areas are `buddy1_comms`,
-`buddy2_motion`, `buddy3_perception`, `buddy4_terrain`, and
-`buddy5_obstacle`. Folder naming identifies primary accountability, not
-exclusive authorship. The Vehicle Controller remains in the shared `app`
-directory.
+The course implementation areas are `app_program/subsystem1` through
+`subsystem5`, matching buddy numbers, with descriptive Buddy-labelled guides.
+Primary ownership means accountability/review, not exclusive authorship. The
+controller remains separate in `app_program/vehicle_controller`; its dedicated
+RTOS task is not implemented yet. Shared contracts and vehicle configuration
+live in `app_program/contracts` and `app_program/project_config`.
+
+Raw CYW43/lwIP/MQTT ownership belongs to the course's built-in service task.
+Buddy 1's application processing will exchange bounded data through a reviewed
+bridge rather than creating another raw networking task. This is a refinement
+of the provisional Week 6 task description, not a measured implementation.
+
+The root `config` and kernel/device/library folders retain course responsibilities.
+See `../platform/course-template-review.md` for SMP, startup and build constraints.
 
 ## Data and authority flow
 

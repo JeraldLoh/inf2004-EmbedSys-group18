@@ -2,12 +2,21 @@
 
 ## G0 - Platform
 
-- verify the professor's micro T-Kernel template and version;
-- identify the application startup hook and task-creation ownership;
+- verified source: official project template commit
+  `c3b09544cb1fd6dac6ad4b8f523be0af59b44482`;
+- identified startup: `usermain()`, all objects before any task starts;
+- identified backend: built-in CYW43/lwIP/MQTT service owner;
+- identified build discovery: app root plus one subfolder level;
+- still qualify WSL/toolchain/SDK/submodules and the actual target build;
+- still implement controller/subsystem lifecycle and failure rollback;
 - identify supported task and ISR-context primitives;
 - identify timer reservations, timeout units, and priority rules;
-- identify the CYW43/lwIP backend and callback context;
+- verify application/service bridge details and required approval;
+- agree core affinity, SMP-safe locking, priorities, stacks and object budget;
 - adapt platform and build files without changing contract semantics.
+
+G0 is partially addressed by source inspection, NOT closed. No target build or
+hardware execution was used for this migration. See the course-template review.
 
 ## G1 - Electrical safety
 
