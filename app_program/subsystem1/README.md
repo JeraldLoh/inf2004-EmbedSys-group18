@@ -1,18 +1,9 @@
-# Buddy 1 - Communications
+# Buddy 1 text communications
 
-Primary responsibility: validated commands, Wi-Fi/MQTT state, bounded
-telemetry, heartbeat, and reconnection.
+Ported onto team main; kernel, contracts, controller, pin map and subsystems 2-5
+are retained. The radio service remains the sole raw CYW43/lwIP/MQTT owner.
+subsystem1 owns protected readings, bounded message buffers and text validation.
+See ../../BUDDY1_README.md for build and test instructions.
 
-The course service task is now verified as the sole raw CYW43/lwIP/MQTT owner.
-Do not implement another application networking task that calls those APIs.
-Buddy 1's application task(s) prepare telemetry, validate commands and exchange
-bounded data with a reviewed service-side bridge. That bridge is not implemented.
-The service exposes status reads and a heartbeat MQTT example, not a complete
-robot telemetry/command transport.
-
-The active folder is `subsystem1`. Put future driver/application `.c` files
-directly here, within the Makefile's one-level discovery rule. Lifecycle hooks
-are inactive `E_NOSPT` placeholders; target tests are SKIP placeholders. Other
-buddies may contribute through reviewed changes. Save evidence in
-`../../testing/subsystem1/`. Shared network hooks require integration review and
-instructor approval where specified by the course template.
+Default application startup is inactive. B1_DEMO_RUN=1 opts into the standalone
+demo only. This is not an integrated vehicle runtime or a verified hardware image.

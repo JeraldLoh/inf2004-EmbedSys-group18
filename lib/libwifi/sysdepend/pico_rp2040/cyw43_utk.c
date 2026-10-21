@@ -3,6 +3,7 @@
 #include "cyw43.h"
 #include "cyw43_country.h"
 #include "cyw43_utk.h"
+#include "buddy1_retry.h"
 
 #if TM_NET_LWIP
 /* lwip_init() must run before cyw43_wifi_set_up() -- cyw43_cb_tcpip_init()
@@ -207,6 +208,7 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
     bool was_scanning;
 #endif
     int32_t result;
+    int interface_ready = 0;
 
     (void)stacd;
     (void)exinf;
@@ -233,6 +235,7 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
                   "firmware load to the CYW43439 did not succeed)\n");
         result = -CYW43_EIO;
     } else {
+        interface_ready = 1;
         (void)cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA,
                                  radio_status.mac);
 #if TM_NET_LWIP
@@ -269,13 +272,13 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
     /* A failed bus has nothing useful to poll.  More importantly, repeatedly
      * waking a failed high-rate service must not interfere with USB or the
      * rest of the kernel qualification. */
-    if(result != 0) {
+    if(result != 0 && !interface_ready) {
         for(;;) (void)tk_dly_tsk(1000);
     }
 
 #if TM_NET_LWIP
     int32_t  prev_link_status = radio_status.link_status;
-    uint64_t rejoin_at = 0;
+    uint64_t link_since = time_us_64();
 #endif
 
     for(;;) {
@@ -300,23 +303,16 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
                           (int)radio_status.link_status);
             }
 
-            /* Negative == the association attempt is over and lost. Arm a
-             * retry; a positive-but-not-UP status (JOIN/NOIP) is still making
-             * progress, so leave it alone and let DHCP finish. */
-            rejoin_at = (radio_status.link_status < 0)?
-                        time_us_64() + WIFI_REJOIN_DELAY_US: 0;
+            link_since = time_us_64();
         }
 
-        if(rejoin_at != 0 && time_us_64() >= rejoin_at) {
-            rejoin_at = 0;
-            if(radio_status.link_status < 0) {
-                (void)wifi_try_join();
-                /* Force the next iteration to treat whatever comes back as a
-                 * change, so the new outcome is always reported. Must be a
-                 * value cyw43_tcpip_link_status() can never return (it yields
-                 * -3..3), or a genuine repeat failure would be swallowed. */
-                prev_link_status = 0x7fffffff;
-            }
+        /* Retry ordinary disconnections too. A stalled association/DHCP gets
+           30 sec to finish; negative/down states retry after 5 sec. */
+        if(b1_wifi_retry_due(radio_status.link_status,
+                (unsigned int)((time_us_64()-link_since)/1000))) {
+            (void)wifi_try_join();
+            link_since = time_us_64();
+            prev_link_status = 0x7fffffff;
         }
 #else
         was_scanning = radio_status.scan_active != 0;
@@ -334,13 +330,9 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
 #if TM_NET_LWIP
         sys_check_timeouts();
 #if TM_MQTT
-        /* mqtt_utk_start() is idempotent (see its own connecting/is_connected
-         * guard), so calling it on every poll iteration once the link is up
-         * is fine -- it only actually does anything on the first call, or
-         * again after connection_cb() schedules a retry. */
-        if(radio_status.link_status == CYW43_LINK_UP) {
-            mqtt_utk_start();
-        }
+        /* All MQTT state and raw lwIP calls stay on this radio owner.
+         * Pass link loss as well, so old sessions are invalidated. */
+        mqtt_utk_poll(radio_status.link_status == CYW43_LINK_UP);
 #endif
 #endif
         (void)tk_dly_tsk(CYW43_POLL_MS);

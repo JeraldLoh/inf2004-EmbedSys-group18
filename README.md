@@ -95,3 +95,9 @@ verification. G1 electrical checks remain open. Servo/body scanning and all
 calibration values remain qualified decisions, not measurements.
 
 See `TEAM.md`, `docs/architecture/architecture.md` and `docs/verification/gates.md`.
+
+## Local Buddy 1 text prototype port
+
+See [BUDDY1_README.md](BUDDY1_README.md). Default startup remains inactive;
+B1_DEMO_RUN=1 explicitly enables a standalone simulated communication demo.
+Other subsystem/controller runtime integration and binary format changes remain open.
