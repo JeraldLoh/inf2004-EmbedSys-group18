@@ -7,8 +7,11 @@ not the micro T-Kernel image in `build_make/` and does not start any team task.
 The obstacle logic is compiled straight from `app_program/subsystem5/`, so a
 bench test always exercises the team's copy of the code.
 
-**The wheels never move.** Motion (Buddy 2) and line sensing (Buddy 3) are
-simulated: `[motion] ...` lines are print-outs only.
+**The motors are never driven.** Motion (Buddy 2) and line sensing (Buddy 3)
+are simulated. When the logic wants the car to move it prints a prompt such as
+`[motion] TURN RIGHT 10 deg >> turn the car by hand now (4 s, Enter = done)`:
+move the car by hand as asked, then press Enter (or wait 4 s). The sensor
+readings are real, so turning the car by hand really changes what it sees.
 
 ## What happens when it boots
 
@@ -30,11 +33,27 @@ One file, `buddy5_bench.uf2`, does everything:
    If any angle reads `sensor-fault`, it runs a pin diagnostic that says whether
    ECHO is stuck high, no ECHO pulse arrives (power / pins / divider), or the
    pulse is fine.
-4. **Run.** Prints the distance ahead every second, every scan reading, the
-   obstacle profile, the decision, every `[state] A -> B` change, and
-   `[metrics]` after each encounter. Keys: `m` metrics, `d` sensor pin
-   diagnostic, `r` restart after
-   FAILED, `h` help.
+4. **Run.** Prints the distance ahead every second, every scan reading (car
+   heading, servo angle and the direction it was looking), the obstacle
+   profile, the decision, the bypass plan, every `[state] A -> B` change, and
+   `[metrics]` after each encounter. Keys: `Enter` finished moving the car,
+   `m` metrics, `d` sensor pin diagnostic, `r` restart after FAILED, `h` help.
+
+## How it scans and goes around
+
+1. **Detect:** something under **25 cm** straight ahead, twice in a row: stop.
+2. **Coarse scan:** servo sweeps its 5 angles. If the middle reading is now
+   30 cm or more, the obstacle has gone and it carries on.
+3. **Fine scan:** servo steps out to its limit on each side looking for an edge.
+4. **Turn scan:** for any side whose edge is beyond the servo, the car turns
+   10 deg at a time (up to 70 deg) reading straight ahead. When it sees open
+   space, the servo looks back 5 deg to place the edge more precisely.
+5. **Decide:** a side is usable if its edge was found and there is at least
+   35 cm free just past it. Shorter detour wins.
+6. **Bypass:** turn out by the planned angle, drive forward, straighten, drive
+   30 cm alongside, turn back by the same angle, drive the same distance,
+   straighten. The car ends near the line facing the original direction, then
+   searches for the line.
 
 ## Wiring (from `app_program/project_config/pinmap.h`)
 
@@ -96,13 +115,17 @@ Keys: `a`/`d` step 5 deg, `A`/`D` step 1 deg, `c` centre, `m` measure,
    Record both limits in `../TEST_LOG.md`.
 
 ### S5-B04 Detection
-1. Slowly bring the object to under 15 cm straight ahead.
+1. Slowly bring the object to under 25 cm straight ahead.
 2. Pass: prints `[detect] obstacle ahead` and `[motion] STOP`, then the servo
    sweeps for the coarse scan.
 
 ### S5-B05 Scan and decision
-1. Object about 10 cm ahead, sides open: the servo sweeps the 5 coarse angles
-   printed under `=== Configuration ===`, then steps outward. Prints `[profile] ... width=...` and `[decide] ... -> LEFT/RIGHT`.
+1. Object about 20 cm ahead, sides open: the servo sweeps the 5 coarse angles
+   printed under `=== Configuration ===`, then steps outward. If the object is
+   wider than the servo can see past, follow the `TURN` prompts: turn the car
+   on the spot by about the angle asked (a protractor or marks on the floor
+   help), then press Enter. Prints `[profile] ... width=...` and
+   `[decide] ... -> LEFT/RIGHT`.
 2. Measure the object's real width. Pass: printed width within **±30%**
    (briefing grade C; ±10% is grade A).
 3. Put a wall or box on one side only: pass if it chooses the **other** side.
@@ -111,6 +134,15 @@ Keys: `a`/`d` step 5 deg, `A`/`D` step 1 deg, `c` centre, `m` measure,
 1. Surround the sensor with objects about 10 cm away on all sides.
 2. Pass: `rescan #1`, `rescan #2`, `reversing (#1)`, repeated, then
    `[FAILED] no clear path after reversing`.
+
+### S5-B08 Bypass path and return to the line
+1. Mark the line direction on the floor. Trigger an encounter with a box
+   about 15-20 cm wide.
+2. Follow every `[motion]` prompt by hand (turn, forward, straighten, forward,
+   turn back, forward, straighten).
+3. Pass: `[bypass] going ...` prints a plan whose two diagonal legs are equal,
+   the second turn mirrors the first, the car never hits the box, and it ends
+   past the box facing the original line direction, roughly back on the line.
 
 ### S5-B07 Obstacle removed mid-scan
 1. Trigger a detection, then take the object away as soon as the servo starts sweeping.

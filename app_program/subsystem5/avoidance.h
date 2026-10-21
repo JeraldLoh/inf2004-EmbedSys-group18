@@ -7,6 +7,11 @@
 // av_platform_t, so the same code runs on the Pico and in host unit tests.
 // Non-blocking by design: call av_tick() from the main loop; each call does a
 // bounded amount of work (at most one range measurement).
+//
+// The scan servo only covers a narrow arc, so edges outside it are found by
+// turning the whole car on the spot (TURN_SCAN states). Headings are tracked
+// in degrees relative to the line direction (+ = left); the bypass is a
+// mirrored three-leg detour that ends facing the line direction again.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -19,12 +24,14 @@
 typedef enum {
     AV_STATE_MONITOR,          // watching straight ahead; Buddy 5 is passive
     AV_STATE_COARSE_SCAN,      // wide sweep at a few fixed angles
-    AV_STATE_FINE_SCAN_RIGHT,  // small steps outward from center to find the right edge
+    AV_STATE_FINE_SCAN_RIGHT,  // servo steps outward from center to find the right edge
     AV_STATE_FINE_SCAN_LEFT,   // same, left
+    AV_STATE_TURN_SCAN_RIGHT,  // edge beyond the servo: turn the car right step by step
+    AV_STATE_TURN_SCAN_LEFT,   // same, left
     AV_STATE_DECIDE,           // build profile and choose a side
     AV_STATE_WAIT_RESCAN,      // no side clear; pause then scan again
     AV_STATE_REVERSE,          // still boxed in; back up then scan again
-    AV_STATE_BYPASS,           // driving around the obstacle
+    AV_STATE_BYPASS,           // turn out, pass the obstacle, turn back to the line
     AV_STATE_REACQUIRE,        // searching for the line behind the obstacle
     AV_STATE_FAILED,           // stopped; needs av_reset()
     AV_STATE_COUNT
@@ -39,6 +46,7 @@ typedef enum {
     AV_EVT_RESCAN,
     AV_EVT_REVERSING,
     AV_EVT_BYPASS_START,
+    AV_EVT_BYPASS_RETURN,  // past the obstacle, mirroring the detour back to the line
     AV_EVT_EMERGENCY_STOP, // something appeared ahead mid-manoeuvre
     AV_EVT_REACQUIRE_START,
     AV_EVT_LINE_REACQUIRED,
@@ -48,11 +56,14 @@ typedef enum {
 typedef struct {
     av_event_type_t type;
     uint32_t time_ms;
-    scan_point_t point;                // DETECTED, SCAN_POINT, EMERGENCY_STOP
+    scan_point_t point;                // DETECTED, SCAN_POINT, EMERGENCY_STOP (servo angle)
+    int heading_deg;                   // SCAN_POINT: car heading vs line direction, + = left
+    float direction_deg;               // SCAN_POINT: heading + servo, vs scan start, + = left
     side_t side;                       // DECISION, BYPASS_START, REACQUIRE_START
     int attempt;                       // RESCAN, REVERSING, REACQUIRE_START
     const obstacle_profile_t *profile; // PROFILE_READY, DECISION
     const side_choice_t *choice;       // DECISION
+    const bypass_plan_t *plan;         // BYPASS_START
     uint32_t duration_ms;              // LINE_REACQUIRED: detection -> back on line
     const char *reason;                // FAILED, OBSTACLE_CLEARED
 } av_event_t;
@@ -66,10 +77,11 @@ typedef struct {
     range_reading_t (*measure)(void *ctx);
 
     // Buddy 2 (motion). Commands return immediately; motion_done() reports
-    // when the last reverse/bypass/search command has finished.
+    // when the last turn/forward/reverse command has finished.
     void (*motion_stop)(void *ctx);
+    void (*motion_turn)(void *ctx, float deg); // turn on the spot, + = left (CCW)
+    void (*motion_forward)(void *ctx, float cm);
     void (*motion_reverse)(void *ctx, float cm);
-    void (*motion_bypass)(void *ctx, side_t side, const obstacle_profile_t *profile);
     void (*motion_search_line)(void *ctx, side_t toward);
     void (*motion_resume_line_follow)(void *ctx);
     bool (*motion_done)(void *ctx);
@@ -88,13 +100,17 @@ typedef struct {
     int right_deg;
     int coarse_points; // odd, 3..AV_MAX_COARSE_POINTS, evenly dividing left..right
     int fine_step_deg;
-    int fine_half_range_deg;
+    int fine_half_range_deg;   // servo fine scan reach either side of center
+
+    int turn_step_deg;         // car turn per step when the edge is beyond the servo
+    int turn_scan_max_deg;     // widest direction searched before giving up on a side
+    uint32_t turn_settle_ms;   // pause after each car turn before measuring
 
     float detect_cm;           // obstacle closer than this triggers avoidance
     float clear_hysteresis_cm; // on rescan, center must exceed detect+this to count as gone
     int detect_confirm_count;  // consecutive detections required (debounce)
     float edge_margin_cm;      // reading must exceed obstacle distance by this to be an edge
-    float min_clearance_cm;    // lateral room needed on the chosen side
+    float min_clearance_cm;    // free range needed just past the edge on the chosen side
     float max_range_cm;        // value used for NO_ECHO readings
     float emergency_stop_cm;   // collision guard during bypass/reacquire; 0 disables
 
@@ -105,6 +121,11 @@ typedef struct {
     uint32_t rescan_delay_ms;
     int max_reverses; // per encounter
     float reverse_cm;
+
+    float bypass_side_margin_cm; // car center passes this far outside the edge
+    float bypass_pass_cm;        // straight leg alongside the obstacle
+    int bypass_min_turn_deg;
+    int bypass_max_turn_deg;
 
     uint32_t motion_timeout_ms;
     uint32_t reacquire_timeout_ms; // per search attempt
@@ -117,6 +138,7 @@ typedef struct {
     uint32_t obstacle_cleared;
     uint32_t profiles_complete; // both edges found
     uint32_t profiles_partial;  // at least one edge outside scan window
+    uint32_t car_turns;         // turn commands issued (scans and bypasses)
     uint32_t bypass_left;
     uint32_t bypass_right;
     uint32_t rescans;
@@ -152,16 +174,43 @@ typedef struct {
     range_reading_t last_reading;
     bool have_reading;
 
+    int heading_deg; // car heading vs the line direction, + = left
+    int origin_deg;  // heading when the current scan started
+    bool turn_pending;
+    uint32_t turn_deadline;
+    bool body_settling;
+    uint32_t body_settle_until;
+
     scan_point_t coarse[AV_MAX_COARSE_POINTS];
     int coarse_idx;
     float ahead_cm;
     int fine_offset;
-    scan_point_t last_hit;
-    obstacle_edge_t right_edge;
+    int turn_mag;     // |heading - origin| reached by the turn scan
+    bool refining;    // turn scan found open space; servo looks back for the edge
+    float clear_dir;  // direction of the open reading nearest the edge
+    struct {
+        bool done;
+        bool found;
+        float last_hit_dir; // direction of the outermost reading that hit the obstacle
+        float last_hit_cm;
+        float edge_dir;
+        float clear_cm;     // free range just past the edge
+    } edge[2]; // [0] right, [1] left
 
     obstacle_profile_t profile;
     bool have_profile;
     side_choice_t choice;
+    bypass_plan_t plan;
+
+    struct {
+        bool forward;
+        int heading_deg; // turn legs: target heading
+        float cm;        // forward legs
+    } legs[7];
+    int leg_idx;
+    bool leg_active;
+    bool reverse_issued;
+    bool search_started;
 
     bool off_line;
     int rescans;

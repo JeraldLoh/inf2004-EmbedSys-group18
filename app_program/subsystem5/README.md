@@ -18,8 +18,16 @@ with it):
 | File | Purpose |
 |---|---|
 | `range.c/.h` | Reading status (ok / no-echo / too-close / fault) and median-of-N filter |
-| `obstacle.c/.h` | Scan geometry: angle+distance to x/y, obstacle width, bypass side choice |
+| `obstacle.c/.h` | Scan geometry: direction+distance to x/y, obstacle width, side choice, bypass plan |
 | `avoidance.c/.h` | Non-blocking detect, scan, decide, bypass, reacquire state machine (section 6.5) |
+
+Scanning: the servo checks a narrow arc first (coarse sweep, then fine steps).
+Edges outside the servo's reach are found by turning the whole car on the spot
+in steps (`TURN_SCAN_RIGHT/LEFT`); once a turn shows open space, the servo looks
+back to pin the edge down. The bypass is a mirrored three-leg detour (turn out,
+drive, straighten, drive alongside, turn back the same angle, drive, straighten)
+so the car ends near the line facing the line direction, then searches for it.
+Motion is requested through `motion_turn` / `motion_forward` / `motion_reverse`.
 
 `avoidance.h` defines `av_platform_t`, the callback table that the future
 sonar/servo drivers and the controller/motion adapters fill in. Avoidance only

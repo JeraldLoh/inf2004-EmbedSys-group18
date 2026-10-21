@@ -1,11 +1,11 @@
 #include "obstacle.h"
 
 #define B5_PI 3.14159265358979323846f
+#define DEG2RAD (B5_PI / 180.0f)
 #define DETOUR_TIE_CM 1.0f
 
 // Local float helpers: the micro T-Kernel image is not linked with libm.
 static float b5_fabsf(float x) { return x < 0.0f ? -x : x; }
-static float b5_fmaxf(float a, float b) { return a > b ? a : b; }
 
 // Taylor series to x^11 after reducing to [-pi/2, pi/2]; error < 1e-7.
 static float b5_sinf(float x) {
@@ -27,26 +27,44 @@ static float b5_sqrtf(float x) {
     return r;
 }
 
-static float left_offset_deg(const scan_geometry_t *g, float angle_deg) {
-    float off = angle_deg - (float)g->center_deg;
+// Minimax polynomial for atan on [-1, 1]; error < 2e-5 rad.
+static float atan_unit(float t) {
+    float t2 = t * t;
+    return t * (0.99997726f + t2 * (-0.33262347f + t2 * (0.19354346f + t2 * (-0.11643287f +
+           t2 * (0.05265332f + t2 * -0.01172120f)))));
+}
+
+// atan2 for y >= 0, x > 0 (first quadrant), which is all the planner needs.
+static float b5_atan2f_q1(float y, float x) {
+    return y <= x ? atan_unit(y / x) : 0.5f * B5_PI - atan_unit(x / y);
+}
+
+float scan_left_offset_deg(const scan_geometry_t *g, float servo_deg) {
+    float off = servo_deg - (float)g->center_deg;
     return g->left_is_higher ? off : -off;
 }
 
-side_t scan_side_of(const scan_geometry_t *g, float angle_deg) {
-    float off = left_offset_deg(g, angle_deg);
+side_t scan_side_of(const scan_geometry_t *g, float servo_deg) {
+    float off = scan_left_offset_deg(g, servo_deg);
     if (off > 0.0f) return SIDE_LEFT;
     if (off < 0.0f) return SIDE_RIGHT;
     return SIDE_NONE;
 }
 
-point2_t scan_polar_to_xy(const scan_geometry_t *g, float angle_deg, float cm) {
-    float rad = left_offset_deg(g, angle_deg) * (B5_PI / 180.0f);
+point2_t obstacle_polar_to_xy(float direction_deg, float cm) {
+    float rad = direction_deg * DEG2RAD;
     point2_t p = {-cm * b5_sinf(rad), cm * b5_cosf(rad)};
     return p;
 }
 
-bool obstacle_is_clear(range_reading_t r, float obstacle_cm, float margin_cm, float max_cm) {
-    return range_effective_cm(r, max_cm) > obstacle_cm + margin_cm;
+point2_t scan_polar_to_xy(const scan_geometry_t *g, float servo_deg, float cm) {
+    return obstacle_polar_to_xy(scan_left_offset_deg(g, servo_deg), cm);
+}
+
+bool obstacle_is_clear(range_reading_t r, float direction_deg, float obstacle_cm,
+                       float margin_cm, float max_cm) {
+    float forward = range_effective_cm(r, max_cm) * b5_cosf(direction_deg * DEG2RAD);
+    return forward > obstacle_cm + margin_cm;
 }
 
 obstacle_profile_t obstacle_build_profile(float distance_cm, obstacle_edge_t left,
@@ -63,42 +81,22 @@ obstacle_profile_t obstacle_build_profile(float distance_cm, obstacle_edge_t lef
     return p;
 }
 
-// Effective range at the scan point furthest from center on the given side.
-static float outer_clearance(const scan_geometry_t *g, const scan_point_t *pts, size_t n,
-                             side_t side, float max_range_cm) {
-    float best_off = 0.0f;
-    float clear = 0.0f;
-    for (size_t i = 0; i < n; i++) {
-        float a = (float)pts[i].angle_deg;
-        if (scan_side_of(g, a) != side) continue;
-        float off = b5_fabsf(left_offset_deg(g, a));
-        if (off > best_off) {
-            best_off = off;
-            clear = range_effective_cm(pts[i].reading, max_range_cm);
-        }
-    }
-    return clear;
-}
-
-side_choice_t obstacle_choose_side(const scan_geometry_t *g, const scan_point_t *coarse,
-                                   size_t count, const obstacle_profile_t *profile,
-                                   float min_clearance_cm, float max_range_cm) {
+side_choice_t obstacle_choose_side(const obstacle_profile_t *profile, float left_clear_cm,
+                                   float right_clear_cm, float min_clearance_cm) {
     side_choice_t c;
-    c.left_clear_cm = outer_clearance(g, coarse, count, SIDE_LEFT, max_range_cm);
-    c.right_clear_cm = outer_clearance(g, coarse, count, SIDE_RIGHT, max_range_cm);
+    c.left_clear_cm = profile->left.found ? left_clear_cm : 0.0f;
+    c.right_clear_cm = profile->right.found ? right_clear_cm : 0.0f;
 
-    bool left_ok = c.left_clear_cm >= min_clearance_cm;
-    bool right_ok = c.right_clear_cm >= min_clearance_cm;
+    bool left_ok = profile->left.found && c.left_clear_cm >= min_clearance_cm;
+    bool right_ok = profile->right.found && c.right_clear_cm >= min_clearance_cm;
 
     if (!left_ok && !right_ok) {
         c.side = SIDE_NONE;
     } else if (left_ok != right_ok) {
         c.side = left_ok ? SIDE_LEFT : SIDE_RIGHT;
-    } else if (profile->left.found != profile->right.found) {
-        c.side = profile->left.found ? SIDE_LEFT : SIDE_RIGHT;
     } else {
-        float left_detour = b5_fmaxf(0.0f, -profile->left.pt.x_cm);
-        float right_detour = b5_fmaxf(0.0f, profile->right.pt.x_cm);
+        float left_detour = b5_fabsf(profile->left.pt.x_cm);
+        float right_detour = b5_fabsf(profile->right.pt.x_cm);
         if (b5_fabsf(left_detour - right_detour) >= DETOUR_TIE_CM) {
             c.side = left_detour < right_detour ? SIDE_LEFT : SIDE_RIGHT;
         } else {
@@ -106,6 +104,27 @@ side_choice_t obstacle_choose_side(const scan_geometry_t *g, const scan_point_t 
         }
     }
     return c;
+}
+
+bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t side,
+                                   float side_margin_cm, float pass_cm, int min_turn_deg,
+                                   int max_turn_deg) {
+    const obstacle_edge_t *e = side == SIDE_RIGHT ? &profile->right : &profile->left;
+    float lateral = b5_fabsf(e->pt.x_cm) + side_margin_cm;
+    float forward = e->pt.y_cm > 1.0f ? e->pt.y_cm : 1.0f;
+    if (lateral < 1.0f) lateral = 1.0f;
+
+    int turn = (int)(b5_atan2f_q1(lateral, forward) / DEG2RAD + 0.5f);
+    if (turn < min_turn_deg) turn = min_turn_deg;
+    if (turn > max_turn_deg) turn = max_turn_deg;
+
+    bypass_plan_t p;
+    p.side = side == SIDE_RIGHT ? SIDE_RIGHT : SIDE_LEFT;
+    p.turn_deg = turn;
+    p.lateral_cm = lateral;
+    p.out_cm = lateral / b5_sinf((float)turn * DEG2RAD);
+    p.pass_cm = pass_cm;
+    return p;
 }
 
 const char *side_name(side_t s) {

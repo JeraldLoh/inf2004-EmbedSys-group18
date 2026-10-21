@@ -2,7 +2,8 @@
 //
 // Bench-test firmware (Pico SDK). The avoidance logic is complete;
 // Buddy 2 (motion) and Buddy 3 (line sensors) are not integrated yet, so the
-// motion_* / line_* callbacks below simulate them with fixed durations.
+// motion_* / line_* callbacks below simulate them: every turn or drive is
+// printed as a prompt and the tester moves the car by hand (Enter = done).
 // Integration = replace those callback bodies; nothing else changes.
 // The avoidance logic itself is app_program/subsystem5 (shared with the RTOS build).
 //
@@ -13,8 +14,9 @@
 //      saved calibration is used automatically.
 //   2. Self-check: sweeps the servo across the scan angles and prints a
 //      reading at each one, so wiring problems show up before the run.
-//   3. Avoidance run: detection, scanning, decision and recovery, with every
-//      step and state change printed.
+//   3. Avoidance run: detection, scanning (servo, then turning the car for
+//      edges outside the servo's reach), decision, a mirrored three-leg
+//      bypass back to the line, and recovery, with every step printed.
 
 #include <stddef.h>
 #include <stdio.h>
@@ -56,9 +58,11 @@
 
 #define CAL_SAFETY_MARGIN_DEG 5
 
-// Simulated Buddy 2/3 behaviour -- remove when integrating.
-#define SIM_REVERSE_MS 600
-#define SIM_BYPASS_MS 1500
+// Simulated Buddy 2/3 behaviour -- remove when integrating. Each simulated
+// move lasts this long, or until Enter is pressed, giving the tester time to
+// move the car by hand.
+#define SIM_TURN_MS 4000
+#define SIM_DRIVE_MS 4000
 #define SIM_LINE_FOUND_MS 400
 
 typedef struct {
@@ -100,17 +104,25 @@ static void cb_motion_stop(void *ctx) {
     printf("         [motion] STOP\n");
 }
 
-static void cb_motion_reverse(void *ctx, float cm) {
+static void cb_motion_turn(void *ctx, float deg) {
     board_t *b = ctx;
-    b->motion_until = now_ms() + SIM_REVERSE_MS;
-    printf("         [motion] REVERSE %.1f cm (simulated, %d ms)\n", (double)cm, SIM_REVERSE_MS);
+    b->motion_until = now_ms() + SIM_TURN_MS;
+    printf("         [motion] TURN %s %.0f deg   >> turn the car by hand now (%d s, Enter = done)\n",
+           deg > 0.0f ? "LEFT" : "RIGHT", (double)(deg > 0.0f ? deg : -deg), SIM_TURN_MS / 1000);
 }
 
-static void cb_motion_bypass(void *ctx, side_t side, const obstacle_profile_t *p) {
+static void cb_motion_forward(void *ctx, float cm) {
     board_t *b = ctx;
-    b->motion_until = now_ms() + SIM_BYPASS_MS;
-    printf("         [motion] BYPASS %s around %.1f cm wide obstacle at %.1f cm (simulated, %d ms)\n",
-           side_name(side), (double)p->width_cm, (double)p->distance_cm, SIM_BYPASS_MS);
+    b->motion_until = now_ms() + SIM_DRIVE_MS;
+    printf("         [motion] FORWARD %.1f cm   >> push the car forward by hand (%d s, Enter = done)\n",
+           (double)cm, SIM_DRIVE_MS / 1000);
+}
+
+static void cb_motion_reverse(void *ctx, float cm) {
+    board_t *b = ctx;
+    b->motion_until = now_ms() + SIM_DRIVE_MS;
+    printf("         [motion] REVERSE %.1f cm   >> pull the car back by hand (%d s, Enter = done)\n",
+           (double)cm, SIM_DRIVE_MS / 1000);
 }
 
 static void cb_motion_search_line(void *ctx, side_t toward) {
@@ -176,19 +188,22 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
             print_reading(e->point.reading);
             printf(" -> stopping and scanning\n");
             break;
-        case AV_EVT_SCAN_POINT:
-            printf("[scan] %3d deg (%-6s): ", e->point.angle_deg,
-                   side_name(scan_side_of(&g_av.geom, (float)e->point.angle_deg)));
+        case AV_EVT_SCAN_POINT: {
+            float d = e->direction_deg;
+            printf("[scan] car %+3d deg, servo %3d -> looking %4.1f deg %-5s: ", e->heading_deg,
+                   e->point.angle_deg, (double)(d < 0.0f ? -d : d),
+                   d > 0.0f ? "LEFT" : (d < 0.0f ? "RIGHT" : "AHEAD"));
             print_reading(e->point.reading);
             printf("\n");
             break;
+        }
         case AV_EVT_OBSTACLE_CLEARED:
             printf("[scan] %s\n", e->reason);
             break;
         case AV_EVT_PROFILE_READY: {
             const obstacle_profile_t *p = e->profile;
             printf("[profile] dist=%.1f cm width=%s%.1f cm center x=%+.1f y=%.1f cm "
-                   "edges L=%.1f%s R=%.1f%s deg\n",
+                   "edges L=%+.1f%s R=%+.1f%s deg\n",
                    (double)p->distance_cm, (p->left.found && p->right.found) ? "" : ">=",
                    (double)p->width_cm, (double)p->center.x_cm, (double)p->center.y_cm,
                    (double)p->left.angle_deg, p->left.found ? "" : "(open)",
@@ -199,7 +214,7 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
             break;
         }
         case AV_EVT_DECISION:
-            printf("[decide] clearance L=%.1f R=%.1f cm (need >= %.0f) -> %s\n",
+            printf("[decide] room past edge L=%.1f R=%.1f cm (need >= %.0f) -> %s\n",
                    (double)e->choice->left_clear_cm, (double)e->choice->right_clear_cm,
                    (double)g_av.cfg.min_clearance_cm, side_name(e->side));
             break;
@@ -209,8 +224,16 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
         case AV_EVT_REVERSING:
             printf("[decide] still blocked, reversing (#%d)\n", e->attempt);
             break;
-        case AV_EVT_BYPASS_START:
-            printf("[bypass] going %s\n", side_name(e->side));
+        case AV_EVT_BYPASS_START: {
+            const bypass_plan_t *b = e->plan;
+            printf("[bypass] going %s: turn %d, forward %.1f, straighten, forward %.1f, "
+                   "turn back %d, forward %.1f, straighten (clears edge by %.0f cm)\n",
+                   side_name(b->side), b->turn_deg, (double)b->out_cm, (double)b->pass_cm,
+                   b->turn_deg, (double)b->out_cm, (double)g_av.cfg.bypass_side_margin_cm);
+            break;
+        }
+        case AV_EVT_BYPASS_RETURN:
+            printf("[bypass] past the obstacle, mirroring the detour back to the line\n");
             break;
         case AV_EVT_EMERGENCY_STOP:
             printf("[guard] EMERGENCY STOP, object at ");
@@ -497,12 +520,19 @@ static void print_config(const av_config_t *c, bool from_flash) {
            c->right_deg);
     printf("coarse  %d angles:", c->coarse_points);
     for (int i = 0; i < c->coarse_points; i++) printf(" %d", c->right_deg + i * step);
-    printf("\nfine    %d deg steps out to +/-%d deg\n", c->fine_step_deg, c->fine_half_range_deg);
+    printf("\nfine    servo %d deg steps out to +/-%d deg\n", c->fine_step_deg,
+           c->fine_half_range_deg);
+    printf("turn    beyond that, the car turns in %d deg steps out to +/-%d deg\n",
+           c->turn_step_deg, c->turn_scan_max_deg);
     printf("detect  < %.0f cm (clears at >= %.0f cm, %d readings in a row)\n",
            (double)c->detect_cm, (double)(c->detect_cm + c->clear_hysteresis_cm),
            c->detect_confirm_count);
-    printf("side    clear if >= %.0f cm; emergency stop < %.0f cm\n",
-           (double)c->min_clearance_cm, (double)c->emergency_stop_cm);
+    printf("side    usable if its edge is found with >= %.0f cm free past it\n",
+           (double)c->min_clearance_cm);
+    printf("bypass  pass the edge by %.0f cm, %.0f cm alongside, turn %d..%d deg; "
+           "emergency stop < %.0f cm\n",
+           (double)c->bypass_side_margin_cm, (double)c->bypass_pass_cm, c->bypass_min_turn_deg,
+           c->bypass_max_turn_deg, (double)c->emergency_stop_cm);
     printf("retry   %d rescans, %d reverses of %.0f cm\n", c->max_rescans, c->max_reverses,
            (double)c->reverse_cm);
 }
@@ -571,8 +601,8 @@ static void self_check(const av_config_t *c) {
 }
 
 static void run_help(void) {
-    printf("keys while running:  m = metrics   d = sensor pin diagnostic   "
-           "r = restart after FAILED   h = help\n");
+    printf("keys while running:  Enter = finished moving the car   m = metrics\n"
+           "                     d = sensor pin diagnostic   r = restart after FAILED   h = help\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -583,7 +613,7 @@ int main(void) {
         sleep_ms(100);
     }
     printf("\nBuddy 5: adaptive ultrasonic scanning + obstacle profiling\n");
-    printf("pins: TRIG GP%d, ECHO GP%d, servo GP%d. Wheels are simulated (no motor output).\n",
+    printf("pins: TRIG GP%d, ECHO GP%d, servo GP%d. Motors are simulated: move the car by hand when prompted.\n",
            TRIG_PIN, ECHO_PIN, SERVO_PIN);
     if (watchdog_caused_reboot()) {
         printf("WARNING: previous run was reset by the watchdog\n");
@@ -617,8 +647,9 @@ int main(void) {
         .servo_set = cb_servo_set,
         .measure = cb_measure,
         .motion_stop = cb_motion_stop,
+        .motion_turn = cb_motion_turn,
+        .motion_forward = cb_motion_forward,
         .motion_reverse = cb_motion_reverse,
-        .motion_bypass = cb_motion_bypass,
         .motion_search_line = cb_motion_search_line,
         .motion_resume_line_follow = cb_motion_resume,
         .motion_done = cb_motion_done,
@@ -670,7 +701,9 @@ int main(void) {
         }
 
         int ch = getchar_timeout_us(0);
-        if (ch == 'm') {
+        if ((ch == '\r' || ch == '\n') && !cb_motion_done(&g_board)) {
+            g_board.motion_until = now; // tester has finished moving the car
+        } else if (ch == 'm') {
             print_metrics(av_metrics(&g_av));
         } else if (ch == 'd') {
             sonar_diagnose();

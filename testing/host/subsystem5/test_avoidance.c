@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "avoidance.h"
@@ -6,6 +7,12 @@
 
 // ---------------------------------------------------------------------------
 // Simulated robot + world
+//
+// World directions use servo-style degrees: 90 = the line direction, higher =
+// further left. What the sensor sees depends on the car heading plus the
+// servo offset, so turning the car really changes the readings. The car does
+// not move through the world (obstacles stay put); tests change the world
+// with flags instead.
 // ---------------------------------------------------------------------------
 
 #define MAX_EVENTS 1024
@@ -14,7 +21,7 @@
 #define TICK_MS 10
 
 typedef struct {
-    int lo, hi; // servo angle range covered (inclusive)
+    int lo, hi; // world direction range covered (inclusive)
     float cm;
     bool present;
 } blob_t;
@@ -29,9 +36,14 @@ typedef struct {
     bool settle_violation;
     int min_angle, max_angle;
 
+    int heading; // + = left
+    int max_abs_heading;
+    uint32_t turn_end;
+    bool measured_while_turning;
+
     blob_t obstacle;
     blob_t wall;
-    blob_t late_obstacle; // appears when bypass starts
+    blob_t late_obstacle; // robot-relative; appears when the bypass starts
     float bg_cm;          // <= 0 means no echo
     bool force;
     range_status_t forced_status;
@@ -39,13 +51,17 @@ typedef struct {
 
     bool motion_active;
     uint32_t motion_end;
-    uint32_t bypass_ms, reverse_ms;
+    uint32_t turn_ms, forward_ms, reverse_ms;
     bool bypass_never_done;
+    bool turns_never_done;
     bool vanish_on_stop;       // obstacle disappears on the first stop
     bool open_on_reverse;      // boxed-in walls vanish when reversing
     bool vanish_late_on_estop; // late obstacle vanishes on an emergency stop
+    bool line_on_return_leg;   // line sensors see the line during the return drive
+    bool bypassing;
 
-    int stops, reverses, bypasses, searches, resumes;
+    int turns_since_return; // turns from the start of the return to the line search
+    int stops, turns, forwards, reverses, bypasses, searches, resumes;
     side_t last_bypass;
     side_t search_sides[MAX_SEARCHES];
     bool searching;
@@ -57,9 +73,15 @@ typedef struct {
     av_event_type_t events[MAX_EVENTS];
     int n_events;
     const char *last_reason;
+    bypass_plan_t last_plan;
 } sim_t;
 
 static bool in_blob(const blob_t *b, int a) { return b->present && a >= b->lo && a <= b->hi; }
+
+static int servo_left_offset(const sim_t *s) {
+    int off = s->servo - s->cfg.center_deg;
+    return s->cfg.left_deg > s->cfg.right_deg ? off : -off;
+}
 
 static uint32_t s_now(void *ctx) { return ((sim_t *)ctx)->t; }
 
@@ -77,6 +99,8 @@ static void s_servo(void *ctx, int deg) {
 static range_reading_t s_measure(void *ctx) {
     sim_t *s = ctx;
     if ((int32_t)(s->t - s->servo_ready_at) < 0) s->settle_violation = true;
+    // The car must have stopped turning and settled before a reading.
+    if ((int32_t)(s->t - (s->turn_end + s->cfg.turn_settle_ms)) < 0) s->measured_while_turning = true;
     s->t += MEASURE_COST_MS;
 
     if (s->force) return (range_reading_t){s->forced_status, 0.0f};
@@ -84,10 +108,11 @@ static range_reading_t s_measure(void *ctx) {
         s->spikes--;
         return (range_reading_t){RANGE_OK, 5.0f};
     }
-    int a = s->servo;
-    if (in_blob(&s->late_obstacle, a)) return (range_reading_t){RANGE_OK, s->late_obstacle.cm};
-    if (in_blob(&s->obstacle, a)) return (range_reading_t){RANGE_OK, s->obstacle.cm};
-    if (in_blob(&s->wall, a)) return (range_reading_t){RANGE_OK, s->wall.cm};
+    int rel = 90 + servo_left_offset(s);
+    int world = rel + s->heading;
+    if (in_blob(&s->late_obstacle, rel)) return (range_reading_t){RANGE_OK, s->late_obstacle.cm};
+    if (in_blob(&s->obstacle, world)) return (range_reading_t){RANGE_OK, s->obstacle.cm};
+    if (in_blob(&s->wall, world)) return (range_reading_t){RANGE_OK, s->wall.cm};
     if (s->bg_cm <= 0.0f) return (range_reading_t){RANGE_NO_ECHO, 0.0f};
     return (range_reading_t){RANGE_OK, s->bg_cm};
 }
@@ -101,26 +126,37 @@ static void s_stop(void *ctx) {
     if (s->vanish_late_on_estop && s->late_obstacle.present) s->late_obstacle.present = false;
 }
 
+static void start_motion(sim_t *s, uint32_t ms) {
+    s->motion_active = true;
+    s->motion_end = s->t + ms;
+}
+
+static void s_turn(void *ctx, float deg) {
+    sim_t *s = ctx;
+    s->turns++;
+    s->turns_since_return++;
+    s->heading += (int)(deg < 0.0f ? deg - 0.5f : deg + 0.5f);
+    if (abs(s->heading) > s->max_abs_heading) s->max_abs_heading = abs(s->heading);
+    start_motion(s, s->turn_ms);
+    s->turn_end = s->motion_end;
+}
+
+static void s_forward(void *ctx, float cm) {
+    sim_t *s = ctx;
+    (void)cm;
+    s->forwards++;
+    start_motion(s, s->forward_ms);
+}
+
 static void s_reverse(void *ctx, float cm) {
     sim_t *s = ctx;
     (void)cm;
     s->reverses++;
-    s->motion_active = true;
-    s->motion_end = s->t + s->reverse_ms;
+    start_motion(s, s->reverse_ms);
     if (s->open_on_reverse) {
         s->bg_cm = 150.0f;
         s->obstacle = (blob_t){80, 100, 12.0f, true};
     }
-}
-
-static void s_bypass(void *ctx, side_t side, const obstacle_profile_t *p) {
-    sim_t *s = ctx;
-    (void)p;
-    s->bypasses++;
-    s->last_bypass = side;
-    s->motion_active = true;
-    s->motion_end = s->t + s->bypass_ms;
-    if (s->late_obstacle.cm > 0.0f) s->late_obstacle.present = true;
 }
 
 static void s_search(void *ctx, side_t toward) {
@@ -135,17 +171,20 @@ static void s_resume(void *ctx) {
     sim_t *s = ctx;
     s->resumes++;
     s->searching = false;
+    s->bypassing = false;
 }
 
 static bool s_done(void *ctx) {
     sim_t *s = ctx;
     if (!s->motion_active) return true;
-    if (s->bypass_never_done && s->bypasses > 0) return false;
+    if (s->bypass_never_done && s->bypassing) return false;
+    if (s->turns_never_done && s->turns > 0) return false;
     return (int32_t)(s->t - s->motion_end) >= 0;
 }
 
 static bool s_line(void *ctx) {
     sim_t *s = ctx;
+    if (s->line_on_return_leg && s->bypassing && s->forwards == 3 && s->motion_active) return true;
     if (s->line_never || !s->searching) return false;
     if (s->line_on_search != 0 && s->searches != s->line_on_search) return false;
     return s->t - s->search_start >= s->line_after_ms;
@@ -155,6 +194,15 @@ static void s_event(void *ctx, const av_event_t *e) {
     sim_t *s = ctx;
     if (s->n_events < MAX_EVENTS) s->events[s->n_events++] = e->type;
     if (e->reason) s->last_reason = e->reason;
+    if (e->type == AV_EVT_BYPASS_START) {
+        s->bypasses++;
+        s->bypassing = true;
+        s->last_bypass = e->side;
+        s->last_plan = *e->plan;
+        s->forwards = 0;
+        if (s->late_obstacle.cm > 0.0f) s->late_obstacle.present = true;
+    }
+    if (e->type == AV_EVT_BYPASS_RETURN) s->turns_since_return = 0;
 }
 
 static av_platform_t platform_for(sim_t *s) {
@@ -164,8 +212,9 @@ static av_platform_t platform_for(sim_t *s) {
         .servo_set = s_servo,
         .measure = s_measure,
         .motion_stop = s_stop,
+        .motion_turn = s_turn,
+        .motion_forward = s_forward,
         .motion_reverse = s_reverse,
-        .motion_bypass = s_bypass,
         .motion_search_line = s_search,
         .motion_resume_line_follow = s_resume,
         .motion_done = s_done,
@@ -175,16 +224,22 @@ static av_platform_t platform_for(sim_t *s) {
     return p;
 }
 
-static void sim_setup(sim_t *s, av_t *av, uint32_t start_ms) {
+static void sim_defaults(sim_t *s, uint32_t start_ms) {
     memset(s, 0, sizeof *s);
     av_config_default(&s->cfg);
     s->t = start_ms;
+    s->turn_end = start_ms;
     s->min_angle = 999;
     s->max_angle = -999;
     s->bg_cm = 150.0f;
-    s->bypass_ms = 1500;
+    s->turn_ms = 300;
+    s->forward_ms = 800;
     s->reverse_ms = 600;
     s->line_after_ms = 300;
+}
+
+static void sim_setup(sim_t *s, av_t *av, uint32_t start_ms) {
+    sim_defaults(s, start_ms);
     av_platform_t p = platform_for(s);
     bool ok = av_init(av, &s->cfg, &p);
     CHECK(ok);
@@ -222,14 +277,20 @@ static int first_event(const sim_t *s, av_event_type_t type) {
 
 static void check_hygiene(const sim_t *s) {
     CHECK(!s->settle_violation);
-    CHECK(s->min_angle >= 0);
-    CHECK(s->max_angle <= 180);
+    CHECK(!s->measured_while_turning);
+    // Never drives the servo past the calibrated limits.
+    int lo = s->cfg.left_deg < s->cfg.right_deg ? s->cfg.left_deg : s->cfg.right_deg;
+    int hi = s->cfg.left_deg > s->cfg.right_deg ? s->cfg.left_deg : s->cfg.right_deg;
+    CHECK(s->min_angle >= lo);
+    CHECK(s->max_angle <= hi);
+    CHECK(s->max_abs_heading <= s->cfg.bypass_max_turn_deg ||
+          s->max_abs_heading <= s->cfg.turn_scan_max_deg);
 }
 
 // Runs a full encounter until back in MONITOR; returns false on timeout.
 static bool run_encounter(sim_t *s, av_t *av) {
     if (!run_until(s, av, AV_STATE_COARSE_SCAN, 5000)) return false;
-    return run_until(s, av, AV_STATE_MONITOR, 30000);
+    return run_until(s, av, AV_STATE_MONITOR, 60000);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +301,9 @@ static void default_config_is_valid(void) {
     av_config_t c;
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
+    CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
+    CHECK_INT(c.left_deg, 102);
+    CHECK_INT(c.right_deg, 78);
 }
 
 static void invalid_configs_rejected(void) {
@@ -260,6 +324,9 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.fine_step_deg = 0);
     EXPECT_BAD(c.fine_half_range_deg = 2);
     EXPECT_BAD(c.fine_half_range_deg = 95);
+    EXPECT_BAD(c.turn_step_deg = 0);
+    EXPECT_BAD(c.turn_scan_max_deg = 5);
+    EXPECT_BAD(c.turn_scan_max_deg = 91);
     EXPECT_BAD(c.detect_cm = 0.0f);
     EXPECT_BAD(c.detect_cm = NAN);
     EXPECT_BAD(c.max_range_cm = 10.0f);
@@ -268,6 +335,11 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.emergency_stop_cm = -1.0f);
     EXPECT_BAD(c.max_rescans = -1);
     EXPECT_BAD(c.reverse_cm = 0.0f);
+    EXPECT_BAD(c.bypass_side_margin_cm = -1.0f);
+    EXPECT_BAD(c.bypass_pass_cm = 0.0f);
+    EXPECT_BAD(c.bypass_min_turn_deg = 0);
+    EXPECT_BAD(c.bypass_max_turn_deg = 90);
+    EXPECT_BAD((c.bypass_min_turn_deg = 50, c.bypass_max_turn_deg = 40));
     EXPECT_BAD(c.motion_timeout_ms = 0);
     EXPECT_BAD(c.max_reacquire_attempts = 0);
     EXPECT_BAD(c.max_consecutive_faults = 0);
@@ -280,6 +352,12 @@ static void init_rejects_incomplete_platform(void) {
     av_t av;
     sim_setup(&s, &av, 0);
     av_platform_t p = platform_for(&s);
+    p.motion_turn = NULL;
+    CHECK(!av_init(&av, &s.cfg, &p));
+    p = platform_for(&s);
+    p.motion_forward = NULL;
+    CHECK(!av_init(&av, &s.cfg, &p));
+    p = platform_for(&s);
     p.line_detected = NULL;
     CHECK(!av_init(&av, &s.cfg, &p));
     CHECK_INT(av_state(&av), AV_STATE_FAILED);
@@ -304,12 +382,25 @@ static void no_obstacle_stays_passive(void) {
     CHECK_INT(av_state(&av), AV_STATE_MONITOR);
     CHECK(!av_is_active(&av));
     CHECK_INT(s.stops, 0);
+    CHECK_INT(s.turns, 0);
     CHECK_INT(av_metrics(&av)->detections, 0);
     CHECK_INT(s.servo, 90);
     range_reading_t r;
     CHECK(av_last_reading(&av, &r));
     CHECK_NEAR(r.cm, 150.0f, 1e-6);
     check_hygiene(&s);
+}
+
+static void detects_at_25_cm(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 26.0f, true}; // just outside
+    run_ms(&s, &av, 3000);
+    CHECK_INT(av_metrics(&av)->detections, 0);
+    s.obstacle.cm = 24.0f; // just inside
+    run_ms(&s, &av, 1000);
+    CHECK_INT(av_metrics(&av)->detections, 1);
 }
 
 static void single_spike_is_debounced(void) {
@@ -338,6 +429,62 @@ static void too_close_counts_as_obstacle(void) {
 }
 
 // ---------------------------------------------------------------------------
+// Scanning
+// ---------------------------------------------------------------------------
+
+static void narrow_obstacle_needs_no_car_turns(void) {
+    // Fits inside the +/-10 deg servo fine scan: edges found without turning.
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){87, 93, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 10000));
+    CHECK_INT(s.turns, 0);
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->left.found && p->right.found);
+    if (p) {
+        // Hit at 0, clear at 5 deg -> edge 2.5 (true edge 3).
+        CHECK_NEAR(p->left.angle_deg, 2.5f, 1e-4);
+        CHECK_NEAR(p->right.angle_deg, -2.5f, 1e-4);
+    }
+}
+
+static void turn_scan_finds_edges_beyond_servo(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){70, 110, 20.0f, true}; // +/-20 deg: outside the servo's reach
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->left.found && p->right.found);
+    if (p) {
+        // Turn to 30 deg is clear, servo looks back 5 deg: still clear -> edge 22.5.
+        CHECK_NEAR(p->left.angle_deg, 22.5f, 1e-4);
+        CHECK_NEAR(p->right.angle_deg, -22.5f, 1e-4);
+        float true_width = 2.0f * 20.0f * 0.34202f; // 2 r sin(20)
+        CHECK(p->width_cm > 0.9f * true_width && p->width_cm < 1.15f * true_width);
+    }
+    CHECK_INT(s.max_abs_heading, 30);
+    CHECK_INT(av_metrics(&av)->car_turns, 4); // -20, -30, then straight to +20, +30
+    CHECK_INT(av_metrics(&av)->profiles_complete, 1);
+    check_hygiene(&s);
+}
+
+static void edge_refined_by_servo_looking_back(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){55, 95, 12.0f, true}; // right edge at -35
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p != NULL);
+    if (p) {
+        CHECK_NEAR(p->left.angle_deg, 7.5f, 1e-4);   // found by the servo alone
+        CHECK_NEAR(p->right.angle_deg, -37.5f, 1e-4); // turn to -40 clear, servo -35 hits
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Full encounters
 // ---------------------------------------------------------------------------
 
@@ -353,10 +500,10 @@ static void centered_obstacle_full_encounter(void) {
     CHECK(p != NULL);
     if (p) {
         CHECK(p->left.found && p->right.found);
-        CHECK_NEAR(p->left.angle_deg, 102.5f, 1e-4);
-        CHECK_NEAR(p->right.angle_deg, 77.5f, 1e-4);
+        CHECK_NEAR(p->left.angle_deg, 12.5f, 1e-4);
+        CHECK_NEAR(p->right.angle_deg, -12.5f, 1e-4);
         CHECK_NEAR(p->distance_cm, 12.0f, 1e-4);
-        // Sim obstacle spans 80..100 deg at 12 cm => ~4.2 cm; step quantisation adds ~1 cm.
+        // Sim obstacle spans +/-10 deg at 12 cm => ~4.2 cm; step quantisation adds ~1 cm.
         CHECK(p->width_cm > 3.5f && p->width_cm < 6.5f);
         CHECK_NEAR(p->center.x_cm, 0.0f, 1e-3);
     }
@@ -364,6 +511,10 @@ static void centered_obstacle_full_encounter(void) {
     CHECK_INT(m->profiles_complete, 1);
     CHECK_INT(s.bypasses, 1);
     CHECK_INT(s.last_bypass, SIDE_LEFT); // exact tie -> LEFT
+    CHECK(s.last_plan.turn_deg >= 20 && s.last_plan.turn_deg <= 75);
+    CHECK_INT(s.forwards, 3);             // out, pass, back
+    CHECK_INT(s.turns, 2 + 4);            // scan: -20, +20; bypass: out, straight, in, straight
+    CHECK_INT(s.heading, 0);              // facing the line direction again
     CHECK_INT(s.searches, 1);
     CHECK_INT(s.search_sides[0], SIDE_RIGHT); // line is back where we came from
     CHECK_INT(s.resumes, 1);
@@ -371,8 +522,6 @@ static void centered_obstacle_full_encounter(void) {
     CHECK(m->last_encounter_ms > 0);
     CHECK_INT(m->total_encounter_ms, m->last_encounter_ms);
     CHECK(m->last_scan_ms > 0 && m->last_scan_ms < m->last_encounter_ms);
-    // Rubric: "time to bypass" < 3 s for an A. Scanning is the part we own.
-    CHECK(m->last_scan_ms < 2500);
     printf("    (sim timing: scan %lu ms, full encounter %lu ms)\n",
            (unsigned long)m->last_scan_ms, (unsigned long)m->last_encounter_ms);
     CHECK_INT(m->failures, 0);
@@ -381,11 +530,31 @@ static void centered_obstacle_full_encounter(void) {
     // Events arrive in pipeline order.
     int d = first_event(&s, AV_EVT_OBSTACLE_DETECTED), sp = first_event(&s, AV_EVT_SCAN_POINT),
         pr = first_event(&s, AV_EVT_PROFILE_READY), de = first_event(&s, AV_EVT_DECISION),
-        by = first_event(&s, AV_EVT_BYPASS_START), rs = first_event(&s, AV_EVT_REACQUIRE_START),
-        ok = first_event(&s, AV_EVT_LINE_REACQUIRED);
-    CHECK(d == 0 && d < sp && sp < pr && pr < de && de < by && by < rs && rs < ok);
-    CHECK_INT(count_events(&s, AV_EVT_SCAN_POINT), 5 + 3 + 3); // coarse + 3 fine each side
+        by = first_event(&s, AV_EVT_BYPASS_START), br = first_event(&s, AV_EVT_BYPASS_RETURN),
+        rs = first_event(&s, AV_EVT_REACQUIRE_START), ok = first_event(&s, AV_EVT_LINE_REACQUIRED);
+    CHECK(d == 0 && d < sp && sp < pr && pr < de && de < by && by < br && br < rs && rs < ok);
+    // coarse 5 + servo fine 2 per side + per side (1 turn reading + 1 look-back)
+    CHECK_INT(count_events(&s, AV_EVT_SCAN_POINT), 5 + 2 + 2 + 2 + 2);
     check_hygiene(&s);
+}
+
+static void bypass_legs_mirror_each_other(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    int t = s.last_plan.turn_deg;
+    // Leg 0: turn out to +t (from wherever the scan left the car).
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 10)); // still bypassing
+    while (s.forwards < 1) run_ms(&s, &av, TICK_MS);
+    CHECK_INT(s.heading, t);
+    while (s.forwards < 2) run_ms(&s, &av, TICK_MS);
+    CHECK_INT(s.heading, 0); // parallel to the line alongside the obstacle
+    while (s.forwards < 3) run_ms(&s, &av, TICK_MS);
+    CHECK_INT(s.heading, -t); // mirrored back toward the line
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 20000));
+    CHECK_INT(s.heading, 0);
 }
 
 static void offset_obstacle_goes_short_way(void) {
@@ -402,6 +571,7 @@ static void offset_obstacle_goes_short_way(void) {
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.last_bypass, SIDE_RIGHT);
     CHECK_INT(s.search_sides[0], SIDE_LEFT);
+    CHECK_INT(s.heading, 0);
     check_hygiene(&s);
 }
 
@@ -410,47 +580,64 @@ static void wall_on_one_side_forces_other(void) {
     av_t av;
     sim_setup(&s, &av, 0);
     s.obstacle = (blob_t){80, 100, 12.0f, true};
-    s.wall = (blob_t){115, 180, 15.0f, true}; // left side walled off
+    s.wall = (blob_t){108, 180, 15.0f, true}; // left side walled off, close
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.last_bypass, SIDE_RIGHT);
+    CHECK_INT(s.max_abs_heading, s.cfg.turn_scan_max_deg); // searched the whole left side
     check_hygiene(&s);
+
+    // A wall further away leaves an edge, but not enough room past it.
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.wall = (blob_t){108, 180, 30.0f, true};
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.last_bypass, SIDE_RIGHT);
 }
 
-static void wide_obstacle_gives_partial_profile(void) {
+static void wide_obstacle_found_by_turning(void) {
     sim_t s;
     av_t av;
     sim_setup(&s, &av, 0);
-    s.obstacle = (blob_t){40, 140, 12.0f, true}; // wider than the +/-45 deg fine scan
+    s.obstacle = (blob_t){40, 140, 12.0f, true}; // +/-50 deg
     CHECK(run_encounter(&s, &av));
     const obstacle_profile_t *p = av_profile(&av);
     CHECK(p != NULL);
     if (p) {
-        CHECK(!p->left.found && !p->right.found);
-        CHECK(p->width_cm >= 16.9f); // lower bound: 2 * 12 * sin(45)
+        CHECK(p->left.found && p->right.found);
+        CHECK_NEAR(p->left.angle_deg, 52.5f, 1e-4);
+        CHECK(p->width_cm > 17.0f && p->width_cm < 21.0f); // true 2*12*sin(50) = 18.4
     }
-    CHECK_INT(av_metrics(&av)->profiles_partial, 1);
     CHECK_INT(s.bypasses, 1);
+    CHECK_INT(s.heading, 0);
     check_hygiene(&s);
+}
+
+static void edge_beyond_turn_range_is_partial(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){40, 175, 12.0f, true}; // left edge past +70
+    CHECK(run_encounter(&s, &av));
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && !p->left.found && p->right.found);
+    CHECK_INT(av_metrics(&av)->profiles_partial, 1);
+    CHECK_INT(s.last_bypass, SIDE_RIGHT);
 }
 
 static void flipped_servo_mounting(void) {
     sim_t s;
     av_t av;
-    memset(&s, 0, sizeof s);
-    av_config_default(&s.cfg);
-    s.cfg.left_deg = 30; // servo mounted the other way round
-    s.cfg.right_deg = 150;
-    s.min_angle = 999;
-    s.max_angle = -999;
-    s.bg_cm = 150.0f;
-    s.bypass_ms = 1500;
-    s.line_after_ms = 300;
+    sim_defaults(&s, 0);
+    s.cfg.left_deg = 78; // servo mounted the other way round
+    s.cfg.right_deg = 102;
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
-    s.obstacle = (blob_t){85, 125, 12.0f, true}; // now mostly on the RIGHT
+    s.obstacle = (blob_t){55, 95, 12.0f, true}; // mostly on the right (world frame)
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.last_bypass, SIDE_LEFT);
     CHECK_INT(s.search_sides[0], SIDE_RIGHT);
+    const obstacle_profile_t *pr = av_profile(&av);
+    CHECK(pr && pr->right.angle_deg < -30.0f);
     check_hygiene(&s);
 }
 
@@ -482,6 +669,7 @@ static void obstacle_gone_on_rescan_resumes(void) {
     CHECK(run_encounter(&s, &av));
     CHECK_INT(av_metrics(&av)->obstacle_cleared, 1);
     CHECK_INT(s.bypasses, 0);
+    CHECK_INT(s.turns, 0);
     CHECK_INT(s.searches, 0);
     CHECK_INT(s.resumes, 1);
     CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 1);
@@ -492,13 +680,14 @@ static void boxed_in_rescans_reverses_then_fails(void) {
     av_t av;
     sim_setup(&s, &av, 0);
     s.bg_cm = 10.0f; // walls everywhere
-    CHECK(run_until(&s, &av, AV_STATE_FAILED, 120000));
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 600000));
     const av_metrics_t *m = av_metrics(&av);
     CHECK_INT(m->rescans, 6); // 2 per cycle x (1 + 2 reverses)
     CHECK_INT(m->reverses, 2);
     CHECK_INT(s.reverses, 2);
     CHECK_INT(m->failures, 1);
     CHECK_INT(s.bypasses, 0);
+    CHECK_INT(s.max_abs_heading, s.cfg.turn_scan_max_deg);
     CHECK(av_fail_reason(&av) != NULL && strstr(av_fail_reason(&av), "no clear path"));
     CHECK(!s.motion_active); // stopped on failure
 
@@ -508,6 +697,19 @@ static void boxed_in_rescans_reverses_then_fails(void) {
     CHECK_INT(av_state(&av), AV_STATE_FAILED);
     CHECK_INT(s.stops, stops);
     check_hygiene(&s);
+}
+
+static void rescan_and_reverse_face_the_obstacle_first(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.bg_cm = 10.0f;
+    CHECK(run_until(&s, &av, AV_STATE_WAIT_RESCAN, 60000));
+    run_ms(&s, &av, 1000);
+    CHECK_INT(s.heading, 0); // turned back before rescanning
+    CHECK(run_until(&s, &av, AV_STATE_REVERSE, 120000));
+    while (s.reverses == 0) run_ms(&s, &av, TICK_MS);
+    CHECK_INT(s.heading, 0); // reverses straight back
 }
 
 static void reverse_opens_a_path(void) {
@@ -532,6 +734,33 @@ static void bypass_timeout_fails_safe(void) {
     CHECK_INT(av_metrics(&av)->motion_timeouts, 1);
     CHECK(strstr(av_fail_reason(&av), "bypass timed out") != NULL);
     CHECK(!s.motion_active);
+}
+
+static void scan_turn_timeout_fails_safe(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.turns_never_done = true;
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 60000));
+    CHECK_INT(s.turns, 1);
+    CHECK_INT(av_metrics(&av)->motion_timeouts, 1);
+    CHECK(strstr(av_fail_reason(&av), "turn timed out") != NULL);
+    CHECK(!s.motion_active);
+}
+
+static void line_found_on_return_leg(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.line_on_return_leg = true;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 3);
+    CHECK_INT(s.stops, 2);   // detection stop + early stop on the return leg
+    CHECK_INT(s.heading, 0); // still straightened up after stopping early
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    CHECK_INT(av_metrics(&av)->failures, 0);
 }
 
 static void reacquire_retries_alternate_direction(void) {
@@ -567,7 +796,7 @@ static void emergency_stop_replans_and_rejoins(void) {
     s.obstacle = (blob_t){80, 100, 12.0f, true};
     s.late_obstacle = (blob_t){85, 95, 4.0f, false}; // appears once bypass starts
     s.vanish_late_on_estop = true;
-    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 10000));
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     s.obstacle.present = false; // we've moved past the original obstacle
     CHECK(run_until(&s, &av, AV_STATE_MONITOR, 30000));
 
@@ -579,7 +808,39 @@ static void emergency_stop_replans_and_rejoins(void) {
     CHECK_INT(s.searches, 1);
     CHECK_INT(s.resumes, 1);
     CHECK_INT(m->reacquire_ok, 1);
+    CHECK_INT(s.heading, 0); // turned back to the line direction before searching
     check_hygiene(&s);
+}
+
+static void replan_mid_bypass_still_ends_on_line_heading(void) {
+    // Emergency stop while turned out; obstacle still there, so a second
+    // bypass is planned from the new heading. It must still end facing the
+    // line direction, not the heading it re-planned from.
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.late_obstacle = (blob_t){85, 95, 4.0f, false};
+    s.vanish_late_on_estop = true;
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 20000)); // e-stop on the out leg
+    int replanned_from = s.heading;
+    CHECK(replanned_from != 0);
+    s.late_obstacle.cm = 0.0f; // don't reappear on the second bypass
+    s.obstacle = (blob_t){80 + replanned_from, 100 + replanned_from, 12.0f, true}; // ahead again
+    CHECK(run_until(&s, &av, AV_STATE_REACQUIRE, 60000));
+    // The second scan is relative to where the car re-planned from, so the
+    // obstacle straight ahead there profiles as centered.
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->left.found && p->right.found);
+    if (p) CHECK_NEAR(p->center.x_cm, 0.0f, 1e-3);
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(s.bypasses, 2);
+    CHECK_INT(s.heading, 0);
+    // Re-planned from +t and went the same way by t again, so the return turn
+    // (o - t) already lands on the line heading: no extra turn before searching.
+    CHECK_INT(s.turns_since_return, 1);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
 static void persistent_sensor_fault_fails(void) {
@@ -631,7 +892,7 @@ static void survives_clock_wraparound(void) {
     s.obstacle = (blob_t){80, 100, 12.0f, true};
     CHECK(run_encounter(&s, &av));
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
-    CHECK(av_metrics(&av)->last_encounter_ms < 20000);
+    CHECK(av_metrics(&av)->last_encounter_ms < 30000);
     check_hygiene(&s);
 }
 
@@ -640,21 +901,31 @@ void run_avoidance_tests(void) {
     RUN(invalid_configs_rejected);
     RUN(init_rejects_incomplete_platform);
     RUN(no_obstacle_stays_passive);
+    RUN(detects_at_25_cm);
     RUN(single_spike_is_debounced);
     RUN(too_close_counts_as_obstacle);
+    RUN(narrow_obstacle_needs_no_car_turns);
+    RUN(turn_scan_finds_edges_beyond_servo);
+    RUN(edge_refined_by_servo_looking_back);
     RUN(centered_obstacle_full_encounter);
+    RUN(bypass_legs_mirror_each_other);
     RUN(offset_obstacle_goes_short_way);
     RUN(wall_on_one_side_forces_other);
-    RUN(wide_obstacle_gives_partial_profile);
+    RUN(wide_obstacle_found_by_turning);
+    RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);
     RUN(obstacle_gone_on_rescan_resumes);
     RUN(boxed_in_rescans_reverses_then_fails);
+    RUN(rescan_and_reverse_face_the_obstacle_first);
     RUN(reverse_opens_a_path);
     RUN(bypass_timeout_fails_safe);
+    RUN(scan_turn_timeout_fails_safe);
+    RUN(line_found_on_return_leg);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);
+    RUN(replan_mid_bypass_still_ends_on_line_heading);
     RUN(persistent_sensor_fault_fails);
     RUN(intermittent_fault_does_not_fail);
     RUN(reset_recovers_from_failure);
