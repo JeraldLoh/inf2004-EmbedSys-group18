@@ -9,7 +9,9 @@ an upstream example result or placeholder into a reported measurement.
 
 `host/test_vehicle_controller.c` contains the portable controller checks,
 `host/test_motion_math.c` checks Buddy 2's hardware-independent conversion logic,
-and `host/test_perception_math.c` checks the ported barcode/raw-IMU decoding.
+`host/test_perception_math.c` checks the ported barcode/raw-IMU decoding,
+and `host/test_terrain_estimator.c` checks Buddy 4's IMU math, packed data,
+seqlock and terrain/hump estimator against a simulated car.
 These CMake targets compile only portable code; they do not compile the kernel,
 build a UF2 or access hardware. Assertions remain enabled in Release builds.
 CMake configuration/build is a HOST operation:

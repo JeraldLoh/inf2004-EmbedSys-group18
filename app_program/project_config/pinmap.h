@@ -16,8 +16,8 @@ enum
     PIN_LINE_LEFT = 0,
     PIN_LINE_RIGHT = 1,
     PIN_BARCODE_ADC = 28,
-    PIN_IMU_SDA = 16,
-    PIN_IMU_SCL = 17,
+    PIN_IMU_SDA = 2,   /* I2C1, Grove 2 / Maker port */
+    PIN_IMU_SCL = 3,
     PIN_SONAR_TRIGGER = 6,
     PIN_SONAR_ECHO = 7,
     PIN_SCAN_SERVO = 12,

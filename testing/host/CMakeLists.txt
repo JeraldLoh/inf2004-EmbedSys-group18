@@ -52,3 +52,21 @@ endif()
 
 add_test(NAME perception_math_host_tests
          COMMAND perception_math_host_tests)
+
+add_executable(terrain_estimator_host_tests
+    test_terrain_estimator.c
+    ../../app_program/subsystem4/imu_math.c
+    ../../app_program/subsystem4/terrain_estimator.c
+    ../../app_program/subsystem4/s4_shared.c
+)
+
+if(MSVC)
+    target_compile_options(terrain_estimator_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(terrain_estimator_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    target_link_libraries(terrain_estimator_host_tests PRIVATE m)
+endif()
+
+add_test(NAME terrain_estimator_host_tests
+         COMMAND terrain_estimator_host_tests)

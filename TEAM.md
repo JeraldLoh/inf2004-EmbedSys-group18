@@ -35,12 +35,12 @@ These are the Week 6 section 2 baseline, not a physical inspection result.
 | GP8, GP9 | Buddy 2 | M1 / intended left motor, PWM slice 4 A/B |
 | GP10, GP11 | Buddy 2 | M2 / intended right motor, PWM slice 5 A/B |
 | GP28 / ADC2 | Buddy 3 | Barcode analog; isolate GP28 VBAT-sense jumper |
-| GP16, GP17 | Buddy 4 | IMU SDA/SCL on I2C0 |
-| GP6, GP7 | Buddy 5 | Provisional TRIG/ECHO; reconcile actual wiring and GP2/3 report contradiction |
+| GP2, GP3 | Buddy 4 | IMU SDA/SCL on I2C1 (Grove 2 / Maker port); claimed at boot by the I2C driver |
+| GP6, GP7 | Buddy 5 | Provisional TRIG/ECHO; GP2/GP3 now belong to the Buddy 4 IMU, so the sonar must not use them |
 | GP12 | Buddy 5 | Optional scan servo, PWM slice 6 A; mechanism unverified |
 | GP20, GP21 | Shared controller adapter | User START/STOP; adapter unimplemented |
 | GP18, GP22 | Carrier-reserved for planning | Onboard RGB/buzzer; no driver added |
-| GP2, GP3, GP4, GP13-GP15, GP19, GP27 | Unclaimed by this application | Inspect actual harness before claiming |
+| GP4, GP13-GP17, GP19, GP27 | Unclaimed by this application | Inspect actual harness before claiming |
 
 The upstream demo's GP19 LED claim is not adopted. Connector number and wire
 colour do not prove a GPIO. G1 remains open for power, common ground, Echo
@@ -53,7 +53,7 @@ protection, IR/encoder voltage, GP28 jumper and boot/reset behavior.
 | Motor PWM slices 4/5 | Buddy 2 motion task | Sole motor-output writer; others request motion or urgent stop |
 | Encoder counts | Buddy 2 acquisition/ISR adapter | Coherent snapshot/reset and SMP policy unimplemented |
 | ADC, GP28 channel 2 | Buddy 3 acquisition task | Coordinate the entire ADC block if channels are added |
-| I2C0, GP16/GP17 | Buddy 4 IMU task | No second task directly drives the block |
+| I2C1 ("iicb"), GP2/GP3 | Buddy 4 IMU task | No second task directly drives the block |
 | Sonar and optional servo slice 6 | Buddy 5 acquisition/scan | Explicit per-peripheral ownership; GPIO IRQ routing reviewed centrally |
 | Controller state | Future dedicated controller task | Other tasks submit events, not concurrent state mutations |
 | USB console | Built-in kernel service | Bounded task logging, not timing-critical ISR printing |

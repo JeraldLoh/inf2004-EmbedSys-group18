@@ -29,11 +29,14 @@
  *   I2C0: SDA on GP0/4/8/12/16/20/28, SCL on GP1/5/9/13/17/21
  *   I2C1: SDA on GP2/6/10/14/18/22/26, SCL on GP3/7/11/15/19/27
  * Robo Pico: I2C0 = GP4/GP5 (Grove 3), I2C1 = GP2/GP3 (Grove 2, Maker port).
- * GP8/GP9 are its motor 1 pins. */
-#define	DEVCNF_I2C0_SDA_PIN	8
-#define	DEVCNF_I2C0_SCL_PIN	9
-#define	DEVCNF_I2C1_SDA_PIN	6
-#define	DEVCNF_I2C1_SCL_PIN	7
+ * GP8/GP9 are its motor 1 pins.
+ *
+ * Group 18: only unit 1 is started (kernel/sysdepend/pico_rp2040/devinit.c),
+ * so the I2C0 pins below are never claimed. I2C1 = Buddy 4 IMU (TEAM.md). */
+#define	DEVCNF_I2C0_SDA_PIN	8	/* unused: unit 0 not initialised */
+#define	DEVCNF_I2C0_SCL_PIN	9	/* unused: unit 0 not initialised */
+#define	DEVCNF_I2C1_SDA_PIN	2	/* Buddy 4 IMU SDA, Grove 2 / Maker port */
+#define	DEVCNF_I2C1_SCL_PIN	3	/* Buddy 4 IMU SCL, Grove 2 / Maker port */
 
 /* Register initial value */
 

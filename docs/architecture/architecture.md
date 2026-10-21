@@ -61,7 +61,7 @@ all modules -> bounded telemetry snapshots/events -> communications
 ## Provisional hardware map
 
 The Week 6 section 2 table is the baseline: motors GP8-GP11, encoders GP26/GP5,
-line sensors GP0/GP1, barcode GP28/ADC2, IMU GP16/GP17, sonar GP6/GP7, servo
-GP12, and start/stop GP20/GP21. The later GP2/GP3 sonar statement is not used.
+line sensors GP0/GP1, barcode GP28/ADC2, IMU GP2/GP3 (I2C1), sonar GP6/GP7, servo
+GP12, and start/stop GP20/GP21. GP2/GP3 are assigned to the IMU, so the later GP2/GP3 sonar statement is not used.
 
 No pin is configured by this framework.
