@@ -13,7 +13,7 @@ bounded-test approval and a physical power cut.
 | S5-U11 | Validate scan/profile and bounded recovery proposals | Procedure and quantitative acceptance to be agreed | Not run |
 | S5-B01 | Sensor distance accuracy | Bench firmware; flat object at 10/20/50/100 cm; pass if within +/-1 cm | Not run |
 | S5-B02 | Sensor edge cases | Open space, 1 cm, ECHO unplugged; pass if no-echo / too-close / sensor-fault | Not run |
-| S5-B03 | Servo movement and safe range | Servo-cal firmware; smooth, no jitter; record both limits and printed config | Not run |
+| S5-B03 | Servo movement and safe range | Boot menu `c`; smooth, no jitter; saved range survives reset; record both limits | Not run |
 | S5-B04 | Obstacle detection | Object brought under 15 cm; pass if detect + STOP + scan starts | Not run |
 | S5-B05 | Scan, width and side choice | Width within +/-30% of measured; walled side avoided | Not run |
 | S5-B06 | Boxed-in handling | Rescan x2, reverse, repeat, then FAILED (no clear path) | Not run |

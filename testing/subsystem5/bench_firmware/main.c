@@ -5,11 +5,25 @@
 // motion_* / line_* callbacks below simulate them with fixed durations.
 // Integration = replace those callback bodies; nothing else changes.
 // The avoidance logic itself is app_program/subsystem5 (shared with the RTOS build).
+//
+// Boot sequence:
+//   1. Calibration menu: recalibrate the servo range, or keep the saved one.
+//      The calibration is stored in the last flash sector, so it survives
+//      power-off and reflashing. With no key press (or no PC attached) the
+//      saved calibration is used automatically.
+//   2. Self-check: sweeps the servo across the scan angles and prints a
+//      reading at each one, so wiring problems show up before the run.
+//   3. Avoidance run: detection, scanning, decision and recovery, with every
+//      step and state change printed.
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "hardware/flash.h"
 #include "hardware/watchdog.h"
+#include "pico/flash.h"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 
@@ -29,6 +43,18 @@
 #define WATCHDOG_TIMEOUT_MS 3000
 #define USB_WAIT_MS 5000
 #define HEARTBEAT_MS 1000
+#define FAILED_REMINDER_MS 5000
+#define MENU_TIMEOUT_S 10
+#define SELFTEST_SETTLE_MS 300
+
+// Servo range measured on this car with the calibration menu. Used when no
+// valid calibration is saved in flash.
+#define CAR_LEFT_DEG 102
+#define CAR_CENTER_DEG 90
+#define CAR_RIGHT_DEG 78
+#define CAR_FINE_HALF_RANGE_DEG 10
+
+#define CAL_SAFETY_MARGIN_DEG 5
 
 // Simulated Buddy 2/3 behaviour -- remove when integrating.
 #define SIM_REVERSE_MS 600
@@ -71,33 +97,33 @@ static void cb_motion_stop(void *ctx) {
     board_t *b = ctx;
     b->motion_until = 0;
     b->searching = false;
-    printf("[motion] STOP\n");
+    printf("         [motion] STOP\n");
 }
 
 static void cb_motion_reverse(void *ctx, float cm) {
     board_t *b = ctx;
     b->motion_until = now_ms() + SIM_REVERSE_MS;
-    printf("[motion] REVERSE %.1f cm\n", (double)cm);
+    printf("         [motion] REVERSE %.1f cm (simulated, %d ms)\n", (double)cm, SIM_REVERSE_MS);
 }
 
 static void cb_motion_bypass(void *ctx, side_t side, const obstacle_profile_t *p) {
     board_t *b = ctx;
     b->motion_until = now_ms() + SIM_BYPASS_MS;
-    printf("[motion] BYPASS %s around %.1f cm wide obstacle at %.1f cm\n", side_name(side),
-           (double)p->width_cm, (double)p->distance_cm);
+    printf("         [motion] BYPASS %s around %.1f cm wide obstacle at %.1f cm (simulated, %d ms)\n",
+           side_name(side), (double)p->width_cm, (double)p->distance_cm, SIM_BYPASS_MS);
 }
 
 static void cb_motion_search_line(void *ctx, side_t toward) {
     board_t *b = ctx;
     b->searching = true;
     b->search_started = now_ms();
-    printf("[motion] SEARCH for line toward %s\n", side_name(toward));
+    printf("         [motion] SEARCH for line toward %s (simulated)\n", side_name(toward));
 }
 
 static void cb_motion_resume(void *ctx) {
     board_t *b = ctx;
     b->searching = false;
-    printf("[motion] RESUME line following\n");
+    printf("         [motion] RESUME line following\n");
 }
 
 static bool cb_motion_done(void *ctx) {
@@ -146,10 +172,11 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
         case AV_EVT_OBSTACLE_DETECTED:
             printf("[detect] obstacle ahead: ");
             print_reading(e->point.reading);
-            printf("\n");
+            printf(" -> stopping and scanning\n");
             break;
         case AV_EVT_SCAN_POINT:
-            printf("[scan] %3d deg: ", e->point.angle_deg);
+            printf("[scan] %3d deg (%-6s): ", e->point.angle_deg,
+                   side_name(scan_side_of(&g_av.geom, (float)e->point.angle_deg)));
             print_reading(e->point.reading);
             printf("\n");
             break;
@@ -164,12 +191,15 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
                    (double)p->width_cm, (double)p->center.x_cm, (double)p->center.y_cm,
                    (double)p->left.angle_deg, p->left.found ? "" : "(open)",
                    (double)p->right.angle_deg, p->right.found ? "" : "(open)");
+            if (!p->left.found || !p->right.found) {
+                printf("         [profile] an edge was beyond the scan range, width is a minimum\n");
+            }
             break;
         }
         case AV_EVT_DECISION:
-            printf("[decide] clearance L=%.1f R=%.1f cm -> %s\n",
+            printf("[decide] clearance L=%.1f R=%.1f cm (need >= %.0f) -> %s\n",
                    (double)e->choice->left_clear_cm, (double)e->choice->right_clear_cm,
-                   side_name(e->side));
+                   (double)g_av.cfg.min_clearance_cm, side_name(e->side));
             break;
         case AV_EVT_RESCAN:
             printf("[decide] no clear side, rescan #%d\n", e->attempt);
@@ -195,98 +225,164 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
             print_metrics(av_metrics(&g_av));
             break;
         case AV_EVT_FAILED:
-            printf("[FAILED] %s -- robot stopped, needs reset\n", e->reason);
+            printf("[FAILED] %s -- robot stopped. Press r to restart.\n", e->reason);
             print_metrics(av_metrics(&g_av));
             break;
     }
 }
 
 // ---------------------------------------------------------------------------
-// Servo calibration mode: step the servo by hand to find the safe range.
+// Calibration storage: one record in the last 4 KB flash sector.
 // ---------------------------------------------------------------------------
 
-// Set to 1 by the separate calibration build target (see CMakeLists.txt).
-#ifndef BUDDY5_SERVO_CALIBRATION
-#define BUDDY5_SERVO_CALIBRATION 0
-#endif
+#define CAL_MAGIC 0xB5CA1B01u
+#define CAL_VERSION 1u
+#define CAL_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
-#define CAL_SAFETY_MARGIN_DEG 5
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    int32_t left_deg;
+    int32_t center_deg;
+    int32_t right_deg;
+    int32_t fine_half_range_deg;
+    uint32_t checksum; // FNV-1a over every field above
+} cal_record_t;
 
-#if BUDDY5_SERVO_CALIBRATION
+static uint32_t cal_checksum(const cal_record_t *r) {
+    const uint8_t *p = (const uint8_t *)r;
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < offsetof(cal_record_t, checksum); i++) {
+        h ^= p[i];
+        h *= 16777619u;
+    }
+    return h;
+}
+
+static void cal_apply(av_config_t *cfg, const cal_record_t *r) {
+    cfg->left_deg = r->left_deg;
+    cfg->center_deg = r->center_deg;
+    cfg->right_deg = r->right_deg;
+    cfg->fine_half_range_deg = r->fine_half_range_deg;
+}
+
+static cal_record_t cal_make(int left, int center, int right, int fine_half) {
+    cal_record_t r = {CAL_MAGIC, CAL_VERSION, left, center, right, fine_half, 0};
+    r.checksum = cal_checksum(&r);
+    return r;
+}
+
+// True only if a record is present, intact and gives a valid config.
+static bool cal_load(cal_record_t *out) {
+    const cal_record_t *r = (const cal_record_t *)(XIP_BASE + CAL_FLASH_OFFSET);
+    if (r->magic != CAL_MAGIC || r->version != CAL_VERSION || r->checksum != cal_checksum(r)) {
+        return false;
+    }
+    av_config_t cfg;
+    av_config_default(&cfg);
+    cal_apply(&cfg, r);
+    if (av_config_check(&cfg) != NULL) return false;
+    *out = *r;
+    return true;
+}
+
+static void flash_write_page(void *param) {
+    flash_range_erase(CAL_FLASH_OFFSET, FLASH_SECTOR_SIZE);
+    if (param != NULL) flash_range_program(CAL_FLASH_OFFSET, param, FLASH_PAGE_SIZE);
+}
+
+// rec == NULL erases the saved calibration.
+static bool cal_store(const cal_record_t *rec) {
+    static uint8_t page[FLASH_PAGE_SIZE];
+    memset(page, 0xFF, sizeof page);
+    if (rec != NULL) memcpy(page, rec, sizeof *rec);
+    if (flash_safe_execute(flash_write_page, rec != NULL ? page : NULL, 1000) != PICO_OK) {
+        return false;
+    }
+    cal_record_t check;
+    if (rec == NULL) return !cal_load(&check);
+    return cal_load(&check) && memcmp(&check, rec, sizeof check) == 0;
+}
+
+static void print_cal(const char *label, const cal_record_t *r) {
+    printf("%s LEFT %ld deg, CENTER %ld deg, RIGHT %ld deg, fine scan +/-%ld deg\n", label,
+           (long)r->left_deg, (long)r->center_deg, (long)r->right_deg,
+           (long)r->fine_half_range_deg);
+}
+
+// ---------------------------------------------------------------------------
+// Servo calibration: step the servo by hand to find the safe range.
+// ---------------------------------------------------------------------------
+
 static void cal_help(void) {
     printf("\n--- Servo calibration ---\n"
            "  a / d : step -5 / +5 deg      A / D : step -1 / +1 deg\n"
            "  c     : back to 90 deg        m     : measure distance here\n"
            "  l     : mark current angle as LEFT limit (sensor looking left)\n"
            "  r     : mark current angle as RIGHT limit (sensor looking right)\n"
-           "  p     : print suggested config  h : help   q : quit to normal run\n"
+           "  p     : preview the calibration from the marked limits\n"
+           "  s     : SAVE the calibration and start the car\n"
+           "  q     : quit without saving (keeps the previous calibration)\n"
+           "  h     : help\n"
            "Step slowly. Stop as soon as the servo touches anything, buzzes or\n"
            "strains, step back until it moves freely, then mark that angle.\n\n");
 }
 
 static void cal_move(int angle) {
-    if (angle < 0) angle = 0;
-    if (angle > 180) angle = 180;
     servo_set_angle(&g_board.servo, angle);
     printf("servo -> %3d deg\n", angle);
 }
 
-// Builds a symmetric config inside the marked limits and checks it is valid.
-static void cal_suggest(int left, int right, bool have_left, bool have_right) {
+// Builds a symmetric range inside the marked limits and checks it is valid.
+static bool cal_suggest(int left, int right, bool have_left, bool have_right, cal_record_t *out) {
     if (!have_left || !have_right) {
         printf("mark both limits first (l and r)\n");
-        return;
-    }
-    if (left == right) {
-        printf("left and right limits are the same angle; re-mark them\n");
-        return;
+        return false;
     }
     const int center = 90;
-    int left_half = abs(left - center);
-    int right_half = abs(right - center);
     bool left_is_higher = left > right;
-    if ((left > center) != left_is_higher || (right > center) == left_is_higher) {
-        printf("both limits must be on opposite sides of 90 deg; re-mark them\n");
-        return;
+    if (left == right || (left > center) != left_is_higher || (right > center) == left_is_higher) {
+        printf("the two limits must be on opposite sides of 90 deg; re-mark them\n");
+        return false;
     }
 
     // Use the smaller side (minus a margin) so both sides are equal, as the scan assumes.
+    int left_half = abs(left - center);
+    int right_half = abs(right - center);
     int half = (left_half < right_half ? left_half : right_half) - CAL_SAFETY_MARGIN_DEG;
     half -= half % 2; // span must split into 4 equal coarse steps
     if (half < 10) {
         printf("usable range is only +/-%d deg: too narrow to scan. Clear the obstruction.\n",
                half < 0 ? 0 : half);
-        return;
+        return false;
     }
 
     av_config_t cfg;
     av_config_default(&cfg);
-    cfg.center_deg = center;
-    cfg.left_deg = left_is_higher ? center + half : center - half;
-    cfg.right_deg = left_is_higher ? center - half : center + half;
-    cfg.fine_half_range_deg = half - half % cfg.fine_step_deg;
-    if (cfg.fine_half_range_deg < cfg.fine_step_deg) cfg.fine_half_range_deg = cfg.fine_step_deg;
+    int fine_half = half - half % cfg.fine_step_deg;
+    if (fine_half < cfg.fine_step_deg) fine_half = cfg.fine_step_deg;
+    *out = cal_make(left_is_higher ? center + half : center - half, center,
+                    left_is_higher ? center - half : center + half, fine_half);
+    cal_apply(&cfg, out);
 
     const char *err = av_config_check(&cfg);
-    printf("\nMeasured safe limits: LEFT %d deg, RIGHT %d deg\n", left, right);
-    printf("Usable symmetric range: +/-%d deg (includes %d deg safety margin)\n", half,
+    printf("\nMarked limits: LEFT %d deg, RIGHT %d deg\n", left, right);
+    printf("Usable symmetric range: +/-%d deg (after a %d deg safety margin)\n", half,
            CAL_SAFETY_MARGIN_DEG);
     if (err != NULL) {
-        printf("Could not build a valid config: %s\n", err);
-        return;
+        printf("Could not build a valid calibration: %s\n", err);
+        return false;
     }
-    printf("Paste into av_config_default() in buddy5/src/avoidance.c:\n"
-           "    cfg->left_deg = %d;\n"
-           "    cfg->center_deg = %d;\n"
-           "    cfg->right_deg = %d;\n"
-           "    cfg->fine_half_range_deg = %d;\n\n",
-           cfg.left_deg, cfg.center_deg, cfg.right_deg, cfg.fine_half_range_deg);
+    print_cal("Calibration:", out);
+    return true;
 }
 
-static void run_servo_calibration(void) {
+// Returns true if a new calibration was saved into *cal.
+static bool run_servo_calibration(cal_record_t *cal) {
     int angle = 90;
     int left = 0, right = 0;
     bool have_left = false, have_right = false;
+    cal_record_t next;
 
     cal_help();
     cal_move(angle);
@@ -294,12 +390,13 @@ static void run_servo_calibration(void) {
     while (true) {
         int ch = getchar_timeout_us(100000);
         if (ch == PICO_ERROR_TIMEOUT) continue;
+        int prev = angle;
         switch (ch) {
-            case 'a': angle -= 5; cal_move(angle); break;
-            case 'd': angle += 5; cal_move(angle); break;
-            case 'A': angle -= 1; cal_move(angle); break;
-            case 'D': angle += 1; cal_move(angle); break;
-            case 'c': angle = 90; cal_move(angle); break;
+            case 'a': angle -= 5; break;
+            case 'd': angle += 5; break;
+            case 'A': angle -= 1; break;
+            case 'D': angle += 1; break;
+            case 'c': angle = 90; break;
             case 'm': {
                 range_reading_t r = ultrasonic_read(&g_board.sonar, RANGE_SAMPLES,
                                                     RANGE_SAMPLE_SPACING_MS);
@@ -318,19 +415,126 @@ static void run_servo_calibration(void) {
                 have_right = true;
                 printf("RIGHT limit marked at %d deg\n", right);
                 break;
-            case 'p': cal_suggest(left, right, have_left, have_right); break;
-            case 'h': cal_help(); break;
+            case 'p': cal_suggest(left, right, have_left, have_right, &next); break;
+            case 's':
+                if (!cal_suggest(left, right, have_left, have_right, &next)) break;
+                if (!cal_store(&next)) {
+                    printf("ERROR: could not write flash, calibration not saved\n");
+                    break;
+                }
+                printf("Saved to flash. It will be offered at every boot.\n");
+                *cal = next;
+                return true;
             case 'q':
-                cal_move(90);
-                printf("servo parked at 90 deg. Flash the normal build to run the car.\n");
-                return;
+                printf("calibration not changed\n");
+                return false;
+            case 'h': cal_help(); break;
             default: break;
         }
         if (angle < 0) angle = 0;
         if (angle > 180) angle = 180;
+        if (angle != prev) cal_move(angle);
     }
 }
-#endif
+
+// ---------------------------------------------------------------------------
+// Boot menu and self-check
+// ---------------------------------------------------------------------------
+
+// Lets the tester recalibrate or keep the current calibration. Waits
+// MENU_TIMEOUT_S for a key, then keeps the current calibration.
+static void boot_menu(cal_record_t *cal, bool *from_flash) {
+    if (!stdio_usb_connected()) {
+        printf("no serial terminal: skipping the menu\n");
+        return;
+    }
+    printf("\n=== Calibration ===\n");
+    print_cal(*from_flash ? "Saved in flash:" : "No saved calibration, built-in:", cal);
+    printf("  Enter / u : use this calibration and start\n"
+           "  c         : calibrate the servo now\n"
+           "  x         : erase the saved calibration (use built-in values)\n");
+
+    for (int left_s = MENU_TIMEOUT_S; left_s > 0; left_s--) {
+        printf("starting with this calibration in %d s...\r", left_s);
+        absolute_time_t until = make_timeout_time_ms(1000);
+        while (!time_reached(until)) {
+            int ch = getchar_timeout_us(50000);
+            if (ch == PICO_ERROR_TIMEOUT) continue;
+            if (ch == '\r' || ch == '\n' || ch == 'u') {
+                printf("\n");
+                return;
+            }
+            if (ch == 'c') {
+                printf("\n");
+                if (run_servo_calibration(cal)) *from_flash = true;
+                return;
+            }
+            if (ch == 'x') {
+                printf("\n");
+                if (!cal_store(NULL)) {
+                    printf("ERROR: could not erase flash\n");
+                    return;
+                }
+                *cal = cal_make(CAR_LEFT_DEG, CAR_CENTER_DEG, CAR_RIGHT_DEG,
+                                CAR_FINE_HALF_RANGE_DEG);
+                *from_flash = false;
+                print_cal("Saved calibration erased, using built-in:", cal);
+                return;
+            }
+        }
+    }
+    printf("\nno key pressed\n");
+}
+
+static void print_config(const av_config_t *c, bool from_flash) {
+    int step = (c->left_deg - c->right_deg) / (c->coarse_points - 1);
+    printf("\n=== Configuration (%s) ===\n", from_flash ? "saved calibration" : "built-in values");
+    printf("servo   LEFT %d / CENTER %d / RIGHT %d deg\n", c->left_deg, c->center_deg,
+           c->right_deg);
+    printf("coarse  %d angles:", c->coarse_points);
+    for (int i = 0; i < c->coarse_points; i++) printf(" %d", c->right_deg + i * step);
+    printf("\nfine    %d deg steps out to +/-%d deg\n", c->fine_step_deg, c->fine_half_range_deg);
+    printf("detect  < %.0f cm (clears at >= %.0f cm, %d readings in a row)\n",
+           (double)c->detect_cm, (double)(c->detect_cm + c->clear_hysteresis_cm),
+           c->detect_confirm_count);
+    printf("side    clear if >= %.0f cm; emergency stop < %.0f cm\n",
+           (double)c->min_clearance_cm, (double)c->emergency_stop_cm);
+    printf("retry   %d rescans, %d reverses of %.0f cm\n", c->max_rescans, c->max_reverses,
+           (double)c->reverse_cm);
+}
+
+// Points at each coarse angle and prints a reading, then returns to center.
+static void self_check(const av_config_t *c) {
+    printf("\n=== Self-check: servo sweep + sensor ===\n");
+    int step = (c->left_deg - c->right_deg) / (c->coarse_points - 1);
+    scan_geometry_t g = {c->center_deg, c->left_deg > c->right_deg};
+    int ok = 0, faults = 0;
+    for (int i = 0; i < c->coarse_points; i++) {
+        int angle = c->right_deg + i * step;
+        servo_set_angle(&g_board.servo, angle);
+        sleep_ms(SELFTEST_SETTLE_MS);
+        range_reading_t r = ultrasonic_read(&g_board.sonar, RANGE_SAMPLES, RANGE_SAMPLE_SPACING_MS);
+        printf("[check] %3d deg (%-6s): ", angle, side_name(scan_side_of(&g, (float)angle)));
+        print_reading(r);
+        printf("\n");
+        if (r.status == RANGE_OK) ok++;
+        if (r.status == RANGE_FAULT) faults++;
+    }
+    servo_set_angle(&g_board.servo, c->center_deg);
+    sleep_ms(SELFTEST_SETTLE_MS);
+    if (faults == c->coarse_points) {
+        printf("[check] WARNING: sensor fault at every angle. Check TRIG GP%d / ECHO GP%d / 5 V.\n",
+               TRIG_PIN, ECHO_PIN);
+    } else if (ok == 0) {
+        printf("[check] WARNING: no distance read at any angle. Nothing in range, or check the sensor.\n");
+    } else {
+        printf("[check] sensor OK (%d/%d angles gave a distance)\n", ok, c->coarse_points);
+    }
+}
+
+static void run_help(void) {
+    printf("keys while running:  m = metrics   r = restart after FAILED   h = help\n");
+}
 
 // ---------------------------------------------------------------------------
 
@@ -340,26 +544,33 @@ int main(void) {
         sleep_ms(100);
     }
     printf("\nBuddy 5: adaptive ultrasonic scanning + obstacle profiling\n");
+    printf("pins: TRIG GP%d, ECHO GP%d, servo GP%d. Wheels are simulated (no motor output).\n",
+           TRIG_PIN, ECHO_PIN, SERVO_PIN);
     if (watchdog_caused_reboot()) {
         printf("WARNING: previous run was reset by the watchdog\n");
     }
 
     ultrasonic_init(&g_board.sonar, TRIG_PIN, ECHO_PIN);
     servo_init(&g_board.servo, SERVO_PIN, SERVO_MIN_US, SERVO_MAX_US);
+    servo_set_angle(&g_board.servo, CAR_CENTER_DEG);
 
-#if BUDDY5_SERVO_CALIBRATION
-    // Calibration build: no watchdog and no avoidance run, only manual servo stepping.
-    run_servo_calibration();
-    while (true) tight_loop_contents();
-#endif
+    cal_record_t cal;
+    bool from_flash = cal_load(&cal);
+    if (!from_flash) {
+        cal = cal_make(CAR_LEFT_DEG, CAR_CENTER_DEG, CAR_RIGHT_DEG, CAR_FINE_HALF_RANGE_DEG);
+    }
+    boot_menu(&cal, &from_flash);
 
     av_config_t cfg;
     av_config_default(&cfg);
+    cal_apply(&cfg, &cal);
     const char *err = av_config_check(&cfg);
     if (err != NULL) {
         printf("FATAL: bad config: %s\n", err);
         while (true) tight_loop_contents();
     }
+    print_config(&cfg, from_flash);
+    self_check(&cfg);
 
     av_platform_t hw = {
         .ctx = &g_board,
@@ -379,25 +590,54 @@ int main(void) {
         printf("FATAL: avoidance init failed\n");
         while (true) tight_loop_contents();
     }
-    printf("ready: detect < %.0f cm, servo L/C/R = %d/%d/%d deg\n", (double)cfg.detect_cm,
-           cfg.left_deg, cfg.center_deg, cfg.right_deg);
+    printf("\n=== Running: watching ahead, obstacle if < %.0f cm ===\n", (double)cfg.detect_cm);
+    run_help();
 
     watchdog_enable(WATCHDOG_TIMEOUT_MS, true);
     uint32_t next_heartbeat = now_ms();
+    uint32_t next_fail_note = 0;
+    av_state_t last_state = av_state(&g_av);
 
     while (true) {
         watchdog_update();
         av_tick(&g_av);
 
+        av_state_t state = av_state(&g_av);
         uint32_t now = now_ms();
-        if (av_state(&g_av) == AV_STATE_MONITOR && (int32_t)(now - next_heartbeat) >= 0) {
+        if (state != last_state) {
+            printf("%8lu [state] %s -> %s\n", (unsigned long)now, av_state_name(last_state),
+                   av_state_name(state));
+            last_state = state;
+            next_fail_note = now + FAILED_REMINDER_MS;
+        }
+
+        if (state == AV_STATE_MONITOR && (int32_t)(now - next_heartbeat) >= 0) {
             next_heartbeat = now + HEARTBEAT_MS;
             range_reading_t r;
             if (av_last_reading(&g_av, &r)) {
+                bool blocked = r.status == RANGE_TOO_CLOSE ||
+                               (r.status == RANGE_OK && r.cm < cfg.detect_cm);
                 printf("%8lu [monitor] ahead: ", (unsigned long)now);
                 print_reading(r);
-                printf("\n");
+                printf(blocked ? "  <- obstacle, confirming\n" : "  (clear)\n");
             }
+        }
+
+        if (state == AV_STATE_FAILED && (int32_t)(now - next_fail_note) >= 0) {
+            next_fail_note = now + FAILED_REMINDER_MS;
+            printf("%8lu [FAILED] %s. Press r to restart.\n", (unsigned long)now,
+                   av_fail_reason(&g_av));
+        }
+
+        int ch = getchar_timeout_us(0);
+        if (ch == 'm') {
+            print_metrics(av_metrics(&g_av));
+        } else if (ch == 'h') {
+            run_help();
+        } else if (ch == 'r' && state == AV_STATE_FAILED) {
+            av_reset(&g_av);
+            printf("%8lu [state] restarted, back to MONITOR\n", (unsigned long)now);
+            last_state = av_state(&g_av);
         }
     }
 }

@@ -40,23 +40,18 @@ target_include_directories(buddy5_core PUBLIC ${B5_CORE})
 target_compile_options(buddy5_core PRIVATE
         -Wall -Wextra -Werror -Wshadow -Wdouble-promotion -Wstrict-prototypes)
 
-# One function per build so the two .uf2 files differ only in this flag.
-function(buddy5_firmware name calibration)
-    add_executable(${name} main.c ultrasonic.c servo.c)
-    target_compile_definitions(${name} PRIVATE BUDDY5_SERVO_CALIBRATION=${calibration})
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror)
-    target_link_libraries(${name}
-            buddy5_core
-            pico_stdlib
-            hardware_pwm
-            hardware_clocks
-            hardware_irq
-            hardware_watchdog
-            )
-    pico_enable_stdio_usb(${name} 1)
-    pico_enable_stdio_uart(${name} 0)
-    pico_add_extra_outputs(${name})
-endfunction()
-
-buddy5_firmware(buddy5_bench 0)      # sensor + servo + avoidance run (motion simulated)
-buddy5_firmware(buddy5_servo_cal 1)  # manual servo stepping to find the safe range
+add_executable(buddy5_bench main.c ultrasonic.c servo.c)
+target_compile_options(buddy5_bench PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(buddy5_bench
+        buddy5_core
+        pico_stdlib
+        hardware_pwm
+        hardware_clocks
+        hardware_irq
+        hardware_watchdog
+        hardware_flash   # servo calibration saved in the last flash sector
+        pico_flash
+        )
+pico_enable_stdio_usb(buddy5_bench 1)
+pico_enable_stdio_uart(buddy5_bench 0)
+pico_add_extra_outputs(buddy5_bench)
