@@ -44,7 +44,7 @@
 #define USB_WAIT_MS 5000
 #define HEARTBEAT_MS 1000
 #define FAILED_REMINDER_MS 5000
-#define MENU_TIMEOUT_S 10
+#define MENU_TIMEOUT_S 5
 #define SELFTEST_SETTLE_MS 300
 
 // Servo range measured on this car with the calibration menu. Used when no
@@ -165,6 +165,8 @@ static void print_metrics(const av_metrics_t *m) {
            (unsigned long)(done ? m->total_encounter_ms / done : 0));
 }
 
+static void sonar_diagnose(void);
+
 static void cb_on_event(void *ctx, const av_event_t *e) {
     (void)ctx;
     printf("%8lu ", (unsigned long)e->time_ms);
@@ -227,6 +229,7 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
         case AV_EVT_FAILED:
             printf("[FAILED] %s -- robot stopped. Press r to restart.\n", e->reason);
             print_metrics(av_metrics(&g_av));
+            if (g_av.fault_streak > 0) sonar_diagnose();
             break;
     }
 }
@@ -454,8 +457,9 @@ static void boot_menu(cal_record_t *cal, bool *from_flash) {
            "  c         : calibrate the servo now\n"
            "  x         : erase the saved calibration (use built-in values)\n");
 
+    printf("starting with this calibration in");
     for (int left_s = MENU_TIMEOUT_S; left_s > 0; left_s--) {
-        printf("starting with this calibration in %d s...\r", left_s);
+        printf(" %d", left_s);
         absolute_time_t until = make_timeout_time_ms(1000);
         while (!time_reached(until)) {
             int ch = getchar_timeout_us(50000);
@@ -503,6 +507,39 @@ static void print_config(const av_config_t *c, bool from_flash) {
            (double)c->reverse_cm);
 }
 
+// Polls the sensor pins directly (no interrupt, no filtering) to tell the
+// usual wiring faults apart when readings come back as sensor-fault.
+static void sonar_diagnose(void) {
+    printf("[diag] ECHO GP%d idle level: %s\n", ECHO_PIN, gpio_get(ECHO_PIN) ? "HIGH" : "low");
+    uint32_t t0 = time_us_32();
+    while (gpio_get(ECHO_PIN) && time_us_32() - t0 < 60000u) tight_loop_contents();
+    if (gpio_get(ECHO_PIN)) {
+        printf("[diag] ECHO is stuck HIGH. Check the ECHO wire and divider, and that the\n"
+               "       sensor GND is connected to a Pico GND.\n");
+        return;
+    }
+
+    gpio_put(TRIG_PIN, 1);
+    sleep_us(10);
+    gpio_put(TRIG_PIN, 0);
+    t0 = time_us_32();
+    while (!gpio_get(ECHO_PIN) && time_us_32() - t0 < 30000u) tight_loop_contents();
+    if (!gpio_get(ECHO_PIN)) {
+        printf("[diag] No ECHO pulse after TRIG. Most likely:\n"
+               "       - sensor VCC is on 3V3: the HC-SR04 needs 5 V (VBUS pin 40, or VSYS)\n"
+               "       - TRIG is not on GP%d or ECHO is not on GP%d (check the car's wiring)\n"
+               "       - divider wired wrong: GP%d must sit between the 1k and 2k resistors\n"
+               "       - sensor GND not shared with the Pico\n",
+               TRIG_PIN, ECHO_PIN, ECHO_PIN);
+        return;
+    }
+    uint32_t rise = time_us_32();
+    while (gpio_get(ECHO_PIN) && time_us_32() - rise < 40000u) tight_loop_contents();
+    uint32_t width = time_us_32() - rise;
+    printf("[diag] ECHO pulse seen: %lu us (about %.1f cm). Wiring and power look fine.\n",
+           (unsigned long)width, (double)((float)width * g_board.sonar.cm_per_us));
+}
+
 // Points at each coarse angle and prints a reading, then returns to center.
 static void self_check(const av_config_t *c) {
     printf("\n=== Self-check: servo sweep + sensor ===\n");
@@ -522,9 +559,10 @@ static void self_check(const av_config_t *c) {
     }
     servo_set_angle(&g_board.servo, c->center_deg);
     sleep_ms(SELFTEST_SETTLE_MS);
-    if (faults == c->coarse_points) {
-        printf("[check] WARNING: sensor fault at every angle. Check TRIG GP%d / ECHO GP%d / 5 V.\n",
-               TRIG_PIN, ECHO_PIN);
+    if (faults > 0) {
+        printf("[check] WARNING: sensor fault at %d/%d angles, running pin diagnostic:\n", faults,
+               c->coarse_points);
+        sonar_diagnose();
     } else if (ok == 0) {
         printf("[check] WARNING: no distance read at any angle. Nothing in range, or check the sensor.\n");
     } else {
@@ -533,7 +571,8 @@ static void self_check(const av_config_t *c) {
 }
 
 static void run_help(void) {
-    printf("keys while running:  m = metrics   r = restart after FAILED   h = help\n");
+    printf("keys while running:  m = metrics   d = sensor pin diagnostic   "
+           "r = restart after FAILED   h = help\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -625,13 +664,16 @@ int main(void) {
 
         if (state == AV_STATE_FAILED && (int32_t)(now - next_fail_note) >= 0) {
             next_fail_note = now + FAILED_REMINDER_MS;
-            printf("%8lu [FAILED] %s. Press r to restart.\n", (unsigned long)now,
+            printf("%8lu [FAILED] %s. Press r to restart, d to check the sensor.\n",
+                   (unsigned long)now,
                    av_fail_reason(&g_av));
         }
 
         int ch = getchar_timeout_us(0);
         if (ch == 'm') {
             print_metrics(av_metrics(&g_av));
+        } else if (ch == 'd') {
+            sonar_diagnose();
         } else if (ch == 'h') {
             run_help();
         } else if (ch == 'r' && state == AV_STATE_FAILED) {

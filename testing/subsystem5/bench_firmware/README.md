@@ -14,7 +14,7 @@ simulated: `[motion] ...` lines are print-outs only.
 
 One file, `buddy5_bench.uf2`, does everything:
 
-1. **Calibration menu.** Shows the saved servo range and waits 10 s:
+1. **Calibration menu.** Shows the saved servo range and counts down 5 s:
    - `Enter` or `u`: use the saved calibration and start.
    - `c`: calibrate the servo now (see S5-B03). `s` saves it and starts the car.
    - `x`: erase the saved calibration and use the built-in values.
@@ -27,9 +27,13 @@ One file, `buddy5_bench.uf2`, does everything:
 2. **Configuration.** Prints the servo angles, scan angles and thresholds in use.
 3. **Self-check.** Sweeps the servo to each scan angle and prints a reading at
    each one, then says `sensor OK` or a wiring warning.
+   If any angle reads `sensor-fault`, it runs a pin diagnostic that says whether
+   ECHO is stuck high, no ECHO pulse arrives (power / pins / divider), or the
+   pulse is fine.
 4. **Run.** Prints the distance ahead every second, every scan reading, the
    obstacle profile, the decision, every `[state] A -> B` change, and
-   `[metrics]` after each encounter. Keys: `m` metrics, `r` restart after
+   `[metrics]` after each encounter. Keys: `m` metrics, `d` sensor pin
+   diagnostic, `r` restart after
    FAILED, `h` help.
 
 ## Wiring (from `app_program/project_config/pinmap.h`)
@@ -61,7 +65,7 @@ Either ask Buddy 5 for `buddy5_bench.uf2`, or build it:
 ## Test procedure
 
 Use a flat, hard object (book or box), not a hand. Ultrasound reflects badly
-off fingers and soft or angled surfaces. At the menu press Enter (or wait 10 s)
+off fingers and soft or angled surfaces. At the menu press Enter (or wait 5 s)
 unless the test says to calibrate.
 
 ### S5-B01 Sensor distance accuracy
