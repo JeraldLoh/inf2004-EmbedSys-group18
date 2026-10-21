@@ -31,3 +31,6 @@ verify the harness because another report section used GP2/GP3. The physical
 scan mechanism/range and fallback calibration remain unverified. Avoidance
 proposes actions to the controller; it must not compete with Buddy 2 for PWM.
 Keep evidence in `../../testing/subsystem5/`.
+
+Component bench tests (sensor and servo on their own, Pico SDK, wheels never
+move): `../../testing/subsystem5/bench_firmware/README.md`.
