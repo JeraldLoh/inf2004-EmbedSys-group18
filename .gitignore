@@ -1,0 +1,33 @@
+# Course build outputs
+Debug/
+Release/
+*.elf
+*.uf2
+*.map
+*.o
+*.obj
+*.d
+*.exe
+build_make/tools/elf2uf2
+tools/elf2uf2/elf2uf2
+build_make/.build_profile
+
+# Host-only test outputs
+testing/host/build*/
+testing/host/out/
+testing/host/_verify/
+
+# Personal configuration and stale nested checkout; do not delete user data
+.vscode/
+/group18-main/
+.DS_Store
+
+# Credentials belong only in a local ignored file
+config/wifi_secrets.h
+
+# Share videos by links, as required by the course template
+*.mp4
+*.mov
+*.webm
+*.avi
+*.mkv
