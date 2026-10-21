@@ -31,8 +31,8 @@
 #include "servo.h"
 #include "ultrasonic.h"
 
-#define TRIG_PIN 6
-#define ECHO_PIN 7
+#define TRIG_PIN 16
+#define ECHO_PIN 17
 #define SERVO_PIN 12
 
 #define SERVO_MIN_US 500

@@ -40,8 +40,8 @@ One file, `buddy5_bench.uf2`, does everything:
 
 | Part | Pin | Notes |
 |---|---|---|
-| HC-SR04 TRIG | GP6 | Output |
-| HC-SR04 ECHO | GP7 | **5 V signal: use a 1k/2k voltage divider or an HC-SR04P**, or GP7 can be damaged |
+| HC-SR04 TRIG | GP16 | Output |
+| HC-SR04 ECHO | GP17 | **5 V signal: use a 1k/2k voltage divider or an HC-SR04P**, or GP17 can be damaged |
 | HC-SR04 VCC / GND | 5 V / GND | |
 | Servo signal | GP12 | 50 Hz PWM |
 | Servo power | 5 V / GND | Shared GND with the Pico |
