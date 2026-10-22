@@ -26,7 +26,7 @@ submitted integrated application. New integrated work belongs in this repository
 | Buddy 2 blocking motion loop | Rejected for runtime | Replace with a periodic motion task and finite-goal state machine; it must never block controller STOP handling |
 | Buddy 2 bench `main()` programs | Bench only | Do not copy into `app_program`; the course entry point is `usermain()` |
 | Buddy 3 barcode decoder | Ported, hardware-independent core | `app_program/subsystem3/barcode_decoder.c`; maps only complete `*A*`-`*D*` symbols to shared route commands |
-| Buddy 3 three-channel ADC line code | Reconcile first | It claims GP26-GP28, conflicting with the current GP0/GP1 line and GP28 barcode plan |
+| Buddy 3 three-channel ADC line code | Reconcile first | It claims GP26-GP28, conflicting with the current plan: digital line sensors on GP7/GP0, barcode on GP26 only, and GP27 as Buddy 2's left encoder |
 | Buddy 3 motor shim | Rejected | Buddy 2 is the sole motor-output owner; Buddy 3 publishes steering evidence/requests |
 | Buddy 3 bench `main()` | Bench only | Contains standalone startup and direct motor control |
 | Buddy 4 LSM303 raw sample decoding | Ported | `app_program/subsystem4/lsm303_decode.c`; pure signed 12-bit conversion with host tests |

@@ -38,6 +38,10 @@
  *	in TEAM.md.
  *	  channel 0 = GP26, channel 1 = GP27, channel 2 = GP28
  *	  channel 3 = GP29 is the Pico W RADIO CLOCK: never set _3 to TRUE.
+ *
+ *	Group 18: the barcode sensor is channel 0 (GP26, Buddy 3), left off
+ *	until Buddy 3 enables it.  Keep channel 1 FALSE: GP27 is Buddy 2's
+ *	left encoder and must stay a digital input.  GP28 is unused.
  */
 #define	DEVCONF_ADC_PIN_INIT_0	FALSE
 #define	DEVCONF_ADC_PIN_INIT_1	FALSE

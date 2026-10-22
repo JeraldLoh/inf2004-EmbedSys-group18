@@ -58,10 +58,10 @@ changes. Buddy 1 must not create an independent raw lwIP/MQTT owner on either co
 
 ## Pins, console and peripheral ownership
 
-Radio pins GP23/24/25/29 are reserved. Our line sensors use GP0/GP1. The actual
-build options make UART console force crash reporting; either UART console or
-USB crash mirroring uses GP0/GP1. Plan USB-only, `CRASH_REPORT=0`, while line
-sensors are attached. Some early Makefile comments still describe older mirroring
+Radio pins GP23/24/25/29 are reserved. Our right line sensor uses GP0 (UART0
+TX). The actual build options make UART console force crash reporting; either
+UART console or USB crash mirroring uses GP0/GP1. Plan USB-only,
+`CRASH_REPORT=0`, while the line sensors are attached. Some early Makefile comments still describe older mirroring
 behavior; use the option logic and actual console code, then verify on hardware.
 
 The vehicle pin declarations are in `app_program/project_config/pinmap.h`.

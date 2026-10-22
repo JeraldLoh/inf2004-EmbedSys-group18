@@ -75,8 +75,8 @@ branch, index or personal `.vscode` files and did not push anything.
   and validation, not a second task that directly calls the raw network stack.
 - Default target profile is dual-core. Local interrupt disabling and `volatile`
   alone are not cross-core synchronization. Runtime locking/affinity remains open.
-- Our line sensors use GP0/GP1. A later target build must use USB console with
-  `CRASH_REPORT=0`; UART console or crash mirroring conflicts with those pins.
+- Our right line sensor uses GP0 (UART0 TX). A later target build must use USB
+  console with `CRASH_REPORT=0`; UART console or crash mirroring conflicts with it.
 - Kernel service priorities and the example priority bands are not a measured
   real-time schedule for our car. Agree and measure the application schedule.
 

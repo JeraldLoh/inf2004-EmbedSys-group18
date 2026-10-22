@@ -11,7 +11,7 @@
 | D7 | Use official course-template root and subsystem1-5 folders, with buddy-labelled guides | Applied structural migration, team review pending |
 | D8 | Keep shared controller outside all five subsystems, under app_program/vehicle_controller | Applied layout; dedicated task unimplemented |
 | D9 | Built-in service owns raw CYW43/lwIP/MQTT; B1 provides bounded application bridge | Verified template constraint; bridge unimplemented |
-| D10 | Keep GP0/GP1 for line sensors; USB-only console, no crash mirroring while attached | Proposed car profile; target verification pending |
+| D10 | Line sensors on GP7 (left) / GP0 (right); GP0 is UART0 TX, so USB-only console, no crash mirroring while attached | Team pin map; target verification pending |
 
 G0 source identification is now addressed by the official template at commit
 `c3b09544cb1fd6dac6ad4b8f523be0af59b44482`; runtime qualification and G1 remain open.

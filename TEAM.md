@@ -24,27 +24,32 @@ names, student IDs and GitHub usernames after the team confirms them.
 
 ## 2 Pin claims
 
-These are the Week 6 section 2 baseline, not a physical inspection result.
+These follow the team-agreed `app_program/project_config/pinmap.h`. They are
+not yet a physical inspection (G1) result. Grove numbers are from the Robo
+Pico datasheet. Buddy 1 (communications) has no application GPIO.
 
 | Pins | Owner | Purpose / qualification |
 |---|---|---|
 | GP23, GP24, GP25, GP29 | Course/Pico W | Radio, reserved |
-| GP0, GP1 | Buddy 3 | Left/right digital IR; NO UART console or crash mirroring while connected |
-| GP5 | Buddy 2 | Right encoder signal, Grove 3 |
-| GP26 | Buddy 2 | Left encoder signal, Grove 6; same GPIO also exposed on Grove 5 |
+| GP7 | Buddy 3 | Left digital line IR, Grove 7 (shared connector with GP28) |
+| GP0 | Buddy 3 | Right digital line IR, Grove 1. GP0 is UART0 TX: NO UART console or crash mirroring while connected |
+| GP26 / ADC0 | Buddy 3 | Barcode analog, ADC channel 0. GP26 is exposed on both Grove 5 and Grove 6 |
+| GP5 | Buddy 2 | Right encoder, channel B, Grove 3 |
+| GP27 | Buddy 2 | Left encoder, channel B, Grove 6 (shared connector with GP26). Must stay a digital input: keep ADC channel 1 disabled |
 | GP8, GP9 | Buddy 2 | M1 / intended left motor, PWM slice 4 A/B |
 | GP10, GP11 | Buddy 2 | M2 / intended right motor, PWM slice 5 A/B |
-| GP28 / ADC2 | Buddy 3 | Barcode analog; isolate GP28 VBAT-sense jumper |
 | GP2, GP3 | Buddy 4 | IMU SDA/SCL on I2C1 (Grove 2 / Maker port); claimed at boot by the I2C driver |
-| GP6, GP7 | Buddy 5 | Provisional TRIG/ECHO; GP2/GP3 now belong to the Buddy 4 IMU, so the sonar must not use them |
+| GP16, GP17 | Buddy 5 | Sonar TRIG / ECHO, Grove 4. The 5 V echo goes through a voltage divider |
 | GP12 | Buddy 5 | Optional scan servo, PWM slice 6 A; mechanism unverified |
 | GP20, GP21 | Shared controller adapter | User START/STOP; adapter unimplemented |
 | GP18, GP22 | Carrier-reserved for planning | Onboard RGB/buzzer; no driver added |
-| GP4, GP13-GP17, GP19, GP27 | Unclaimed by this application | Inspect actual harness before claiming |
+| GP1, GP4, GP6, GP13-GP15, GP19, GP28 | Unclaimed by this application | Inspect actual harness before claiming |
 
 The upstream demo's GP19 LED claim is not adopted. Connector number and wire
-colour do not prove a GPIO. G1 remains open for power, common ground, Echo
-protection, IR/encoder voltage, GP28 jumper and boot/reset behavior.
+colour do not prove a GPIO. G1 remains open for power, common ground, the
+sonar echo divider on GP17, IR/encoder voltage and boot/reset behavior. GP28
+is no longer used, so its VBAT-sense jumper only matters if GP28 is claimed
+again.
 
 ## 3 Runtime resource owners
 
@@ -52,7 +57,7 @@ protection, IR/encoder voltage, GP28 jumper and boot/reset behavior.
 |---|---|---|
 | Motor PWM slices 4/5 | Buddy 2 motion task | Sole motor-output writer; others request motion or urgent stop |
 | Encoder counts | Buddy 2 acquisition/ISR adapter | Coherent snapshot/reset and SMP policy unimplemented |
-| ADC, GP28 channel 2 | Buddy 3 acquisition task | Coordinate the entire ADC block if channels are added |
+| ADC, GP26 channel 0 | Buddy 3 acquisition task | Coordinate the entire ADC block if channels are added; channel 1 (GP27) is the left encoder and must stay digital |
 | I2C1 ("iicb"), GP2/GP3 | Buddy 4 IMU task | No second task directly drives the block |
 | Sonar and optional servo slice 6 | Buddy 5 acquisition/scan | Explicit per-peripheral ownership; GPIO IRQ routing reviewed centrally |
 | Controller state | Future dedicated controller task | Other tasks submit events, not concurrent state mutations |

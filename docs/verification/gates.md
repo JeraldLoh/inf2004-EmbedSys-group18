@@ -20,10 +20,11 @@ hardware execution was used for this migration. See the course-template review.
 
 ## G1 - Electrical safety
 
-- trace the Week 6 pin/Grove harness;
+- trace the pin/Grove harness against `app_program/project_config/pinmap.h`;
 - verify common ground and absence of driven-output conflicts;
-- measure HC-SR04 echo protection at GP7;
-- verify the GP28 VBAT-sense jumper is isolated;
+- measure HC-SR04 echo protection (voltage divider) at GP17;
+- confirm GP26 (barcode, Grove 5 and 6) and GP27 (left encoder, Grove 6) are not
+  wired to two devices at once;
 - measure IR supplies and maximum D0/A0 voltages;
 - document battery/USB arrangement and motor/servo rail behaviour;
 - verify safe motor outputs during boot and reset.

@@ -58,10 +58,12 @@ all modules -> bounded telemetry snapshots/events -> communications
 - Terrain limits compose with other limits using the lowest applicable cap.
 - If bounded recovery cannot establish safe continuation, the controller stops.
 
-## Provisional hardware map
+## Hardware map
 
-The Week 6 section 2 table is the baseline: motors GP8-GP11, encoders GP26/GP5,
-line sensors GP0/GP1, barcode GP28/ADC2, IMU GP2/GP3 (I2C1), sonar GP6/GP7, servo
-GP12, and start/stop GP20/GP21. GP2/GP3 are assigned to the IMU, so the later GP2/GP3 sonar statement is not used.
+The team-agreed map is `app_program/project_config/pinmap.h`: motors GP8-GP11,
+encoders GP27 (left) / GP5 (right) on channel B, line sensors GP7 (left) / GP0
+(right), barcode GP26/ADC0, IMU GP2/GP3 (I2C1), sonar GP16/GP17 (5 V echo through
+a divider), servo GP12, and start/stop GP20/GP21. It is not yet electrically
+verified (G1).
 
 No pin is configured by this framework.

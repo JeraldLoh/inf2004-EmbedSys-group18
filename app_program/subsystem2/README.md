@@ -13,7 +13,7 @@ geometry using caller-supplied calibration. Its host tests do not move hardware.
 Put future `drv_motor.c/.h`, `drv_encoder.c/.h`, wheel-control and odometry files
 directly here, not under root `device/` or deeper driver folders. Lifecycle hooks
 remain inactive `E_NOSPT` placeholders; they do not configure GP8-GP11 or
-GP26/GP5. No encoder PPR, geometry or PID constants are treated as measured.
+GP27/GP5 (encoder channel B). No encoder PPR, geometry or PID constants are treated as measured.
 
 Use shared motion contracts and explicit completion/cancellation/timeout/fault
 results. Do not copy old blocking movement routines or assume local interrupt
