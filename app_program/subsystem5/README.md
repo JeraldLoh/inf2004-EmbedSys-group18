@@ -34,9 +34,9 @@ sonar/servo drivers and the controller/motion adapters fill in. Avoidance only
 proposes motion through those callbacks; it never drives PWM itself. Host tests:
 `../../testing/host/subsystem5/` (target `obstacle_avoidance_host_tests`).
 
-GP6/GP7 and optional GP12 remain the provisional Week 6 section 2 baseline;
-verify the harness because another report section used GP2/GP3. The physical
-scan mechanism/range and fallback calibration remain unverified. Avoidance
+Agreed pins (`../project_config/pinmap.h`): sonar TRIG GP16, ECHO GP17 (through
+a voltage divider), scan servo GP12. The physical scan range and car-turn
+accuracy remain unverified. Avoidance
 proposes actions to the controller; it must not compete with Buddy 2 for PWM.
 Keep evidence in `../../testing/subsystem5/`.
 
