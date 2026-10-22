@@ -3,8 +3,7 @@
 
 /* Buddy 3: IR sensor hardware access (target only, uses micro T-Kernel).
  *
- * Pins follow the agreed team map. They are defined here, not in pinmap.h,
- * until the team updates the shared pin map.
+ * Pins come from the shared team map in project_config/pinmap.h.
  *   GP0         right line sensor, digital D0
  *   GP7         left line sensor, digital D0
  *   GP26/ADC0   barcode sensor, analogue A0
@@ -13,11 +12,12 @@
 #include <stdint.h>
 
 #include "../app.h"
+#include "../project_config/pinmap.h"
 
-#define S3_PIN_LINE_RIGHT 0U
-#define S3_PIN_LINE_LEFT 7U
-#define S3_PIN_BARCODE_ADC 26U
-#define S3_BARCODE_ADC_CHANNEL 0   /* GP26 = ADC input 0 */
+#define S3_PIN_LINE_RIGHT ((UINT)PIN_LINE_RIGHT)
+#define S3_PIN_LINE_LEFT ((UINT)PIN_LINE_LEFT)
+#define S3_PIN_BARCODE_ADC ((UINT)PIN_BARCODE_ADC)
+#define S3_BARCODE_ADC_CHANNEL BARCODE_ADC_CHANNEL
 
 /* GPIO level the line module's D0 outputs when it is over BLACK.
  * Most TCRT5000/LM393 boards give HIGH on black (no reflection) and light

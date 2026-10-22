@@ -9,7 +9,7 @@ and evidence. Save evidence in `../../testing/subsystem3/`.
 
 Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 
-## Pins (agreed team map, not yet in `pinmap.h`)
+## Pins (from `project_config/pinmap.h`)
 
 | Pin | Use |
 |---|---|
@@ -47,7 +47,7 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 
 - [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1 (or use `S3_BARCODE_USE_EDGES`)
 - [ ] `device/adc/sysdepend/rp2040/adc_cnf_sysdep.h`: `DEVCONF_ADC_PIN_INIT_0` TRUE
-- [ ] `pinmap.h` updated to the agreed map
+- [x] `pinmap.h` updated to the agreed map
 - [ ] `app_main.c` calls `subsystem3_init()` / `subsystem3_start()`; priority agreed
 - [ ] Controller: take route before junction each cycle; implement the probe
       handshake with Buddy 2's pivot; hold speed on `barcode_active`
