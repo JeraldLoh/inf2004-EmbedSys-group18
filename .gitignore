@@ -13,13 +13,14 @@ tools/elf2uf2/elf2uf2
 build_make/.build_profile
 
 # Host-only test outputs
+build/
 testing/host/build*/
 testing/host/out/
 testing/host/_verify/
 
 # Personal configuration and stale nested checkout; do not delete user data
 .vscode/
-/group18-main/
+group18-main/
 .DS_Store
 
 # Credentials belong only in a local ignored file
