@@ -20,7 +20,6 @@
 #define B5_SERVO_MAX_US 2500U
 #define B5_PENDING_MAX 8U
 #define B5_STATUS_PERIOD_MS 1000U
-
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -33,6 +32,7 @@ static av_t av;
 static b5_bridge_t bridge;
 static bool motion_refused;
 static uint32_t refused_count;
+static b5_motion_t motion;
 
 /* Controller events not yet accepted by the (full) controller queue. */
 static controller_event_t pending[B5_PENDING_MAX];
@@ -63,71 +63,106 @@ static range_reading_t cb_measure(void *ctx)
     return drv_sonar_read(&sonar, B5_SAMPLES, B5_SAMPLE_SPACING_MS);
 }
 
-static void cb_motion_stop(void *ctx)
+/* ---- Moves: Buddy 2 goals (CAR_RUN, b5_motion.c) or refused (B5_RUN) ---- */
+
+static bool has_motion(void)
 {
-    (void)ctx;
-    motion_refused = false;
-    /* Stopping is always safe, so Buddy 5 does it directly instead of
-     * waiting for the controller queue (emergency stop mid-manoeuvre). */
-    if (!bindings.urgent_stop())
-    {
-        tm_printf((UB*)"[B5] urgent stop NOT applied\n");
-    }
+    return b5_motion_ops_present(&bindings.motion);
 }
 
 static void refuse(const char *what, int amount)
 {
     motion_refused = true;
     refused_count++;
-    tm_printf((UB*)"[B5] %s %d refused: no motion executor yet\n", what, amount);
+    tm_printf((UB*)"[B5] %s %d refused: no motion executor in this build\n",
+        what, amount);
+}
+
+static void cb_motion_stop(void *ctx)
+{
+    (void)ctx;
+    motion_refused = false;
+    if (has_motion())
+    {
+        b5_motion_stop(&motion);
+        return;
+    }
+    /* No executor: stop directly instead of waiting for the controller queue
+     * (emergency stop mid-manoeuvre). */
+    if (!bindings.urgent_stop())
+    {
+        tm_printf((UB*)"[B5] urgent stop NOT applied\n");
+    }
 }
 
 static void cb_motion_turn(void *ctx, float deg)
 {
     (void)ctx;
-    refuse("turn (deg)", (int)deg);
+    if (!has_motion())
+    {
+        refuse("turn (deg)", (int)deg);
+        return;
+    }
+    b5_motion_turn(&motion, (int32_t)(deg * 1000.0f), cb_now_ms(NULL));
 }
 
 static void cb_motion_forward(void *ctx, float cm)
 {
     (void)ctx;
-    refuse("forward (cm)", (int)cm);
+    if (!has_motion())
+    {
+        refuse("forward (cm)", (int)cm);
+        return;
+    }
+    b5_motion_straight(&motion, (int32_t)(cm * 10.0f), false, cb_now_ms(NULL));
 }
 
 static void cb_motion_reverse(void *ctx, float cm)
 {
     (void)ctx;
-    refuse("reverse (cm)", (int)cm);
+    if (!has_motion())
+    {
+        refuse("reverse (cm)", (int)cm);
+        return;
+    }
+    b5_motion_straight(&motion, (int32_t)(cm * 10.0f), true, cb_now_ms(NULL));
 }
 
 static void cb_motion_search_line(void *ctx, side_t toward)
 {
     (void)ctx;
-    refuse("line search toward side", (int)toward);
+    if (!has_motion())
+    {
+        refuse("line search toward side", (int)toward);
+        return;
+    }
+    b5_motion_search(&motion, toward == SIDE_LEFT);
 }
 
 static void cb_motion_resume(void *ctx)
 {
     (void)ctx;
-    motion_refused = false; /* the controller starts line tracking */
+    motion_refused = false;
+    b5_motion_resume(&motion); /* the controller resumes line tracking */
 }
 
 static bool cb_motion_done(void *ctx)
 {
     (void)ctx;
-    return true; /* nothing is ever left running: every move is refused */
+    /* Without an executor nothing is ever left running. */
+    return b5_motion_done(&motion);
 }
 
 static bool cb_motion_failed(void *ctx)
 {
     (void)ctx;
-    return motion_refused;
+    return motion_refused || b5_motion_failed(&motion);
 }
 
 static bool cb_line_detected(void *ctx)
 {
     (void)ctx;
-    return false; /* Buddy 3 line sensors not wired to Buddy 5 yet */
+    return b5_motion_line_seen(&motion);
 }
 
 static void cb_on_event(void *ctx, const av_event_t *e)
@@ -241,8 +276,30 @@ static void print_status(void)
             mode_name(status.mode), mission_name(status.mission),
             (unsigned long)status.stop_commands);
     }
-    tm_printf((UB*)" | refused=%lu dropped=%lu\n", (unsigned long)refused_count,
-        (unsigned long)dropped_events);
+    tm_printf((UB*)" | move=%d refused=%lu dropped=%lu\n", (int)motion.state,
+        (unsigned long)refused_count, (unsigned long)dropped_events);
+}
+
+/* With an executor (CAR_RUN), avoidance only runs while the controller is
+ * driving in AUTO. Otherwise a hand in front of the parked car would run a
+ * whole encounter, fail (no authority to move) and leave avoidance in
+ * FAILED, which only av_reset() leaves. So: reset when AUTO ends, run again
+ * when it starts. Not reset on arming: av_reset() stops the motion, which
+ * would also refuse the controller's first line requests of the new run.
+ * Without an executor (B5_RUN) it always runs, as before. */
+static bool avoidance_armed(bool was_armed)
+{
+    controller_status_t status;
+
+    if (!has_motion() || (bindings.controller_status == NULL))
+    {
+        return true;
+    }
+    if (!bindings.controller_status(&status))
+    {
+        return was_armed;   /* controller busy: keep the last answer */
+    }
+    return status.mode == SYSTEM_MODE_AUTO;
 }
 
 static void subsystem5_task(INT stacd, void *exinf)
@@ -250,16 +307,29 @@ static void subsystem5_task(INT stacd, void *exinf)
     controller_event_t events[B5_BRIDGE_MAX_EVENTS];
     size_t count;
     uint32_t last_status_ms;
+    bool armed = false;
+    bool now_armed;
 
     (void)stacd;
     (void)exinf;
     last_status_ms = cb_now_ms(NULL);
     for (;;)
     {
-        av_tick(&av);
-        count = b5_bridge_update(&bridge, av_state(&av),
-            av.fault_streak >= av.cfg.max_consecutive_faults, events);
-        queue_events(events, count);
+        now_armed = avoidance_armed(armed);
+        if (!now_armed && armed)
+        {
+            av_reset(&av);              /* back to MONITOR for the next run */
+            b5_bridge_init(&bridge);
+        }
+        armed = now_armed;
+        if (armed)
+        {
+            b5_motion_service(&motion, cb_now_ms(NULL));
+            av_tick(&av);
+            count = b5_bridge_update(&bridge, av_state(&av),
+                av.fault_streak >= av.cfg.max_consecutive_faults, events);
+            queue_events(events, count);
+        }
         flush_events();
         if ((uint32_t)(cb_now_ms(NULL) - last_status_ms) >= B5_STATUS_PERIOD_MS)
         {
@@ -277,7 +347,7 @@ static void subsystem5_task(INT stacd, void *exinf)
 ER subsystem5_bind(const subsystem5_bindings_t *b)
 {
     if ((b == NULL) || (b->dispatcher == NULL) || (b->urgent_stop == NULL) ||
-        (b->post_event == NULL))
+        (b->post_event == NULL) || !b5_motion_ops_valid(&b->motion))
     {
         return E_PAR;
     }
@@ -331,6 +401,7 @@ EXPORT ER subsystem5_init(void)
         return E_PAR;
     }
     b5_bridge_init(&bridge);
+    b5_motion_init(&motion, &bindings.motion, NULL);
 
     /* Core 0, the same core that services the GPIO interrupt writing the
      * echo timestamps this task reads. */
