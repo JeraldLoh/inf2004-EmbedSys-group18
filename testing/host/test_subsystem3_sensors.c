@@ -1,4 +1,4 @@
-/* Host tests for Buddy 3 (S3-H01 .. S3-H12, see testing/subsystem3/TEST_LOG.md).
+/* Host tests for Buddy 3 (S3-H01 .. S3-H14, see testing/subsystem3/TEST_LOG.md).
  * No hardware: sensor readings and time are simulated.
  */
 #include <assert.h>
@@ -8,6 +8,8 @@
 #include "../../app_program/subsystem3/barcode_sensor.h"
 #include "../../app_program/subsystem3/barcode_decoder.h"
 #include "../../app_program/subsystem3/barcode_edges.h"
+#include "../../app_program/subsystem3/barcode_map.h"
+#include <string.h>
 #include "../../app_program/vehicle_controller/vehicle_controller.h"
 
 /* ---- helpers ---------------------------------------------------------- */
@@ -429,6 +431,102 @@ static void test_edge_buffer(void)
     }
 }
 
+/* ---- S3-H13 ----------------------------------------------------------- */
+/* Every A-Z and 0-9 decodes, forward and backward, and takes its command
+ * from the run-time map. Independent table (wide = 1, first element = bit 8). */
+static void test_decode_full_alphabet_with_map(void)
+{
+    static const char CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    static const uint16_t BITS[36] = {
+        0x109U, 0x049U, 0x148U, 0x019U, 0x118U, 0x058U, 0x00DU, 0x10CU,
+        0x04CU, 0x01CU, 0x103U, 0x043U, 0x142U, 0x013U, 0x112U, 0x052U,
+        0x007U, 0x106U, 0x046U, 0x016U, 0x181U, 0x0C1U, 0x1C0U, 0x091U,
+        0x190U, 0x0D0U, 0x034U, 0x121U, 0x061U, 0x160U, 0x031U, 0x130U,
+        0x070U, 0x025U, 0x124U, 0x064U};
+    static const route_command_t CYCLE[4] = {
+        ROUTE_COMMAND_LEFT, ROUTE_COMMAND_RIGHT,
+        ROUTE_COMMAND_STRAIGHT, ROUTE_COMMAND_UTURN};
+    uint32_t w[29], r[29];
+    route_command_t cmd;
+    char ch;
+    bool reversed;
+    uint8_t i, k;
+
+    barcode_map_clear();
+    for (i = 0U; i < 36U; i++)
+    {
+        assert(barcode_map_set(CHARS[i], CYCLE[i % 4U]));
+    }
+    for (i = 0U; i < 36U; i++)
+    {
+        build_symbol(BITS[i], 20000U, 60000U, w);
+        assert(scan(w, &cmd, &ch, &reversed));
+        assert((ch == CHARS[i]) && (cmd == CYCLE[i % 4U]) && !reversed);
+        for (k = 0U; k < 29U; k++)
+        {
+            r[k] = w[28U - k];
+        }
+        /* Backwards must give the SAME letter (K backwards is U's pattern,
+         * so this proves the start/stop check picks the right direction). */
+        assert(scan(r, &cmd, &ch, &reversed));
+        assert((ch == CHARS[i]) && (cmd == CYCLE[i % 4U]) && reversed);
+    }
+
+    /* A good read of an unmapped letter: read succeeds, command NONE. */
+    barcode_map_clear();
+    build_symbol(BITS[10], 20000U, 60000U, w);           /* K */
+    assert(scan(w, &cmd, &ch, NULL));
+    assert((ch == 'K') && (cmd == ROUTE_COMMAND_NONE));
+    barcode_map_defaults();
+}
+
+/* ---- S3-H14 ----------------------------------------------------------- */
+static bool map_cmd(const char *text, char *reply)
+{
+    return barcode_map_command(text, (unsigned int)strlen(text), reply,
+                               BARCODE_MAP_REPLY_MAX);
+}
+
+static void test_map_command_over_mqtt(void)
+{
+    char reply[BARCODE_MAP_REPLY_MAX];
+
+    assert(barcode_map_is_command("MAP SHOW", 8U));
+    assert(barcode_map_is_command("  map k l", 9U));
+    assert(!barcode_map_is_command("START", 5U));
+    assert(!barcode_map_is_command("MAPX", 4U));
+
+    assert(map_cmd("MAP SHOW", reply));
+    assert(strcmp(reply, "OK A=L B=R C=S D=U") == 0);
+
+    /* Demo-day style: forget defaults, set the announced letters. */
+    assert(map_cmd("MAP CLEAR K LEFT Q RIGHT Z STRAIGHT M UTURN", reply));
+    assert(strcmp(reply, "OK K=L M=U Q=R Z=S") == 0);
+    assert(barcode_map_get('A') == ROUTE_COMMAND_NONE);
+    assert(barcode_map_get('k') == ROUTE_COMMAND_LEFT);
+
+    /* Short names, '=' and ',' separators, lower case. */
+    assert(map_cmd("map a=r, 7=u", reply));
+    assert(barcode_map_get('A') == ROUTE_COMMAND_RIGHT);
+    assert(barcode_map_get('7') == ROUTE_COMMAND_UTURN);
+
+    /* Errors change nothing (all-or-nothing). */
+    assert(!map_cmd("MAP B LEFT C SIDEWAYS", reply));
+    assert(strcmp(reply, "ERR bad command: SIDEWAYS") == 0);
+    assert(barcode_map_get('B') == ROUTE_COMMAND_NONE);
+    assert(!map_cmd("MAP KK LEFT", reply));
+    assert(!map_cmd("MAP * LEFT", reply));
+    assert(!map_cmd("MAP K", reply));
+    assert(!map_cmd("MAP", reply));
+
+    assert(map_cmd("MAP K NONE", reply));
+    assert(barcode_map_get('K') == ROUTE_COMMAND_NONE);
+    assert(map_cmd("MAP CLEAR", reply));
+    assert(strcmp(reply, "OK (empty)") == 0);
+    assert(map_cmd("MAP DEFAULT", reply));
+    assert(strcmp(reply, "OK A=L B=R C=S D=U") == 0);
+}
+
 int main(void)
 {
     test_status_is_one_byte();
@@ -443,6 +541,8 @@ int main(void)
     test_no_barcode_defaults_and_override();
     test_reacquire();
     test_edge_buffer();
-    (void)puts("subsystem3 sensor host tests passed (S3-H01..S3-H12)");
+    test_decode_full_alphabet_with_map();
+    test_map_command_over_mqtt();
+    (void)puts("subsystem3 sensor host tests passed (S3-H01..S3-H14)");
     return 0;
 }

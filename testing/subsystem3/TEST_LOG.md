@@ -13,6 +13,7 @@ gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
   testing/host/test_subsystem3_sensors.c \
   app_program/subsystem3/line_follow.c app_program/subsystem3/barcode_sensor.c \
   app_program/subsystem3/barcode_decoder.c app_program/subsystem3/barcode_edges.c \
+  app_program/subsystem3/barcode_map.c \
   app_program/vehicle_controller/vehicle_controller.c \
   app_program/vehicle_controller/safety.c -o test_s3 && ./test_s3
 ```
@@ -31,6 +32,8 @@ gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
 | S3-H10 | No barcode: "+" straight, T right; barcode overrides | as stated |
 | S3-H11 | Reacquire steers to last side, ends on black | as stated |
 | S3-H12 | Edge buffer order, packing, overflow | FIFO order; time/level round-trip; full flagged |
+| S3-H13 | Full Code 39 A-Z, 0-9, both directions, run-time map | every character decodes to itself both ways; unmapped letter gives command NONE |
+| S3-H14 | `MAP` command parsing | set/clear/default/show work; bad message changes nothing |
 
 ## Hardware cases (to run on the car)
 
@@ -52,3 +55,4 @@ profile, configuration and raw log/video.
 | Date | Test ID | Commit/profile | Tester | Result | Evidence | Notes |
 |---|---|---|---|---|---|---|
 | 2026-10-21 | S3-H01..S3-H12 | buddy3 working tree, before first commit; host gcc 11, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 12/12 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H12)" | Logic only; no hardware. Re-run and replace commit field after committing. |
+| 2026-10-28 | S3-H01..S3-H14 | buddy3 working tree (uncommitted, adds barcode_map); host gcc, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 14/14 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H14)" | Logic only; no hardware. |

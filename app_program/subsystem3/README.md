@@ -25,7 +25,8 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 | `drv_ir.c/.h` | Pico | GPIO, ADC and microsecond timer access |
 | `line_follow.c/.h` | Pico + host | Filter, steering, junction detection, probe, reacquire |
 | `barcode_sensor.c/.h` | Pico + host | ADC to black/white: calibration, hysteresis, adaptation |
-| `barcode_decoder.c/.h` | Pico + host | Code 39 `*A*`-`*D*`, both directions, validated |
+| `barcode_decoder.c/.h` | Pico + host | Full Code 39 (A-Z, 0-9), both directions, validated |
+| `barcode_map.c/.h` | Pico + host | Letter-to-command map, set at run time with `MAP` over MQTT |
 | `barcode_edges.c/.h` | Pico + host | Optional ISR-to-task edge buffer (lock-free) |
 | `subsystem3.c/.h` | Pico | Task, cyclic handler, published interface |
 
@@ -43,6 +44,36 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
   should hold a steady speed until it clears.
 - `subsystem3_reacquire()` searches for the line after a bypass.
 
+## Demo day: setting the barcode letters over MQTT
+
+The letters are announced on the day, so nothing is hardcoded. Send a `MAP`
+message on the command topic before `START`:
+
+```
+MAP CLEAR K LEFT Q RIGHT Z STRAIGHT M UTURN
+```
+
+The reply is the whole map, e.g. `OK K=L M=U Q=R Z=S`. Also accepted:
+`MAP K=L, Q=R` (short names), `MAP SHOW`, `MAP DEFAULT` (A=L B=R C=S D=U,
+the power-on map), `MAP CLEAR`, `MAP K NONE`. Commands: LEFT/L, RIGHT/R,
+STRAIGHT/S, UTURN/U, NONE/X. A bad message changes nothing and replies
+`ERR <reason>: <word>`. A letter that is read but not mapped prints a warning
+and is treated like no barcode (the junction probe runs).
+
+The map is in RAM, so it resets to the defaults on power-up: send it again
+after any reset.
+
+Buddy 1 integration (in `b1_telemetry_task`, before `b1_parse`):
+
+```c
+if (barcode_map_is_command(m.data, m.length)) {
+    char reply[BARCODE_MAP_REPLY_MAX];
+    (void)barcode_map_command(m.data, m.length, reply, sizeof(reply));
+    put(B1_RESULT, reply, now);   /* or wrap it in the JSON result */
+    continue;
+}
+```
+
 ## Integration checklist (shared items, need team agreement)
 
 - [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1 (or use `S3_BARCODE_USE_EDGES`)
@@ -52,6 +83,7 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 - [ ] Controller: take route before junction each cycle; implement the probe
       handshake with Buddy 2's pivot; hold speed on `barcode_active`
 - [ ] Buddy 5: call `subsystem3_reacquire()` at the end of a bypass
+- [ ] Buddy 1: forward `MAP ...` messages to `barcode_map_command()` (snippet above)
 
 ## Data representation (Change Requirement 1)
 

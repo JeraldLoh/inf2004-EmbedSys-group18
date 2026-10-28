@@ -321,8 +321,18 @@ LOCAL void s3_task(INT stacd, void *exinf)
             {
                 tm_printf((UB *)"[S3] (barcode read in reverse)\n");
             }
-            s3_publish_route(command, character, now_ms);
-            barcode_seen = true;
+            if (command == ROUTE_COMMAND_NONE)
+            {
+                /* Good read, but nobody mapped this letter: no route. The
+                 * junction is then handled as if there was no barcode. */
+                tm_printf((UB *)"[S3] Barcode '%c' read, but it is not mapped (send MAP over MQTT)\n",
+                          (INT)character);
+            }
+            else
+            {
+                s3_publish_route(command, character, now_ms);
+                barcode_seen = true;
+            }
         }
 
         /* ---- Publish: build locally, store once (atomic byte) ---- */

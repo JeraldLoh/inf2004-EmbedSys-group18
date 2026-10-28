@@ -41,6 +41,7 @@ add_test(NAME motion_math_host_tests
 add_executable(perception_math_host_tests
     test_perception_math.c
     ../../app_program/subsystem3/barcode_decoder.c
+    ../../app_program/subsystem3/barcode_map.c
     ../../app_program/subsystem4/lsm303_decode.c
 )
 
@@ -60,6 +61,7 @@ add_executable(subsystem3_sensor_host_tests
     ../../app_program/subsystem3/line_follow.c
     ../../app_program/subsystem3/barcode_sensor.c
     ../../app_program/subsystem3/barcode_decoder.c
+    ../../app_program/subsystem3/barcode_map.c
     ../../app_program/subsystem3/barcode_edges.c
     ../../app_program/vehicle_controller/vehicle_controller.c
     ../../app_program/vehicle_controller/safety.c
