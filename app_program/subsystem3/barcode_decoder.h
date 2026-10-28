@@ -27,6 +27,7 @@ typedef struct
     bool saw_quiet_zone;
     route_command_t command;
     char character;
+    bool reversed;   /* last read was crossed in the opposite direction */
 } barcode_decoder_t;
 
 void barcode_decoder_reset(barcode_decoder_t *decoder);
@@ -38,5 +39,13 @@ bool barcode_decoder_take(
     barcode_decoder_t *decoder,
     route_command_t *command,
     char *character);
+
+/* True while a barcode is being captured. The controller should hold a
+ * steady speed during this, because bar widths are measured in time. */
+bool barcode_decoder_busy(const barcode_decoder_t *decoder);
+
+/* True if the last decoded barcode was read backwards. Valid until the
+ * next barcode_decoder_take() reset; read it before taking. */
+bool barcode_decoder_was_reversed(const barcode_decoder_t *decoder);
 
 #endif
