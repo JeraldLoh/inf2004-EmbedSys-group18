@@ -1,0 +1,135 @@
+=== TEST FINISHED ===
+Selected 1/15: line sensors: Grove 1 GP0 right, Grove 7 GP7 left
+Press GP20 to run, or GP21 for next.
+Selected 2/15: calibrate right encoder B GP5 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 2: calibrate right encoder B GP5 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP5: pull-up=1 pull-down=1 - line is being held HIGH
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the right tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+right encoder GP5 transitions=12723 in 11015 ms; level 0->1
+CALIBRATION: 12723 transitions over 10 turns = 1272.3 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 2/15: calibrate right encoder B GP5 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 2: calibrate right encoder B GP5 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP5: pull-up=1 pull-down=1 - line is being held HIGH
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the right tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+right encoder GP5 transitions=12630 in 10741 ms; level 1->1
+CALIBRATION: 12630 transitions over 10 turns = 1263.0 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 2/15: calibrate right encoder B GP5 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 2: calibrate right encoder B GP5 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP5: pull-up=0 pull-down=0 - line is being held LOW
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the right tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+right encoder GP5 transitions=12558 in 10666 ms; level 0->0
+CALIBRATION: 12558 transitions over 10 turns = 1255.8 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 2/15: calibrate right encoder B GP5 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 2: calibrate right encoder B GP5 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP5: pull-up=1 pull-down=1 - line is being held HIGH
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the right tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+=== TEST FINISHED ===
+Selected 2/15: calibrate right encoder B GP5 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+Selected 3/15: calibrate left encoder B GP27 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 3: calibrate left encoder B GP27 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP27: pull-up=1 pull-down=1 - line is being held HIGH
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the left tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+left encoder GP27 transitions=12656 in 10632 ms; level 1->1
+CALIBRATION: 12656 transitions over 10 turns = 1265.6 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 3/15: calibrate left encoder B GP27 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 3: calibrate left encoder B GP27 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP27: pull-up=0 pull-down=0 - line is being held LOW
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the left tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+left encoder GP27 transitions=12864 in 10630 ms; level 0->0
+CALIBRATION: 12864 transitions over 10 turns = 1286.4 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 3/15: calibrate left encoder B GP27 over 10 wheel turns
+Press GP20 to run, or GP21 for next.
+
+=== RUN 3: calibrate left encoder B GP27 over 10 wheel turns ===
+Checking whether each encoder input is floating or actively driven.
+idle pull probe GP27: pull-up=1 pull-down=1 - line is being held HIGH
+This calibration uses the production encoder-B input only.
+LIFT THE WHEELS and put a tape mark on the left tyre.
+Align the mark with a fixed pointer before starting.
+Hold GP20 to drive, count exactly 10 complete turns, then RELEASE at the pointer.
+The safety limit is 20000 ms. GP21 aborts. Both B-signal edges are counted.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+left encoder GP27 transitions=12603 in 10414 ms; level 1->0
+CALIBRATION: 12603 transitions over 10 turns = 1260.3 BOTH-EDGE transitions/revolution.
+Valid only if the tyre mark began at the pointer and GP20 was released at the 10th return.
+Repeat this wheel three times; keep the three totals for the final average.
+=== TEST FINISHED ===
+Selected 3/15: calibrate left encoder B GP27 over 10 wheel turns
+Press GP20 to run, or GP21 for next.

@@ -1,0 +1,23 @@
+Firmware profile: TEST=1 CONSOLE=usb_cdc
+UF2 SHA-256: 8067B0D05A7F42E0FB15B774E939EB8D06A52D4A157911E2BFF8B3C3C64395A7
+Encoder sampler: 50 us hardware-timer busy poll with internal-pull probe
+
+Corrected harness mapping used:
+  blue=GND, red=channel A, green=channel B, white=3V3,
+  black/yellow=motor terminals
+
+Right encoder, approximately one visual wheel revolution:
+  GP5 channel B: 1206 transitions in 1070 ms
+  GP4 channel A: 1205 transitions
+  Channel difference: 1 transition
+
+Left encoder, approximately one visual wheel revolution:
+  GP27 channel B: 1238 transitions in 1332 ms
+  GP26 channel A: 1238 transitions
+  Channel difference: 0 transitions
+
+Result: PASS for encoder power, harness, both quadrature outputs and GPIO
+acquisition. The approximately 1,200 transitions/revolution values are
+consistent with the photographed geared Hall encoder but remain provisional:
+human release timing and wheel inertia affect a one-revolution measurement.
+Perform a multi-revolution calibration before setting production constants.

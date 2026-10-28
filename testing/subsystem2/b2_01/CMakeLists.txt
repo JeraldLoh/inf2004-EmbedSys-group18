@@ -1,0 +1,82 @@
+cmake_minimum_required(VERSION 3.20)
+project(buddy2_driver_foundation C)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+set(B2_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../../app_program/subsystem2")
+option(B2_COVERAGE "Instrument native driver tests with GCC coverage" OFF)
+
+add_library(b2_foundation STATIC
+    ${B2_SOURCE}/motion_hal.c
+    ${B2_SOURCE}/drv_motor.c
+    ${B2_SOURCE}/drv_encoder.c
+    ${B2_SOURCE}/subsystem2.c
+)
+target_include_directories(b2_foundation PUBLIC ${B2_SOURCE} stubs)
+target_compile_definitions(b2_foundation PRIVATE APP_B2_BENCH=1)
+add_library(b2_fake STATIC fake_motion_hal.c)
+target_link_libraries(b2_fake PUBLIC b2_foundation)
+
+if(MSVC)
+    add_compile_options(/W4 /WX /UNDEBUG)
+    target_compile_options(b2_foundation PRIVATE /W4 /WX /UNDEBUG)
+    target_compile_options(b2_fake PRIVATE /W4 /WX /UNDEBUG)
+else()
+    add_compile_options(-Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    target_compile_options(b2_foundation PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    target_compile_options(b2_fake PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    if(B2_COVERAGE)
+        target_compile_options(b2_foundation PRIVATE --coverage -O0)
+        add_link_options(--coverage)
+    endif()
+endif()
+
+enable_testing()
+foreach(test_name IN ITEMS driver_foundation stop_interleavings encoder_snapshots lifecycle)
+    add_executable(test_${test_name} test_${test_name}.c)
+    target_link_libraries(test_${test_name} PRIVATE b2_fake)
+    add_test(NAME b2_${test_name} COMMAND test_${test_name})
+endforeach()
+
+add_executable(test_bench_start test_bench_start.c ${B2_SOURCE}/b2_bench_target.c
+    platform_stubs.c bsp_stubs.c ${B2_SOURCE}/b2_platform_rp2040.c
+    ${B2_SOURCE}/motion_hal_rp2040.c)
+target_compile_definitions(test_bench_start PRIVATE APP_B2_BENCH=1)
+target_link_libraries(test_bench_start PRIVATE b2_runtime_policy)
+add_test(NAME b2_bench_task COMMAND test_bench_start)
+add_test(NAME b2_bench_create_failure COMMAND test_bench_start create)
+add_test(NAME b2_bench_start_failure COMMAND test_bench_start start)
+foreach(failure_step RANGE 1 20)
+    add_test(NAME b2_lifecycle_failure_${failure_step}
+        COMMAND test_lifecycle ${failure_step})
+endforeach()
+add_test(NAME b2_lifecycle_detach_failure COMMAND test_lifecycle detach)
+add_test(NAME b2_lifecycle_start_clock_failure COMMAND test_lifecycle start_clock)
+add_test(NAME b2_lifecycle_start_output_failure COMMAND test_lifecycle start_output)
+
+add_executable(test_rp2040_adapter test_rp2040_adapter.c bsp_stubs.c
+    ${B2_SOURCE}/motion_hal_rp2040.c)
+target_link_libraries(test_rp2040_adapter PRIVATE b2_fake)
+add_test(NAME b2_rp2040_adapter COMMAND test_rp2040_adapter)
+
+add_library(b2_runtime_policy STATIC
+    ${B2_SOURCE}/b2_trial.c ${B2_SOURCE}/b2_gesture.c
+    ${B2_SOURCE}/../project_config/gpio_dispatcher.c
+    ${B2_SOURCE}/../vehicle_controller/vehicle_controller.c
+    ${B2_SOURCE}/../vehicle_controller/safety.c
+    ${B2_SOURCE}/../contracts/hardware_faults.c)
+target_link_libraries(b2_runtime_policy PUBLIC b2_fake)
+add_executable(test_runtime_policy test_runtime_policy.c)
+target_link_libraries(test_runtime_policy PRIVATE b2_runtime_policy)
+add_test(NAME b2_runtime_policy COMMAND test_runtime_policy)
+add_executable(test_platform_binding test_platform_binding.c platform_stubs.c bsp_stubs.c
+    ${B2_SOURCE}/b2_platform_rp2040.c ${B2_SOURCE}/motion_hal_rp2040.c)
+target_compile_definitions(test_platform_binding PRIVATE APP_B2_BENCH=1)
+target_link_libraries(test_platform_binding PRIVATE b2_runtime_policy)
+add_test(NAME b2_platform_binding COMMAND test_platform_binding)
+foreach(case IN ITEMS timer_owner gpio_owner irq_failure output_failure clock_failure)
+    add_test(NAME b2_platform_${case} COMMAND test_platform_binding ${case})
+endforeach()
+
+get_property(b2_tests DIRECTORY PROPERTY TESTS)
+set_tests_properties(${b2_tests} PROPERTIES LABELS subsystem2)

@@ -59,6 +59,7 @@ void vehicle_controller_init(vehicle_controller_t *controller)
         controller->authority_generation = 1U;
         controller->route_lifecycle = ROUTE_LIFECYCLE_NONE;
         safety_init(&controller->safety);
+        hardware_fault_state_init(&controller->hardware_faults);
     }
 }
 
@@ -128,6 +129,38 @@ bool vehicle_controller_clear_stop(
 
     safety_clear(&controller->safety, reasons);
     return safety_motion_allowed(&controller->safety);
+}
+
+bool vehicle_controller_latch_hardware_faults(
+    vehicle_controller_t *controller,
+    hardware_fault_mask_t faults)
+{
+    if ((controller == NULL) || !hardware_fault_mask_is_valid(faults))
+    {
+        return false;
+    }
+    hardware_fault_state_latch(&controller->hardware_faults, faults);
+    return true;
+}
+
+bool vehicle_controller_clear_hardware_faults(
+    vehicle_controller_t *controller,
+    hardware_fault_mask_t faults)
+{
+    if ((controller == NULL) || !hardware_fault_mask_is_valid(faults))
+    {
+        return false;
+    }
+    hardware_fault_state_clear(&controller->hardware_faults, faults);
+    return true;
+}
+
+hardware_fault_mask_t vehicle_controller_hardware_faults(
+    const vehicle_controller_t *controller)
+{
+    return (controller == NULL)
+        ? 0U
+        : hardware_fault_state_read(&controller->hardware_faults);
 }
 
 bool vehicle_controller_receive_route(

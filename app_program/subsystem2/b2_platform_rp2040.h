@@ -1,0 +1,28 @@
+#ifndef GROUP18_B2_PLATFORM_RP2040_H
+#define GROUP18_B2_PLATFORM_RP2040_H
+#include "motion_hal.h"
+#include "b2_trial.h"
+#include "../project_config/gpio_dispatcher.h"
+
+typedef struct
+{
+    stop_reason_mask_t reasons;
+    bool cutoff_fired;
+    uint32_t confirmed_us;
+    uint32_t output_command_us;
+    uint32_t stop_events;
+    uint32_t max_lock_hold_us;
+    uint32_t max_lock_wait_us;
+} b2_platform_events_t;
+
+/* Core-0 task/startup only. Reserves IO_BANK0 IRQ13 and TIMER alarm0/IRQ0.
+ * SMP=1 kernel ISpinLock provides shared exclusion with local IRQ masking.
+ * Does not start motion. Existing enabled IRQ ownership causes refusal. */
+bool b2_platform_init(motion_hal_t *hal, b2_trial_io_t *trial_io);
+void b2_platform_take_events(b2_platform_events_t *events);
+gpio_dispatcher_t *b2_platform_dispatcher(void);
+bool b2_platform_start_pressed(void);
+bool b2_platform_stop_pressed(void);
+uint32_t b2_platform_now_us(void);
+
+#endif

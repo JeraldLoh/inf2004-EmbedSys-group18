@@ -1,0 +1,17 @@
+Hardware component tester, USB console, TEST=1
+Date: 2026-10-21
+Firmware SHA-256: C5D8843CCB4BEF6FD93B3E90CC3B3B6EA8CAF382B25645DE23754DAFBC44796D
+
+Right encoder, expected white channel GP5 with alternate GP4:
+- GP5 transitions: 0 in 1559 ms
+- GP4 transitions: 0
+
+Left encoder, expected GP27:
+- GP27 transitions: 0 in 1039 ms
+- GP27 transitions: 0 in 1219 ms repeat
+
+All runs drove the selected motor using the bounded component-test routine.
+No signal edge reached any tested GPIO. This is a repeatable FAIL and is not
+counts-per-revolution evidence. Verify the encoder supply voltage at the motor
+connector and the exact motor-specific six-wire pinout before another powered
+test. Do not infer the pinout from wire colour alone.

@@ -22,5 +22,7 @@ if(BUILD_TESTING)
         "${GROUP18_REPO_ROOT}/testing/host/test_subsystem3_sensors.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../vehicle_controller/vehicle_controller.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../vehicle_controller/safety.c")
+    target_sources(subsystem3_host_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../contracts/hardware_faults.c")
     target_link_libraries(subsystem3_host_tests PRIVATE subsystem3_host)
 endif()

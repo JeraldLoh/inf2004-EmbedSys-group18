@@ -1,0 +1,19 @@
+Firmware profile: TEST=1 CONSOLE=usb_cdc
+UF2 SHA-256: D4154C4EDC5E7E4D6FA037A10FA74509BBB2FBF8BEE271805A1218F09251E6B6
+Encoder sampler: 50 us hardware-timer busy poll
+
+=== RUN 2: right encoder: white channel GP5 (also probes GP4) ===
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+right encoder GP5 transitions=0 in 1132 ms; level 0->0
+alternate GP4 transitions=0; level 1->1
+NO SIGNAL CHANGE on GP5 while the motor ran.
+
+=== RUN 3: left encoder: Grove 6 GP27 ===
+Fast encoder sampling: every 50 us (independent of the RTOS tick).
+left encoder GP27 transitions=0 in 1107 ms; level 1->1
+NO SIGNAL CHANGE on GP27 while the motor ran.
+
+Interpretation: the corrected 20 kHz diagnostic observed no encoder waveform
+at either GPIO while the corresponding motor turned. This establishes a fault
+in the encoder power/signal/harness path, but does not by itself distinguish
+incorrect pinout, missing supply, disconnected conductor, or failed encoder.
