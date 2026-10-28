@@ -48,8 +48,9 @@ static const char *failure;
 
 static ER bring_up(void)
 {
-    controller_outputs_t outputs = {NULL, controller_stop};
-    subsystem5_bindings_t bindings;
+    /* No drive/line outputs and no motion bindings: obstacle-only build. */
+    controller_outputs_t outputs = {NULL, controller_stop, NULL, NULL};
+    subsystem5_bindings_t bindings = {0};
     controller_event_t auto_mode = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_AUTO,
         STOP_REASON_NONE, MISSION_IDLE, false};
     ER er;

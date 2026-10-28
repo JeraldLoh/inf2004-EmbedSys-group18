@@ -4,6 +4,7 @@
 #define CONTROLLER_TASK_PRIORITY 10  /* provisional: above Buddy 5 (12) */
 #define CONTROLLER_TASK_STACK 1024
 #define CONTROLLER_STATUS_WAIT_MS 10
+#define CONTROLLER_TICK_MS 10U
 
 static controller_service_t service;
 static ID queue;
@@ -12,21 +13,38 @@ static ID task;
 static bool initialized;
 static bool started;
 
+static uint32_t now_ms(void)
+{
+    SYSTIM now;
+    (void)tk_get_otm(&now);
+    return (uint32_t)now.lo;
+}
+
+/* Events as they arrive; the line-tracking tick every 10 ms in between. */
 static void controller_task_main(INT stacd, void *exinf)
 {
     controller_event_t event;
+    uint32_t last_tick = now_ms();
+    uint32_t waited;
+    TMO wait;
 
     (void)stacd;
     (void)exinf;
     for (;;)
     {
-        if (tk_rcv_mbf(queue, &event, TMO_FEVR) != (INT)sizeof(event))
-        {
-            continue;
-        }
-        if (tk_loc_mtx(guard, TMO_FEVR) == E_OK)
+        waited = now_ms() - last_tick;
+        wait = (waited >= CONTROLLER_TICK_MS) ? 0 : (TMO)(CONTROLLER_TICK_MS - waited);
+        if ((tk_rcv_mbf(queue, &event, wait) == (INT)sizeof(event)) &&
+            (tk_loc_mtx(guard, TMO_FEVR) == E_OK))
         {
             (void)controller_service_handle(&service, &event);
+            (void)tk_unl_mtx(guard);
+        }
+        if (((now_ms() - last_tick) >= CONTROLLER_TICK_MS) &&
+            (tk_loc_mtx(guard, TMO_FEVR) == E_OK))
+        {
+            last_tick = now_ms();
+            controller_service_tick(&service, last_tick);
             (void)tk_unl_mtx(guard);
         }
     }
@@ -115,4 +133,17 @@ bool controller_get_status(controller_status_t *status)
     controller_service_status(&service, status);
     (void)tk_unl_mtx(guard);
     return true;
+}
+
+bool controller_authority(motion_source_t source, authority_generation_t *generation)
+{
+    bool ok;
+
+    if (!initialized || (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return false;
+    }
+    ok = controller_service_authority(&service, source, generation);
+    (void)tk_unl_mtx(guard);
+    return ok;
 }

@@ -30,7 +30,7 @@ static bool rig_stop(void *context)
 
 static void rig_init(rig_t *r)
 {
-    controller_outputs_t outputs;
+    controller_outputs_t outputs = {0};
     controller_event_t auto_mode = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_AUTO,
         STOP_REASON_NONE, MISSION_IDLE, false};
 
