@@ -46,7 +46,7 @@ static motion_status_t goal(void *p,const motion_goal_request_t *r,uint32_t ttl)
 }
 static void ack(void *p,uint32_t id) { (void)p; (void)id; }
 int main(int argc,char **argv) {
-    controller_outputs_t o={NULL,stop};
+    controller_outputs_t o={.context=NULL,.stop_motion=stop};
     controller_motion_outputs_t mo={NULL,42U,authorize,continuous,goal,stop,ack};
     controller_event_t mode={CONTROLLER_EVENT_SET_MODE,SYSTEM_MODE_MANUAL,0U,MISSION_IDLE,false};
     controller_event_t halt={CONTROLLER_EVENT_LATCH_STOP,SYSTEM_MODE_STOPPED,STOP_REASON_REMOTE,MISSION_IDLE,false};

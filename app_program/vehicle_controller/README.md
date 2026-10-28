@@ -61,3 +61,40 @@ call the portable state-mutating functions concurrently from both cores.
 Future lifecycle integration must create controller AND subsystem objects before
 starting any application task. This directory is directly under `app_program`
 so its `.c` files are discovered by the inspected one-level course Make rule.
+
+## Line tracking and the motion gate (`CAR_RUN=1`)
+
+`controller_service_tick()` (every 10 ms in the controller task):
+while AUTO is following the line (TRACK_LINE, VERIFY_LINE, JUNCTION_APPROACH)
+and LINE motion is allowed, it reads Buddy 3's steering and hands Buddy 2 one
+continuous request (IF-02 -> IF-05) that expires after 150 ms. In any other
+state it sends nothing, so the car stops by itself. Numbers are placeholders
+in `controller_line_default_config()`: cruise 150 mm/s, 100 mm/s while a
+barcode is read, steer 100 -> 17.8 1/m curvature, i.e. inner wheel ~0 with the 112 mm
+track (matches Buddy 3's bench).
+
+`controller_authority()` / `controller_service_authority()` (IF-04 gate):
+Buddy 5 asks it before every obstacle move and stamps the returned authority
+generation on the goal. Only granted in AUTO with motion allowed for that
+source, so obstacle moves are only possible during an obstacle mission.
+
+Not done yet: junction routes (EXECUTE_ROUTE) are recorded, not driven. That
+needs the Buddy 3 junction probe and route goals, agreed with Buddy 3.
+
+## Whole-car startup (`car_run_target.c/.h`, `CAR_RUN=1`)
+
+Shared startup, owned by the integration lead (Buddy 5). One core-0
+supervisor task brings up, every init before any start: Buddy 2's
+foundation and draft executor, this controller task, Buddy 3's task and the
+Buddy 5 task. Then it owns the buttons:
+
+| Input | Effect |
+|---|---|
+| GP20 held >= 1 s, released | Clears operator stops (PHYSICAL, OBSTACLE, RECOVERY_FAILED, ROUTE_REQUIRED, MANUAL_EXPIRED, REMOTE), then AUTO |
+| GP21 | Buddy 2's ISR stops the motors at once; supervisor latches PHYSICAL |
+| Cutoff alarm | Latched CONTROLLER_FAULT (executor stalled) |
+| 60 s run limit (`CAR_RUN_LIMIT_MS`) | IDLE |
+
+MOTION_FAULT, CONTROLLER_FAULT and SENSOR_CRITICAL stay latched until reset.
+Prints a `[CAR]` status line every second. Test plan:
+`../../testing/integration/CAR_RUN_TEST_PLAN.md`.

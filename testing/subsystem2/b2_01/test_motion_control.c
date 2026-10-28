@@ -213,7 +213,7 @@ static void controller(void) {
     fixture_t f;
     controller_service_t s;
     controller_motion_t m;
-    controller_outputs_t o={&f,stop};
+    controller_outputs_t o={.context=&f,.stop_motion=stop};
     controller_motion_outputs_t mo={&f,42U,authorize,continuous,goal,cancel,acknowledge};
     controller_event_t mode={CONTROLLER_EVENT_SET_MODE,SYSTEM_MODE_MANUAL,0U,MISSION_IDLE,false};
     controller_motion_request_t r={0};
@@ -249,7 +249,7 @@ static void result_adapter(void) {
     fixture_t f;
     controller_service_t s;
     controller_motion_t m;
-    controller_outputs_t o={&f,stop};
+    controller_outputs_t o={.context=&f,.stop_motion=stop};
     controller_motion_outputs_t mo={&f,42U,authorize,continuous,goal,cancel,acknowledge};
     controller_event_t mode={CONTROLLER_EVENT_SET_MODE,SYSTEM_MODE_MANUAL,0U,MISSION_IDLE,false};
     controller_motion_request_t r={0};

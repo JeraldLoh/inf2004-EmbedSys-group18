@@ -65,6 +65,7 @@ through within one tick.
 | `drv_servo.c/.h` | Pico | Scan servo: 50 Hz PWM, 1 us per count, slice 6 |
 | `b5_mission_bridge.c/.h` | both | Avoidance state -> controller mission events (host-tested) |
 | `b5_run_target.c/.h` | Pico | `B5_RUN=1` bring-up: B2 foundation, controller task, Buddy 5 task |
+| `b5_motion.c/.h` | both | `CAR_RUN=1`: moves as authority-stamped Buddy 2 goals, line search, line seen (host-tested) |
 
 Build from `build_make`:
 
@@ -84,9 +85,24 @@ What it cannot do yet, and refuses instead of faking:
   once, so anything wider than the servo arc ends in a latched safe stop;
 - line detection: Buddy 3 is not wired to Buddy 5.
 
-Not run on hardware: compiled against the kernel headers with the team flags
-for every profile (B5_RUN, default SMP=0/1, B2_BENCH); not linked or flashed
-here (no `make` on this machine).
+Not run on hardware.
+
+### In the whole car (`CAR_RUN=1`)
+
+`car_run_target.c` (vehicle_controller folder) gives Buddy 5 the optional
+motion bindings, and then:
+- every turn / forward / reverse is a Buddy 2 goal, submitted only once the
+  controller grants obstacle authority (waits up to 300 ms, because the first
+  turn is asked for in the same tick the obstacle is reported);
+- the line search is Buddy 3's `subsystem3_reacquire()` plus a slow arc
+  toward the line; "line detected" is Buddy 3's line status;
+- stops are `subsystem2_motion_halt()` (zero at once, no latched inhibit);
+- avoidance only runs while the controller is in AUTO, and is reset to
+  MONITOR when AUTO ends, so a failed encounter does not disable it for the
+  next run.
+
+Placeholders: goal speed 100 mm/s, goal timeout 4 s, search 80 mm/s on a
+~33 cm radius (`b5_motion_default_config()`).
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

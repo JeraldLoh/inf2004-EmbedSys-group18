@@ -3,7 +3,8 @@
 
 /* Kernel wrapper around controller_service: one task owns the vehicle
  * controller and applies events from a message buffer, so no two tasks ever
- * change controller state at the same time.
+ * change controller state at the same time. Between events it runs
+ * controller_service_tick() every 10 ms (line tracking, when wired).
  *
  * Lifecycle: controller_task_init() with every other init, before any task
  * starts; controller_task_start() afterwards. Task priority and stack are
@@ -32,5 +33,8 @@ bool controller_post_motion_result(const motion_goal_result_t *result);
 bool controller_post_motion_stop(stop_reason_mask_t reasons, uint32_t evidence_id);
 bool controller_get_motion_status(controller_motion_status_t *status);
 bool controller_urgent_stop_pending(void);
+
+/* May source drive now? See controller_service_authority(). Any task. */
+bool controller_authority(motion_source_t source, authority_generation_t *generation);
 
 #endif

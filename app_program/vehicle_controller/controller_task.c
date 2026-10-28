@@ -86,10 +86,13 @@ static void drain_urgent(void)
 static void controller_task_main(INT code, void *exinf)
 {
     controller_mail_t mail;
+    uint32_t last_tick = now_ms();
     (void)code; (void)exinf;
     for (;;)
     {
-        INT received = tk_rcv_mbf(queue, &mail, 10);
+        uint32_t waited = now_ms()-last_tick;
+        INT wait = waited >= 10U ? 0 : (INT)(10U-waited);
+        INT received = tk_rcv_mbf(queue, &mail, wait);
         if (tk_loc_mtx(guard, TMO_FEVR) != E_OK) { continue; }
         drain_urgent();
         if (received == (INT)sizeof(mail))
@@ -123,6 +126,11 @@ static void controller_task_main(INT code, void *exinf)
             continuous_pending = false;
             ingress_leave(saved);
             if (pending) { (void)controller_motion_handle(&motion, &latest, now_ms()); }
+        }
+        if (now_ms()-last_tick >= 10U)
+        {
+            last_tick = now_ms();
+            if (!motion.bound) { controller_service_tick(&service, last_tick); }
         }
         (void)tk_unl_mtx(guard);
     }
@@ -167,7 +175,7 @@ ER controller_task_init(const controller_outputs_t *outputs)
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     uint32_t session, uint32_t caution, uint32_t cruise)
 {
-    if (!initialized || started || motion.bound) { return E_OBJ; }
+    if (!initialized || started || motion.bound || service.outputs.drive != NULL) { return E_OBJ; }
     return controller_motion_init(&motion, &service, outputs, session, caution, cruise)
         ? E_OK : E_PAR;
 }
@@ -252,4 +260,17 @@ bool controller_get_motion_status(controller_motion_status_t *status)
     *status = motion.status;
     status->authority_generation = service.controller.authority_generation;
     (void)tk_unl_mtx(guard); return true;
+}
+
+bool controller_authority(motion_source_t source, authority_generation_t *generation)
+{
+    bool ok;
+
+    if (!initialized || (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return false;
+    }
+    ok = controller_service_authority(&service, source, generation);
+    (void)tk_unl_mtx(guard);
+    return ok;
 }

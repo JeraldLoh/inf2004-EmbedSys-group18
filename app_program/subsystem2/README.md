@@ -89,3 +89,49 @@ requests 15% effort for 250 ms, never automatically at boot.
 38 B2 tests now pass, plus the four shared host tests; runtime target/normal
 builds pass. Hardware execution/timing remain pending. See
 `../../testing/subsystem2/B2_RUNTIME_TEST_GUIDE.md` before any later test.
+
+## DRAFT motion executor (`CAR_RUN=1` only) - for Buddy 2's review
+
+Written by Buddy 5 as integration lead so the whole car can be tested
+(decision D13). Buddy 2 owns it: review, change or replace it before it is
+relied on. Nothing here changes the B2-01 drivers, the bench or the default
+build.
+
+| File | Runs on | Purpose |
+|---|---|---|
+| `motion_executor.c/.h` | both | Portable core: continuous requests and finite goals -> wheel effort (host-tested) |
+| `subsystem2_motion.c/.h` | Pico | Task (core 0, priority 8, 5 ms): the only `drv_motor_apply()` caller |
+| `subsystem2.c` / `subsystem2_internal.h` | Pico | `subsystem2_executor_motor/encoder()` accessors, `APP_CAR_RUN` only |
+
+Interfaces (types from `contracts/control_messages.h`):
+- IF-05 in: `subsystem2_motion_continuous()` (line tracking, search arcs)
+  and `subsystem2_motion_goal()` (forward/reverse mm, pivot mdeg).
+- IF-06 out: `subsystem2_motion_goal_result()`: PROGRESS, then COMPLETED,
+  CANCELLED, TIMEOUT, ABORTED or FAULT.
+- `subsystem2_motion_halt()`: zero output at once (wakes the task).
+  `subsystem2_urgent_stop()` is unchanged and still latches the inhibit.
+
+Safety rules it keeps:
+- Arms like `b2_trial_begin()`: refused while STOP is held or pending, fresh
+  authority generation, clear inhibit, arm.
+- Keeps the hardware cutoff alarm armed (100 ms) while driving: a stalled
+  task stops the motors by itself.
+- Commands with an older authority generation are rejected. After a driver
+  refusal or STOP, the same generation is rejected too (IF-07: fresh
+  authority before resuming).
+- A wheel changing direction gets one zero period first.
+- Continuous requests expire (150 ms from the controller) and never reverse a
+  wheel. Goals end on encoder counts or their timeout.
+
+Placeholders that need measuring (all in `motion_executor_default_config()`):
+
+| Value | Now | How to measure |
+|---|---|---|
+| Track width | 112 mm, measured 2026-10-28 (`MOTION_TRACK_WIDTH_MM`) | Done with a ruler; still check with a 360 deg pivot on the floor |
+| Effort per 100 mm/s | 133 (150 mm/s -> 200) | Raised wheels: read `speed L/R` on the `[CAR]` line at known efforts |
+| Goal minimum effort | 150 | Lowest effort that starts both wheels on the floor |
+| Max effort | 350 | Buddy 3's bench cap |
+| Wheel diameter / counts | 65 mm, 1271/1264 | Already in `motion_calibration.h` |
+
+Open-loop speed: there is no PID yet. Speed varies with battery and load.
+Host tests: `testing/host/test_motion_executor.c`.

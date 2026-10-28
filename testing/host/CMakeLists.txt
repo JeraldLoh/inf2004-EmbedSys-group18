@@ -149,3 +149,40 @@ endif()
 
 add_test(NAME subsystem3_sensor_host_tests
          COMMAND subsystem3_sensor_host_tests)
+
+# Draft Buddy 2 motion executor core (continuous requests + finite goals).
+add_executable(motion_executor_host_tests
+    test_motion_executor.c
+    ../../app_program/subsystem2/motion_executor.c
+    ../../app_program/subsystem2/motion_math.c
+)
+
+if(MSVC)
+    target_compile_options(motion_executor_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(motion_executor_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+
+add_test(NAME motion_executor_host_tests
+         COMMAND motion_executor_host_tests)
+
+# Buddy 5 moves as authority-stamped Buddy 2 goals (CAR_RUN wiring).
+add_executable(b5_motion_host_tests
+    subsystem5/test_b5_motion.c
+    ../../app_program/subsystem5/b5_motion.c
+)
+
+target_include_directories(b5_motion_host_tests PRIVATE
+    ../../app_program/subsystem5
+)
+
+if(MSVC)
+    target_compile_options(b5_motion_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(b5_motion_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+
+add_test(NAME b5_motion_host_tests
+         COMMAND b5_motion_host_tests)

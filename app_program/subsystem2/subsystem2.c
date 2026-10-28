@@ -135,9 +135,10 @@ drv_motor_t *subsystem2_bench_motor(void) { return started ? &motor : NULL; }
 drv_encoder_t *subsystem2_bench_encoder(void) { return started ? &encoder : NULL; }
 #endif
 
+
 bool subsystem2_executor_drivers(drv_motor_t **m, drv_encoder_t **e)
 {
-#if APP_B2_BENCH
+#if APP_B2_BENCH || APP_CAR_RUN
     (void)m; (void)e;
     return false;
 #else
@@ -146,3 +147,9 @@ bool subsystem2_executor_drivers(drv_motor_t **m, drv_encoder_t **e)
     return true;
 #endif
 }
+
+#if APP_CAR_RUN
+/* DRAFT (Buddy 2 review): the motion executor task is the only caller. */
+drv_motor_t *subsystem2_executor_motor(void) { return started ? &motor : NULL; }
+drv_encoder_t *subsystem2_executor_encoder(void) { return started ? &encoder : NULL; }
+#endif

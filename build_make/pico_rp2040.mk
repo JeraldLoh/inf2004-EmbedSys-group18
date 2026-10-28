@@ -141,6 +141,23 @@ endif
 TEST_SUFFIX := _b5run
 endif
 
+# Whole car (integration lead, Buddy 5): Buddy 2 draft executor + controller
+# line tracking + Buddy 3 line/barcode + Buddy 5 obstacles. Uses the 1 ms
+# kernel tick Buddy 3's barcode sampling needs (decision D11).
+CAR_RUN ?= 0
+ifneq ($(filter $(CAR_RUN),0 1),$(CAR_RUN))
+$(error Unknown CAR_RUN '$(CAR_RUN)'; use 0 or 1)
+endif
+ifeq ($(CAR_RUN),1)
+ifneq ($(B2_BENCH)$(S3_BENCH)$(B5_RUN),000)
+$(error CAR_RUN=1 cannot be combined with B2_BENCH, S3_BENCH or B5_RUN)
+endif
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error CAR_RUN=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+TEST_SUFFIX := _carrun
+endif
+
 # CRASH_REPORT=1 also copies every console line to UART0 on GP0 (TX) /
 # GP1 (RX), 115200 8N1.  UART output is sent immediately, so it still shows
 # the last messages and the kernel's crash report after a crash, when the
@@ -163,6 +180,11 @@ endif
 ifeq ($(B5_RUN),1)
 ifneq ($(CRASH_REPORT),0)
 $(error B5_RUN=1 requires CRASH_REPORT=0 to keep GP0 free)
+endif
+endif
+ifeq ($(CAR_RUN),1)
+ifneq ($(CRASH_REPORT),0)
+$(error CAR_RUN=1 requires CRASH_REPORT=0: GP0 is the right line sensor)
 endif
 endif
 ifneq ($(filter $(CRASH_REPORT),0 1),$(CRASH_REPORT))
@@ -255,6 +277,10 @@ ifeq ($(S3_BENCH),1)
 CFLAGS  += -DS3_DEBUG_RAW=1
 endif
 CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
+CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN)
+ifeq ($(CAR_RUN),1)
+CFLAGS  += -DCNF_TIMER_PERIOD=1
+endif
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)
 CFLAGS  += -DBOARD_UART0_FREE=1
@@ -287,7 +313,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-s3bench$(S3_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))
