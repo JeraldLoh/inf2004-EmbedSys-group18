@@ -13,6 +13,12 @@
 #ifndef APP_S3_BENCH
 #define APP_S3_BENCH 0   /* 1 = S3 sensors-only bench, 2 = S3 line-follow bench */
 #endif
+#ifndef APP_B5_RUN
+#define APP_B5_RUN 0     /* 1 = Buddy 5 obstacle task + controller, motors off */
+#endif
+#ifndef APP_CAR_RUN
+#define APP_CAR_RUN 0    /* 1 = whole car: line following + obstacle avoidance */
+#endif
 
 IMPORT ER subsystem1_init(void);
 IMPORT ER subsystem2_init(void);
