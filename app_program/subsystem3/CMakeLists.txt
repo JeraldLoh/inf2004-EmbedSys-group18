@@ -11,6 +11,7 @@ add_library(subsystem3_host STATIC
     barcode_edges.c
     barcode_decoder.c
     barcode_map.c
+    line_drive.c
 )
 target_include_directories(subsystem3_host PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(subsystem3_host PUBLIC group18_contracts)

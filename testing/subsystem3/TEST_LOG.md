@@ -13,7 +13,8 @@ gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
   testing/host/test_subsystem3_sensors.c \
   app_program/subsystem3/line_follow.c app_program/subsystem3/barcode_sensor.c \
   app_program/subsystem3/barcode_decoder.c app_program/subsystem3/barcode_edges.c \
-  app_program/subsystem3/barcode_map.c \
+  app_program/subsystem3/barcode_map.c app_program/subsystem3/line_drive.c \
+  app_program/contracts/hardware_faults.c \
   app_program/vehicle_controller/vehicle_controller.c \
   app_program/vehicle_controller/safety.c -o test_s3 && ./test_s3
 ```
@@ -34,17 +35,21 @@ gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
 | S3-H12 | Edge buffer order, packing, overflow | FIFO order; time/level round-trip; full flagged |
 | S3-H13 | Full Code 39 A-Z, 0-9, both directions, run-time map | every character decodes to itself both ways; unmapped letter gives command NONE |
 | S3-H14 | `MAP` command parsing | set/clear/default/show work; bad message changes nothing |
+| S3-H15 | Bench steering mixer | right steer speeds left wheel; efforts clamped 0..max, never negative |
+| S3-H16 | Bench junction rule | stop for wait; barcode turn, else straight; route used once; U-turn ends run |
 
 ## Hardware cases (to run on the car)
 
 | ID | Purpose | Method | Acceptance |
 |---|---|---|---|
-| S3-T01 | Line sensor polarity | `S3_DEBUG_RAW=1`, hold each sensor over tape and foam | L/R read 1 on black, 0 on white |
+| S3-T01 | Line sensor polarity | `S3_BENCH=1` image, hold each sensor over tape and foam | L/R read 1 on black, 0 on white |
 | S3-T02 | Barcode contrast at mounting height | Calibration sweep, record white/black levels | black - white >= 300 counts |
 | S3-T03 | Barcode decode on track | 10 passes per letter, each direction, at operating speed | >= 9/10 correct, 0 wrong letters |
 | S3-T04 | Line following on curves | Full loop of the practice track, 3 runs | stays on line every run |
 | S3-T05 | Junction detection | 10 crossings of a "+" | 10/10 reported once |
 | S3-T06 | Probe angle | No-barcode "+" and T, 5 each | correct type 10/10 |
+| S3-T08 | Bench line follow, wheels raised | `S3_BENCH=2`, move tape under sensors by hand | wheel speeds follow steer; GP21 stops at once; run ends at 20 s |
+| S3-T09 | Bench line follow on floor | `S3_BENCH=2` on the practice loop, 3 runs | stays on line; stops at each junction, then straight with no barcode |
 | S3-T07 | Barcode to junction time | Time from decode to junction at operating speed | sets `S3_ROUTE_VALID_MS` with margin |
 
 ## Results
@@ -56,3 +61,4 @@ profile, configuration and raw log/video.
 |---|---|---|---|---|---|---|
 | 2026-10-21 | S3-H01..S3-H12 | buddy3 working tree, before first commit; host gcc 11, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 12/12 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H12)" | Logic only; no hardware. Re-run and replace commit field after committing. |
 | 2026-10-28 | S3-H01..S3-H14 | buddy3 working tree (uncommitted, adds barcode_map); host gcc, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 14/14 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H14)" | Logic only; no hardware. |
+| 2026-10-28 | S3-H01..S3-H16 | buddy3 working tree (adds line_drive, s3_bench); host gcc `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 16/16 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H16)"; B2 suite 38/38; normal, B2_BENCH, S3_BENCH=1, S3_BENCH=2 images compile and link (arm-none-eabi-gcc 13.2, pico-sdk 2.2.0) | Logic and build only; not flashed. |

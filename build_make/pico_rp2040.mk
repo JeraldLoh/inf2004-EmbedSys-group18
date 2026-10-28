@@ -103,6 +103,25 @@ endif
 TEST_SUFFIX := _b2bench
 endif
 
+# Buddy 3 bench: S3_BENCH=1 sensors only (motors held off), S3_BENCH=2
+# line follow on Buddy 2's bench drivers. Same profile rules as B2_BENCH,
+# plus a 1 ms kernel tick for barcode sampling. Cannot combine with B2_BENCH.
+S3_BENCH ?= 0
+ifneq ($(filter $(S3_BENCH),0 1 2),$(S3_BENCH))
+$(error Unknown S3_BENCH '$(S3_BENCH)'; use 0, 1 or 2)
+endif
+B2_DRIVERS := $(B2_BENCH)
+ifneq ($(S3_BENCH),0)
+ifeq ($(B2_BENCH),1)
+$(error Use B2_BENCH=1 or S3_BENCH=$(S3_BENCH), not both)
+endif
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error S3_BENCH requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+B2_DRIVERS := 1
+TEST_SUFFIX := _s3bench$(S3_BENCH)
+endif
+
 # CRASH_REPORT=1 also copies every console line to UART0 on GP0 (TX) /
 # GP1 (RX), 115200 8N1.  UART output is sent immediately, so it still shows
 # the last messages and the kernel's crash report after a crash, when the
@@ -115,6 +134,11 @@ CRASH_REPORT ?= 0
 ifeq ($(B2_BENCH),1)
 ifneq ($(CRASH_REPORT),0)
 $(error B2_BENCH=1 requires CRASH_REPORT=0 to keep GP0 free)
+endif
+endif
+ifneq ($(S3_BENCH),0)
+ifneq ($(CRASH_REPORT),0)
+$(error S3_BENCH requires CRASH_REPORT=0: GP0 is the right line sensor)
 endif
 endif
 ifneq ($(filter $(CRASH_REPORT),0 1),$(CRASH_REPORT))
@@ -198,7 +222,14 @@ CFLAGS  += -DCNF_SMP=1
 ASFLAGS += -DCNF_SMP=1
 endif
 CFLAGS  += -DAPP_TEST=$(TEST)
-CFLAGS  += -DAPP_B2_BENCH=$(B2_BENCH)
+CFLAGS  += -DAPP_B2_BENCH=$(B2_DRIVERS)
+CFLAGS  += -DAPP_S3_BENCH=$(S3_BENCH)
+ifneq ($(S3_BENCH),0)
+CFLAGS  += -DCNF_TIMER_PERIOD=1
+endif
+ifeq ($(S3_BENCH),1)
+CFLAGS  += -DS3_DEBUG_RAW=1
+endif
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)
 CFLAGS  += -DBOARD_UART0_FREE=1

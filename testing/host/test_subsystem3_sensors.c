@@ -1,4 +1,4 @@
-/* Host tests for Buddy 3 (S3-H01 .. S3-H14, see testing/subsystem3/TEST_LOG.md).
+/* Host tests for Buddy 3 (S3-H01 .. S3-H16, see testing/subsystem3/TEST_LOG.md).
  * No hardware: sensor readings and time are simulated.
  */
 #include <assert.h>
@@ -9,6 +9,7 @@
 #include "../../app_program/subsystem3/barcode_decoder.h"
 #include "../../app_program/subsystem3/barcode_edges.h"
 #include "../../app_program/subsystem3/barcode_map.h"
+#include "../../app_program/subsystem3/line_drive.h"
 #include <string.h>
 #include "../../app_program/vehicle_controller/vehicle_controller.h"
 
@@ -527,6 +528,102 @@ static void test_map_command_over_mqtt(void)
     assert(strcmp(reply, "OK A=L B=R C=S D=U") == 0);
 }
 
+/* ---- S3-H15 ----------------------------------------------------------- */
+/* Steering to wheel effort: right turn speeds the left wheel, never negative
+ * (Buddy 2's driver rejects a direct forward/reverse flip), never above max. */
+static void test_line_drive_mix(void)
+{
+    int16_t l, r;
+
+    line_drive_mix(0, 200, 2, 350, &l, &r);
+    assert((l == 200) && (r == 200));
+    line_drive_mix(50, 200, 2, 350, &l, &r);          /* turn right */
+    assert((l == 300) && (r == 100));
+    line_drive_mix(-50, 200, 2, 350, &l, &r);         /* turn left */
+    assert((l == 100) && (r == 300));
+    line_drive_mix(100, 200, 2, 350, &l, &r);         /* hard right */
+    assert((l == 350) && (r == 0));
+    line_drive_mix(-100, 200, 2, 350, &l, &r);        /* hard left */
+    assert((l == 0) && (r == 350));
+    line_drive_mix(-128, 200, 2, 350, &l, &r);        /* int8 extreme */
+    assert((l == 0) && (r == 350));
+}
+
+/* ---- S3-H16 ----------------------------------------------------------- */
+/* Junction rule: stop for the wait, then the barcode turn, or straight if
+ * there was no barcode, then back to following. U-turn ends the bench run. */
+static void test_line_drive_junction_rule(void)
+{
+    line_drive_config_t cfg;
+    line_drive_t d;
+    int16_t l, r;
+    uint32_t t;
+
+    line_drive_default_config(&cfg);
+    cfg.base_effort = 200;
+    cfg.max_effort = 350;
+    cfg.gain = 2;
+    cfg.junction_wait_ms = 1000U;
+    cfg.cross_ms = 300U;
+    cfg.turn_ms = 500U;
+    line_drive_init(&d, &cfg);
+
+    /* Following: efforts come from steering. */
+    assert(line_drive_step(&d, 25, 0U, &l, &r) == LINE_DRIVE_EVENT_NONE);
+    assert((l == 250) && (r == 150));
+
+    /* No barcode: stop, wait, straight. */
+    line_drive_junction(&d, 100U);
+    assert(line_drive_step(&d, 0, 101U, &l, &r) == LINE_DRIVE_EVENT_JUNCTION_STOP);
+    assert((l == 0) && (r == 0));
+    for (t = 102U; t < 1100U; t += 10U)
+    {
+        assert(line_drive_step(&d, 40, t, &l, &r) == LINE_DRIVE_EVENT_NONE);
+        assert((l == 0) && (r == 0));                  /* steering ignored */
+    }
+    line_drive_junction(&d, 600U);                     /* repeat: ignored */
+    assert(line_drive_step(&d, 0, 1100U, &l, &r) == LINE_DRIVE_EVENT_GO);
+    assert((d.go_command == ROUTE_COMMAND_STRAIGHT) && (d.go_character == '-'));
+    assert((l == 200) && (r == 200));
+    assert(line_drive_step(&d, 90, 1300U, &l, &r) == LINE_DRIVE_EVENT_NONE);
+    assert((l == 200) && (r == 200));                  /* blind crossing */
+    assert(line_drive_step(&d, 0, 1400U, &l, &r) == LINE_DRIVE_EVENT_RESUME);
+    assert(d.state == LINE_DRIVE_FOLLOW);
+
+    /* Barcode K = LEFT before the junction: swing left. */
+    line_drive_route(&d, ROUTE_COMMAND_LEFT, 'K');
+    line_drive_junction(&d, 2000U);
+    (void)line_drive_step(&d, 0, 2000U, &l, &r);
+    assert(line_drive_step(&d, 0, 3000U, &l, &r) == LINE_DRIVE_EVENT_GO);
+    assert((d.go_command == ROUTE_COMMAND_LEFT) && (d.go_character == 'K'));
+    assert((l == 0) && (r == 200));
+    assert(line_drive_step(&d, 0, 3500U, &l, &r) == LINE_DRIVE_EVENT_RESUME);
+
+    /* The route was used up: the next junction goes straight again. */
+    line_drive_junction(&d, 4000U);
+    (void)line_drive_step(&d, 0, 4000U, &l, &r);
+    assert(line_drive_step(&d, 0, 5000U, &l, &r) == LINE_DRIVE_EVENT_GO);
+    assert(d.go_command == ROUTE_COMMAND_STRAIGHT);
+    (void)line_drive_step(&d, 0, 5300U, &l, &r);
+
+    /* Right turn. */
+    line_drive_route(&d, ROUTE_COMMAND_RIGHT, 'Q');
+    line_drive_junction(&d, 6000U);
+    (void)line_drive_step(&d, 0, 6000U, &l, &r);
+    assert(line_drive_step(&d, 0, 7000U, &l, &r) == LINE_DRIVE_EVENT_GO);
+    assert((l == 200) && (r == 0));
+    (void)line_drive_step(&d, 0, 7500U, &l, &r);
+
+    /* U-turn is not done on the bench: run ends, wheels stay at 0. */
+    line_drive_route(&d, ROUTE_COMMAND_UTURN, 'M');
+    line_drive_junction(&d, 8000U);
+    (void)line_drive_step(&d, 0, 8000U, &l, &r);
+    assert(line_drive_step(&d, 0, 9000U, &l, &r) == LINE_DRIVE_EVENT_DONE);
+    assert((l == 0) && (r == 0));
+    assert(line_drive_step(&d, 50, 9500U, &l, &r) == LINE_DRIVE_EVENT_NONE);
+    assert((l == 0) && (r == 0) && (d.state == LINE_DRIVE_DONE));
+}
+
 int main(void)
 {
     test_status_is_one_byte();
@@ -543,6 +640,8 @@ int main(void)
     test_edge_buffer();
     test_decode_full_alphabet_with_map();
     test_map_command_over_mqtt();
-    (void)puts("subsystem3 sensor host tests passed (S3-H01..S3-H14)");
+    test_line_drive_mix();
+    test_line_drive_junction_rule();
+    (void)puts("subsystem3 sensor host tests passed (S3-H01..S3-H16)");
     return 0;
 }

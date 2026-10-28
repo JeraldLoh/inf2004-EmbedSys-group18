@@ -63,6 +63,7 @@ add_executable(subsystem3_sensor_host_tests
     ../../app_program/subsystem3/barcode_decoder.c
     ../../app_program/subsystem3/barcode_map.c
     ../../app_program/subsystem3/barcode_edges.c
+    ../../app_program/subsystem3/line_drive.c
     ../../app_program/vehicle_controller/vehicle_controller.c
     ../../app_program/vehicle_controller/safety.c
 )
