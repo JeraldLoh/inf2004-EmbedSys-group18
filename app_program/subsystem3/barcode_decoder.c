@@ -3,11 +3,13 @@
 #include <stddef.h>
 
 #define BARCODE_QUIET_START_US 8000U
-#define BARCODE_QUIET_END_US 28000U
+#define BARCODE_QUIET_END_US 28000U   /* lower bound for the end quiet zone */
+#define BARCODE_QUIET_END_FACTOR 5U   /* end quiet zone = 5 x narrow bar */
 #define BARCODE_MIN_RUN_US 400U
-#define BARCODE_MAX_SCAN_US 1500000U
+#define BARCODE_MAX_SCAN_US 6000000U  /* 141 mm barcode at ~25 mm/s */
 #define BARCODE_WIDE_NUMERATOR 17U
 #define BARCODE_WIDE_DENOMINATOR 10U
+#define BARCODE_SYMBOL_RUNS 29U   /* 3 characters x 9 + 2 gaps */
 
 static route_command_t command_from_character(char character)
 {
@@ -51,20 +53,31 @@ static uint32_t minimum_run_us(const barcode_decoder_t *decoder)
     return minimum;
 }
 
+/* Builds the 9-bit wide/narrow pattern of the character that starts at
+ * element "start". When "reverse" is true the runs are read from the end
+ * backwards, which is what a barcode looks like when the car crosses it in
+ * the opposite direction (for example after a U-turn). */
 static uint16_t pattern_at(
     const barcode_decoder_t *decoder,
     uint8_t start,
-    uint32_t narrow_us)
+    uint32_t narrow_us,
+    bool reverse)
 {
     uint16_t bits = 0U;
     uint32_t wide_limit =
         (narrow_us * BARCODE_WIDE_NUMERATOR) / BARCODE_WIDE_DENOMINATOR;
     uint8_t index;
+    uint8_t run;
 
     for (index = 0U; index < 9U; index++)
     {
+        run = (uint8_t)(start + index);
+        if (reverse)
+        {
+            run = (uint8_t)(BARCODE_SYMBOL_RUNS - 1U - run);
+        }
         bits = (uint16_t)(bits << 1);
-        if (decoder->run_us[start + index] > wide_limit)
+        if (decoder->run_us[run] > wide_limit)
         {
             bits = (uint16_t)(bits | 1U);
         }
@@ -72,42 +85,83 @@ static uint16_t pattern_at(
     return bits;
 }
 
-static bool decode_complete_symbol(barcode_decoder_t *decoder)
+/* Every Code 39 character has exactly 3 wide elements out of 9. */
+static bool has_three_wide(uint16_t bits)
 {
-    uint32_t narrow_us;
-    char start;
+    uint8_t count = 0U;
+
+    while (bits != 0U)
+    {
+        count = (uint8_t)(count + (bits & 1U));
+        bits = (uint16_t)(bits >> 1);
+    }
+    return count == 3U;
+}
+
+/* The gap between characters is always a narrow space. Gaps sit at elements
+ * 9 and 19, which are the same positions whichever way the code is read. */
+static bool gaps_are_narrow(const barcode_decoder_t *decoder, uint32_t narrow_us)
+{
+    uint32_t wide_limit =
+        (narrow_us * BARCODE_WIDE_NUMERATOR) / BARCODE_WIDE_DENOMINATOR;
+
+    return (decoder->run_us[9] <= wide_limit) &&
+           (decoder->run_us[19] <= wide_limit);
+}
+
+static bool decode_direction(
+    barcode_decoder_t *decoder,
+    uint32_t narrow_us,
+    bool reverse)
+{
+    uint16_t start_bits = pattern_at(decoder, 0U, narrow_us, reverse);
+    uint16_t data_bits = pattern_at(decoder, 10U, narrow_us, reverse);
+    uint16_t stop_bits = pattern_at(decoder, 20U, narrow_us, reverse);
     char data;
-    char stop;
 
-    /* Exactly one Code 39 character is authoritative: * X * plus two gaps. */
-    if (decoder->run_count < 29U)
+    /* Validation: reject anything that is not a well-formed symbol, so a
+     * smudge or speed change gives "no read" instead of the wrong command. */
+    if (!has_three_wide(start_bits) || !has_three_wide(data_bits) ||
+        !has_three_wide(stop_bits))
+    {
+        return false;
+    }
+    if ((code39_character(start_bits) != '*') ||
+        (code39_character(stop_bits) != '*'))
     {
         return false;
     }
 
-    narrow_us = minimum_run_us(decoder);
-    if (narrow_us == 0U)
-    {
-        return false;
-    }
-
-    start = code39_character(pattern_at(decoder, 0U, narrow_us));
-    data = code39_character(pattern_at(decoder, 10U, narrow_us));
-    stop = code39_character(pattern_at(decoder, 20U, narrow_us));
-
-    if ((start != '*') || (stop != '*'))
-    {
-        return false;
-    }
-
+    data = code39_character(data_bits);
     decoder->command = command_from_character(data);
     if (decoder->command == ROUTE_COMMAND_NONE)
     {
         return false;
     }
-
     decoder->character = data;
+    decoder->reversed = reverse;
     return true;
+}
+
+static bool decode_complete_symbol(barcode_decoder_t *decoder)
+{
+    uint32_t narrow_us;
+
+    /* Exactly one Code 39 character is authoritative: * X * plus two gaps. */
+    if (decoder->run_count < BARCODE_SYMBOL_RUNS)
+    {
+        return false;
+    }
+
+    narrow_us = minimum_run_us(decoder);
+    if ((narrow_us == 0U) || !gaps_are_narrow(decoder, narrow_us))
+    {
+        return false;
+    }
+
+    /* Try the normal direction first, then the mirrored one. */
+    return decode_direction(decoder, narrow_us, false) ||
+           decode_direction(decoder, narrow_us, true);
 }
 
 static void push_run(barcode_decoder_t *decoder, uint32_t width_us)
@@ -149,6 +203,7 @@ void barcode_decoder_reset(barcode_decoder_t *decoder)
     decoder->saw_quiet_zone = false;
     decoder->command = ROUTE_COMMAND_NONE;
     decoder->character = '\0';
+    decoder->reversed = false;
     for (index = 0U; index < BARCODE_DECODER_MAX_RUNS; index++)
     {
         decoder->run_us[index] = 0U;
@@ -203,17 +258,27 @@ void barcode_decoder_feed(
         push_run(decoder, width_us);
         decoder->run_started_us = now_us;
         decoder->last_black = centre_sensor_black;
-        if (decoder->run_count >= 29U)
+        if (decoder->run_count >= BARCODE_SYMBOL_RUNS)
         {
             finish_or_reset(decoder);
             return;
         }
     }
-    else if (!centre_sensor_black && (decoder->run_count >= 19U) &&
-        ((now_us - decoder->run_started_us) >= BARCODE_QUIET_END_US))
+    else if (!centre_sensor_black && (decoder->run_count >= 19U))
     {
-        finish_or_reset(decoder);
-        return;
+        /* The end quiet zone is judged relative to the narrow bar width, so
+         * the decoder works at any car speed. A wide space is at most ~3x
+         * narrow, so 5x narrow can only be the white area after the barcode. */
+        uint32_t quiet_us = minimum_run_us(decoder) * BARCODE_QUIET_END_FACTOR;
+        if (quiet_us < BARCODE_QUIET_END_US)
+        {
+            quiet_us = BARCODE_QUIET_END_US;
+        }
+        if ((now_us - decoder->run_started_us) >= quiet_us)
+        {
+            finish_or_reset(decoder);
+            return;
+        }
     }
 
     if ((now_us - decoder->capture_started_us) > BARCODE_MAX_SCAN_US)
@@ -237,4 +302,14 @@ bool barcode_decoder_take(
     *character = decoder->character;
     barcode_decoder_reset(decoder);
     return true;
+}
+
+bool barcode_decoder_busy(const barcode_decoder_t *decoder)
+{
+    return (decoder != NULL) && (decoder->state == BARCODE_DECODER_CAPTURE);
+}
+
+bool barcode_decoder_was_reversed(const barcode_decoder_t *decoder)
+{
+    return (decoder != NULL) && decoder->reversed;
 }
