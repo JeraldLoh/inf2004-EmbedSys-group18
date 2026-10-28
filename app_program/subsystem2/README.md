@@ -127,7 +127,7 @@ Placeholders that need measuring (all in `motion_executor_default_config()`):
 
 | Value | Now | How to measure |
 |---|---|---|
-| Track width | 130 mm (`MOTION_TRACK_WIDTH_MM_PLACEHOLDER`) | Ruler between wheel contact centres; then a 360 deg pivot on the floor |
+| Track width | 112 mm, measured 2026-10-28 (`MOTION_TRACK_WIDTH_MM`) | Done with a ruler; still check with a 360 deg pivot on the floor |
 | Effort per 100 mm/s | 133 (150 mm/s -> 200) | Raised wheels: read `speed L/R` on the `[CAR]` line at known efforts |
 | Goal minimum effort | 150 | Lowest effort that starts both wheels on the floor |
 | Max effort | 350 | Buddy 3's bench cap |

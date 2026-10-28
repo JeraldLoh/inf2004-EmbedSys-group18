@@ -49,7 +49,7 @@ void motion_executor_default_config(motion_executor_config_t *config)
     }
     (void)memset(config, 0, sizeof(*config));
     config->calibration.wheel_diameter_mm = MOTION_WHEEL_DIAMETER_MM_CANDIDATE;
-    config->calibration.wheelbase_mm = MOTION_TRACK_WIDTH_MM_PLACEHOLDER;
+    config->calibration.wheelbase_mm = MOTION_TRACK_WIDTH_MM;
     config->calibration.left_counts_per_revolution =
         MOTION_LEFT_BOTH_EDGE_COUNTS_PER_REV;
     config->calibration.right_counts_per_revolution =

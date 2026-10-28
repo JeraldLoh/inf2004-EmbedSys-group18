@@ -26,9 +26,9 @@
  * - A wheel that changes direction gets one zero-effort period first, as
  *   drv_motor_apply() requires.
  *
- * Every number in the default config is a placeholder until measured; see
- * subsystem2/README.md. Track width (calibration.wheelbase_mm) in particular
- * is NOT measured, so pivot angles are approximate.
+ * The speed/effort numbers in the default config are placeholders until
+ * measured; see subsystem2/README.md. Track width is measured (112 mm) but
+ * not yet checked with a pivot on the floor.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,9 +36,10 @@
 #include "../contracts/control_messages.h"
 #include "motion_math.h"
 
-/* Placeholder: distance between the wheel contact centres. Measure it. */
-#ifndef MOTION_TRACK_WIDTH_MM_PLACEHOLDER
-#define MOTION_TRACK_WIDTH_MM_PLACEHOLDER 130u
+/* Distance between the left and right wheel contact centres. Measured on
+ * the car with a ruler, 2026-10-28; still to check with a 360 deg pivot. */
+#ifndef MOTION_TRACK_WIDTH_MM
+#define MOTION_TRACK_WIDTH_MM 112u
 #endif
 
 typedef struct

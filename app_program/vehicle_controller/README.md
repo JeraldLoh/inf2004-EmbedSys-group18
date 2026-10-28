@@ -70,7 +70,8 @@ and LINE motion is allowed, it reads Buddy 3's steering and hands Buddy 2 one
 continuous request (IF-02 -> IF-05) that expires after 150 ms. In any other
 state it sends nothing, so the car stops by itself. Numbers are placeholders
 in `controller_line_default_config()`: cruise 150 mm/s, 100 mm/s while a
-barcode is read, steer 100 -> 15 1/m curvature (matches Buddy 3's bench).
+barcode is read, steer 100 -> 17.8 1/m curvature, i.e. inner wheel ~0 with the 112 mm
+track (matches Buddy 3's bench).
 
 `controller_authority()` / `controller_service_authority()` (IF-04 gate):
 Buddy 5 asks it before every obstacle move and stamps the returned authority

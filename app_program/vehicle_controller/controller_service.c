@@ -23,10 +23,10 @@ void controller_line_default_config(controller_line_config_t *config)
     }
     /* 150 mm/s and steer 100 -> inner wheel ~0 reproduce Buddy 3's tuned
      * line-follow bench (base effort 200, gain 2) through Buddy 2's draft
-     * executor defaults. */
+     * executor defaults: curvature 2 / track (112 mm) = 17.8 1/m at 100. */
     config->cruise_mm_s = 150U;
     config->slow_mm_s = 100U;
-    config->curvature_per_steer_u1_m = 150000;
+    config->curvature_per_steer_u1_m = 178000;
     config->request_life_ms = 150U;
 }
 

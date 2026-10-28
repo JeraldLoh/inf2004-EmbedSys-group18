@@ -74,7 +74,7 @@ Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 5 OBSTACLE_STOP,
 
 | What | How | Where to put the result |
 |---|---|---|
-| Track width | Ruler between wheel contact centres; check with a 360 deg pivot | `MOTION_TRACK_WIDTH_MM_PLACEHOLDER` (subsystem2/motion_executor.h) |
+| Track width | 112 mm measured with a ruler; check with a 360 deg pivot (turn ends square to the start) | `MOTION_TRACK_WIDTH_MM` (subsystem2/motion_executor.h) |
 | Effort vs speed | INT-25c: read `speed L/R` at effort 200 | `effort_per_100_mm_s` in `motion_executor_default_config()` |
 | Start effort | Lowest effort that moves both wheels on the floor | `goal_min_effort` |
 | Cruise speed / steering | INT-27a: off-line count at 150 mm/s; adjust if it weaves or cuts corners | `controller_line_default_config()` |
@@ -87,5 +87,5 @@ Record the old and new value, the date and the evidence (log/video) in
 - Buddy 2's executor is a DRAFT (decision D13): open-loop speed, no PID,
   placeholders above. Buddy 2 must review it before floor runs.
 - Junction routes are not driven (D14): use a loop without junctions.
-- Turn angles depend on the track-width placeholder (D12).
+- Turn angles use the ruler-measured 112 mm track; not yet pivot-checked (D12).
 - Not run on hardware at all yet.

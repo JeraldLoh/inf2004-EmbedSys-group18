@@ -13,7 +13,7 @@
 | D9 | Built-in service owns raw CYW43/lwIP/MQTT; B1 provides bounded application bridge | Verified template constraint; bridge unimplemented |
 | D10 | Keep GP0/GP1 for line sensors; USB-only console, no crash mirroring while attached | Proposed car profile; target verification pending |
 | D11 | Whole-car build (`CAR_RUN=1`) uses a 1 ms kernel tick for Buddy 3's ADC barcode sampling; every other profile keeps 10 ms. All application code uses millisecond APIs, not ticks | Proposed by Buddy 5; Buddy 3 review |
-| D12 | Track width is a 130 mm placeholder until measured; pivot angles are approximate until then | Proposed; measurement pending |
+| D12 | Track width (wheel contact centres) is 112 mm, ruler-measured 2026-10-28; confirm with a 360 deg floor pivot | Measured; pivot check pending |
 | D13 | Buddy 5 drafted the Buddy 2 motion executor so the whole car can be tested; Buddy 2 reviews, owns and may replace it | Proposed; Buddy 2 review required |
 | D14 | First whole-car build does not drive junction routes; test on a loop without junctions until the Buddy 3 probe and route goals are integrated | Proposed; Buddy 3 review |
 
