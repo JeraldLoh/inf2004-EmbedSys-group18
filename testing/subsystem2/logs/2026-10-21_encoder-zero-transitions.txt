@@ -1,0 +1,32 @@
+Hardware component tester, USB console, TEST=1
+Date: 2026-10-21
+Firmware SHA-256: 17EB8EEF58BE75005C8837418B1F3D0BA5F2783277CE7E14FD4BCD58AEDA13A6
+
+=== RUN 2: right encoder: white channel GP5 (also probes GP4) ===
+This geared motor may not back-drive its shaft encoder by hand.
+LIFT THE WHEELS and put a tape mark on the right tyre.
+Hold GP20 to drive slowly, then RELEASE it after exactly ONE wheel revolution.
+The safety limit is 5000 ms. This counts both signal edges.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+right encoder GP5 transitions=0 in 1319 ms
+alternate GP4 transitions=0
+NO SIGNAL CHANGE on GP5 while the motor ran. Check encoder 3V3/GND and channel wiring.
+Grove 3 also carries GP4; expected OUT is GP5.
+=== TEST FINISHED ===
+
+=== RUN 3: left encoder: Grove 6 GP27 ===
+This geared motor may not back-drive its shaft encoder by hand.
+LIFT THE WHEELS and put a tape mark on the left tyre.
+Hold GP20 to drive slowly, then RELEASE it after exactly ONE wheel revolution.
+The safety limit is 5000 ms. This counts both signal edges.
+Now press GP20 a SECOND time and HOLD it to run.
+Release GP20 to stop; GP21 aborts.
+left encoder GP27 transitions=0 in 979 ms
+NO SIGNAL CHANGE on GP27 while the motor ran. Check encoder 3V3/GND and channel wiring.
+Grove 6 also carries GP26; OUT must use its GP27 conductor, not GP26.
+=== TEST FINISHED ===
+
+Result: FAIL. No encoder channel produced transitions while the selected motor
+was driven. Do not derive counts/revolution or odometry calibration from this
+run. Verify the exact motor/encoder pinout and encoder supply before retesting.

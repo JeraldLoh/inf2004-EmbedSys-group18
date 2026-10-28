@@ -1,0 +1,21 @@
+Firmware profile: TEST=1 CONSOLE=usb_cdc
+UF2 SHA-256: CAD08872B95FE6964F23D55FA2DA28AD077668C91648399CE96AFB662345606B
+Encoder sampler: 50 us hardware-timer busy poll with internal-pull probe
+
+Right encoder:
+  GP5 pull-up=0 pull-down=0; held LOW
+  GP4 pull-up=0 pull-down=0; held LOW
+  GP5 transitions=2 in 1146 ms; level 0->0
+  GP4 transitions=1; level 0->1
+
+Left encoder:
+  GP27 pull-up=1 pull-down=0; floating/weak
+  GP26 pull-up=0 pull-down=0; held LOW
+  GP27 transitions=0 in 1102 ms; level 1->1
+  GP26 transitions=8; level 0->0
+
+Interpretation: GPIO activity is detectable, but 1-8 transitions per wheel
+revolution are not a usable output from the photographed 13-line geared Hall
+encoder. The pattern is consistent with encoder VCC and signal conductors being
+mapped by an incorrect generic wire-colour convention. Confirm the six physical
+connector positions before another powered run.

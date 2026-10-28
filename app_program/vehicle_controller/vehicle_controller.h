@@ -2,6 +2,7 @@
 #define VEHICLE_CONTROLLER_H
 
 #include "../contracts/control_messages.h"
+#include "../contracts/hardware_faults.h"
 #include "safety.h"
 
 typedef enum
@@ -30,6 +31,7 @@ typedef struct
     terrain_state_t terrain;
     authority_generation_t authority_generation;
     safety_state_t safety;
+    hardware_fault_state_t hardware_faults;
     route_instruction_t route;
     route_lifecycle_t route_lifecycle;
     goal_id_t active_goal_id;
@@ -47,6 +49,14 @@ controller_action_t vehicle_controller_latch_stop(
 bool vehicle_controller_clear_stop(
     vehicle_controller_t *controller,
     stop_reason_mask_t reasons);
+bool vehicle_controller_latch_hardware_faults(
+    vehicle_controller_t *controller,
+    hardware_fault_mask_t faults);
+bool vehicle_controller_clear_hardware_faults(
+    vehicle_controller_t *controller,
+    hardware_fault_mask_t faults);
+hardware_fault_mask_t vehicle_controller_hardware_faults(
+    const vehicle_controller_t *controller);
 bool vehicle_controller_receive_route(
     vehicle_controller_t *controller,
     const route_instruction_t *instruction,

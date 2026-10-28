@@ -91,6 +91,18 @@ ifeq ($(TEST),1)
 TEST_SUFFIX := _test
 endif
 
+# Separate opt-in path: real B2 drivers, GPIO STOP, hardware-timed trials.
+B2_BENCH ?= 0
+ifneq ($(filter $(B2_BENCH),0 1),$(B2_BENCH))
+$(error Unknown B2_BENCH '$(B2_BENCH)'; use 0 or 1)
+endif
+ifeq ($(B2_BENCH),1)
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error B2_BENCH=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+TEST_SUFFIX := _b2bench
+endif
+
 # CRASH_REPORT=1 also copies every console line to UART0 on GP0 (TX) /
 # GP1 (RX), 115200 8N1.  UART output is sent immediately, so it still shows
 # the last messages and the kernel's crash report after a crash, when the
@@ -100,6 +112,11 @@ endif
 # alone, so a subsystem may claim them in TEAM.md.
 # CONSOLE=uart always uses UART0 as the console, so it forces CRASH_REPORT=1.
 CRASH_REPORT ?= 0
+ifeq ($(B2_BENCH),1)
+ifneq ($(CRASH_REPORT),0)
+$(error B2_BENCH=1 requires CRASH_REPORT=0 to keep GP0 free)
+endif
+endif
 ifneq ($(filter $(CRASH_REPORT),0 1),$(CRASH_REPORT))
 $(error Unknown CRASH_REPORT '$(CRASH_REPORT)'; use 0 or 1)
 endif
@@ -122,7 +139,11 @@ GCC := arm-none-eabi-gcc
 AS := arm-none-eabi-gcc
 LINK := arm-none-eabi-gcc
 SIZE := arm-none-eabi-size
-E2U := tools/elf2uf2
+HOST_EXEEXT :=
+ifeq ($(OS),Windows_NT)
+HOST_EXEEXT := .exe
+endif
+E2U := tools/elf2uf2$(HOST_EXEEXT)
 
 # Fail early, with a readable message, when the cross compiler is not on PATH.
 ifneq ($(MAKECMDGOALS),clean)
@@ -177,6 +198,7 @@ CFLAGS  += -DCNF_SMP=1
 ASFLAGS += -DCNF_SMP=1
 endif
 CFLAGS  += -DAPP_TEST=$(TEST)
+CFLAGS  += -DAPP_B2_BENCH=$(B2_BENCH)
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)
 CFLAGS  += -DBOARD_UART0_FREE=1
@@ -209,7 +231,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))
