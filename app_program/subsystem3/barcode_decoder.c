@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#include "barcode_map.h"
+
 #define BARCODE_QUIET_START_US 8000U
 #define BARCODE_QUIET_END_US 28000U   /* lower bound for the end quiet zone */
 #define BARCODE_QUIET_END_FACTOR 5U   /* end quiet zone = 5 x narrow bar */
@@ -11,29 +13,45 @@
 #define BARCODE_WIDE_DENOMINATOR 10U
 #define BARCODE_SYMBOL_RUNS 29U   /* 3 characters x 9 + 2 gaps */
 
-static route_command_t command_from_character(char character)
+/* Full Code 39 table. Each character is 9 elements read in order
+ * bar space bar space bar space bar space bar; bit 8 is the first element
+ * and a 1 means that element is wide. Every entry has exactly 3 wide.
+ * Checked against the python-barcode library's Code 39 table. */
+typedef struct
 {
-    switch (character)
-    {
-        case 'A': return ROUTE_COMMAND_LEFT;
-        case 'B': return ROUTE_COMMAND_RIGHT;
-        case 'C': return ROUTE_COMMAND_STRAIGHT;
-        case 'D': return ROUTE_COMMAND_UTURN;
-        default: return ROUTE_COMMAND_NONE;
-    }
-}
+    uint16_t bits;
+    char character;
+} code39_entry_t;
+
+static const code39_entry_t CODE39_TABLE[] = {
+    {0x109U, 'A'}, {0x049U, 'B'}, {0x148U, 'C'}, {0x019U, 'D'},
+    {0x118U, 'E'}, {0x058U, 'F'}, {0x00DU, 'G'}, {0x10CU, 'H'},
+    {0x04CU, 'I'}, {0x01CU, 'J'}, {0x103U, 'K'}, {0x043U, 'L'},
+    {0x142U, 'M'}, {0x013U, 'N'}, {0x112U, 'O'}, {0x052U, 'P'},
+    {0x007U, 'Q'}, {0x106U, 'R'}, {0x046U, 'S'}, {0x016U, 'T'},
+    {0x181U, 'U'}, {0x0C1U, 'V'}, {0x1C0U, 'W'}, {0x091U, 'X'},
+    {0x190U, 'Y'}, {0x0D0U, 'Z'},
+    {0x034U, '0'}, {0x121U, '1'}, {0x061U, '2'}, {0x160U, '3'},
+    {0x031U, '4'}, {0x130U, '5'}, {0x070U, '6'}, {0x025U, '7'},
+    {0x124U, '8'}, {0x064U, '9'},
+    {0x085U, '-'}, {0x184U, '.'}, {0x0C4U, ' '},
+    {0x094U, '*'}   /* start/stop */
+};
 
 static char code39_character(uint16_t bits)
 {
-    switch (bits)
+    uint8_t index;
+
+    for (index = 0U;
+         index < (uint8_t)(sizeof(CODE39_TABLE) / sizeof(CODE39_TABLE[0]));
+         index++)
     {
-        case 0x109U: return 'A';
-        case 0x049U: return 'B';
-        case 0x148U: return 'C';
-        case 0x019U: return 'D';
-        case 0x094U: return '*';
-        default: return '?';
+        if (CODE39_TABLE[index].bits == bits)
+        {
+            return CODE39_TABLE[index].character;
+        }
     }
+    return '?';
 }
 
 static uint32_t minimum_run_us(const barcode_decoder_t *decoder)
@@ -132,12 +150,17 @@ static bool decode_direction(
         return false;
     }
 
+    /* The '*' check above also fixes the direction: '*' read backwards is
+     * 'P', so a reversed crossing always fails the forward try. That matters
+     * because some letters are mirrors of others (K backwards is U). */
     data = code39_character(data_bits);
-    decoder->command = command_from_character(data);
-    if (decoder->command == ROUTE_COMMAND_NONE)
+    if ((data == '?') || (data == '*'))
     {
         return false;
     }
+    /* Any valid character is a good read. The command comes from the
+     * run-time map (set over MQTT); NONE means "read, but not mapped". */
+    decoder->command = barcode_map_get(data);
     decoder->character = data;
     decoder->reversed = reverse;
     return true;

@@ -35,6 +35,9 @@ void barcode_decoder_feed(
     barcode_decoder_t *decoder,
     bool centre_sensor_black,
     uint32_t now_us);
+/* Returns true once per good read. "character" is the decoded Code 39
+ * character; "command" is its mapping from barcode_map.h, which is
+ * ROUTE_COMMAND_NONE if that character has not been mapped. */
 bool barcode_decoder_take(
     barcode_decoder_t *decoder,
     route_command_t *command,

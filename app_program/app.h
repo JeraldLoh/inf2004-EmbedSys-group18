@@ -10,6 +10,9 @@
 #ifndef APP_TEST
 #define APP_TEST 0
 #endif
+#ifndef APP_S3_BENCH
+#define APP_S3_BENCH 0   /* 1 = S3 sensors-only bench, 2 = S3 line-follow bench */
+#endif
 
 IMPORT ER subsystem1_init(void);
 IMPORT ER subsystem2_init(void);

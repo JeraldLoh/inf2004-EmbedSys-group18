@@ -38,7 +38,9 @@
 
 #define	CNF_MAX_TSKPRI		32	/* Task Max priority */
 
-#define CNF_TIMER_PERIOD	10	/* System timer period */
+#ifndef CNF_TIMER_PERIOD
+#define CNF_TIMER_PERIOD	10	/* System timer period (ms); the S3 bench builds pass 1 */
+#endif
 
 /* Maximum number of kernel objects (raised for a 5-subsystem team project) */
 #define CNF_MAX_TSKID		32	/* Task */
