@@ -134,3 +134,9 @@ motion_status_t subsystem2_read_encoders(motion_encoder_snapshot_t *snapshot)
 drv_motor_t *subsystem2_bench_motor(void) { return started ? &motor : NULL; }
 drv_encoder_t *subsystem2_bench_encoder(void) { return started ? &encoder : NULL; }
 #endif
+
+#if APP_CAR_RUN
+/* DRAFT (Buddy 2 review): the motion executor task is the only caller. */
+drv_motor_t *subsystem2_executor_motor(void) { return started ? &motor : NULL; }
+drv_encoder_t *subsystem2_executor_encoder(void) { return started ? &encoder : NULL; }
+#endif

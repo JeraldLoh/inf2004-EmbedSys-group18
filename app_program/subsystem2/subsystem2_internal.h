@@ -8,4 +8,9 @@
 drv_motor_t *subsystem2_bench_motor(void);
 drv_encoder_t *subsystem2_bench_encoder(void);
 #endif
+/* DRAFT (Buddy 2 review): CAR_RUN only, for subsystem2_motion.c alone. */
+#if APP_CAR_RUN
+drv_motor_t *subsystem2_executor_motor(void);
+drv_encoder_t *subsystem2_executor_encoder(void);
+#endif
 #endif

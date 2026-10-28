@@ -149,3 +149,21 @@ endif()
 
 add_test(NAME subsystem3_sensor_host_tests
          COMMAND subsystem3_sensor_host_tests)
+
+# Draft Buddy 2 motion executor core (continuous requests + finite goals).
+add_executable(motion_executor_host_tests
+    test_motion_executor.c
+    ../../app_program/subsystem2/motion_executor.c
+    ../../app_program/subsystem2/motion_math.c
+)
+
+if(MSVC)
+    target_compile_options(motion_executor_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(motion_executor_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+
+add_test(NAME motion_executor_host_tests
+         COMMAND motion_executor_host_tests)
+
