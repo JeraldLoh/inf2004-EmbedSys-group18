@@ -19,6 +19,7 @@
 #define B5_SERVO_MIN_US 500U
 #define B5_SERVO_MAX_US 2500U
 #define B5_PENDING_MAX 8U
+#define B5_STATUS_PERIOD_MS 1000U
 
 static subsystem5_bindings_t bindings;
 static bool bound;
@@ -31,6 +32,7 @@ static drv_servo_t servo;
 static av_t av;
 static b5_bridge_t bridge;
 static bool motion_refused;
+static uint32_t refused_count;
 
 /* Controller events not yet accepted by the (full) controller queue. */
 static controller_event_t pending[B5_PENDING_MAX];
@@ -76,6 +78,7 @@ static void cb_motion_stop(void *ctx)
 static void refuse(const char *what, int amount)
 {
     motion_refused = true;
+    refused_count++;
     tm_printf((UB*)"[B5] %s %d refused: no motion executor yet\n", what, amount);
 }
 
@@ -191,13 +194,66 @@ static void flush_events(void)
     }
 }
 
+static const char *mode_name(system_mode_t mode)
+{
+    static const char *const names[] = {
+        "STARTUP", "IDLE", "AUTO", "MANUAL", "CALIBRATION", "STOPPED", "FAULT",
+    };
+    return ((unsigned)mode < (sizeof(names) / sizeof(names[0]))) ?
+        names[mode] : "?";
+}
+
+static const char *mission_name(mission_state_t mission)
+{
+    static const char *const names[] = {
+        "IDLE", "TRACK_LINE", "JUNCTION_APPROACH", "JUNCTION_EXECUTE",
+        "VERIFY_LINE", "OBSTACLE_STOP", "SCAN", "PLAN_BYPASS", "BYPASS",
+        "RECOVERY", "SAFE_STOP",
+    };
+    return ((unsigned)mission < (sizeof(names) / sizeof(names[0]))) ?
+        names[mission] : "?";
+}
+
+/* One line a second, so the console shows the task is alive even when
+ * nothing is in front of the sonar. */
+static void print_status(void)
+{
+    range_reading_t reading;
+    controller_status_t status;
+
+    tm_printf((UB*)"[B5] state=%s servo=%d ", av_state_name(av_state(&av)),
+        av.servo_deg);
+    if (!av_last_reading(&av, &reading))
+    {
+        tm_printf((UB*)"dist=none");
+    }
+    else if (reading.status == RANGE_OK)
+    {
+        tm_printf((UB*)"dist=%dcm", (int)reading.cm);
+    }
+    else
+    {
+        tm_printf((UB*)"dist=%s", range_status_name(reading.status));
+    }
+    if ((bindings.controller_status != NULL) && bindings.controller_status(&status))
+    {
+        tm_printf((UB*)" | ctrl mode=%s mission=%s stops=%lu",
+            mode_name(status.mode), mission_name(status.mission),
+            (unsigned long)status.stop_commands);
+    }
+    tm_printf((UB*)" | refused=%lu dropped=%lu\n", (unsigned long)refused_count,
+        (unsigned long)dropped_events);
+}
+
 static void subsystem5_task(INT stacd, void *exinf)
 {
     controller_event_t events[B5_BRIDGE_MAX_EVENTS];
     size_t count;
+    uint32_t last_status_ms;
 
     (void)stacd;
     (void)exinf;
+    last_status_ms = cb_now_ms(NULL);
     for (;;)
     {
         av_tick(&av);
@@ -205,6 +261,11 @@ static void subsystem5_task(INT stacd, void *exinf)
             av.fault_streak >= av.cfg.max_consecutive_faults, events);
         queue_events(events, count);
         flush_events();
+        if ((uint32_t)(cb_now_ms(NULL) - last_status_ms) >= B5_STATUS_PERIOD_MS)
+        {
+            last_status_ms = cb_now_ms(NULL);
+            print_status();
+        }
         (void)tk_dly_tsk(B5_TICK_MS);
     }
 }

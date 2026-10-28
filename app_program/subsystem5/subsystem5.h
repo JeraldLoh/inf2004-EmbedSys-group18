@@ -25,9 +25,12 @@ typedef struct
     gpio_dispatcher_t *dispatcher;  /* shared GPIO interrupt owner (ECHO) */
     bool (*urgent_stop)(void);      /* stop the motors now; false if not applied */
     bool (*post_event)(const controller_event_t *event); /* never blocks */
+    /* Optional (may be NULL): controller status for the 1 s status line. */
+    bool (*controller_status)(controller_status_t *status);
 } subsystem5_bindings_t;
 
-/* Startup only, before subsystem5_init(). All three fields are required. */
+/* Startup only, before subsystem5_init(). dispatcher, urgent_stop and
+ * post_event are required. */
 ER subsystem5_bind(const subsystem5_bindings_t *bindings);
 
 #endif
