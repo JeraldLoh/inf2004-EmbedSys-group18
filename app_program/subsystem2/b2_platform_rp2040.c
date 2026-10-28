@@ -183,7 +183,8 @@ static bool stop_pending(void *context)
 {
     bool pending;
     uintptr_t key = enter(context);
-    pending = (evidence.reasons != STOP_REASON_NONE) || evidence.cutoff_fired;
+    pending = (evidence.reasons != STOP_REASON_NONE) || evidence.cutoff_fired ||
+        b2_platform_stop_pressed();
     leave(context, key);
     return pending;
 }
@@ -321,6 +322,28 @@ void b2_platform_take_events(b2_platform_events_t *events)
 }
 
 gpio_dispatcher_t *b2_platform_dispatcher(void) { return &dispatcher; }
+void b2_platform_peek_events(b2_platform_events_t *events)
+{
+    uintptr_t key;
+    if (events == NULL || !initialized) { return; }
+    key = enter(NULL); *events = evidence; leave(NULL, key);
+}
+bool b2_platform_ack_events(uint32_t id)
+{
+    uintptr_t key;
+    bool ok;
+    if (!initialized || id == 0U || id == UINT32_MAX) { return false; }
+    key = enter(NULL);
+    ok = id == evidence.stop_events;
+    if (ok) { evidence.reasons = STOP_REASON_NONE; evidence.cutoff_fired = false; }
+    leave(NULL, key); return ok;
+}
+bool b2_platform_executor_io(measured_motion_executor_io_t *io)
+{
+    if (!initialized || io == NULL) { return false; }
+    *io = (measured_motion_executor_io_t){NULL, stop_pending, arm_cutoff, cancel_cutoff};
+    return true;
+}
 #else
 bool b2_platform_init(motion_hal_t *hal, b2_trial_io_t *io)
 { (void)hal; (void)io; return false; }
@@ -330,4 +353,8 @@ gpio_dispatcher_t *b2_platform_dispatcher(void) { return NULL; }
 bool b2_platform_start_pressed(void) { return false; }
 bool b2_platform_stop_pressed(void) { return true; }
 uint32_t b2_platform_now_us(void) { return (uint32_t)in_w(TIMER_TIMERAWL); }
+void b2_platform_peek_events(b2_platform_events_t *events)
+{ if (events != NULL) { *events = (b2_platform_events_t){0}; } }
+bool b2_platform_ack_events(uint32_t id) { (void)id; return false; }
+bool b2_platform_executor_io(measured_motion_executor_io_t *io) { (void)io; return false; }
 #endif

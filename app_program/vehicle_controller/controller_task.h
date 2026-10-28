@@ -11,15 +11,26 @@
  */
 #include "../app.h"
 #include "controller_service.h"
+#include "controller_motion.h"
 
 ER controller_task_init(const controller_outputs_t *outputs);
 ER controller_task_start(void);
 
-/* From any task (not an ISR). Never blocks; false if not started or the
- * queue is full. Events are applied in the order they were posted. */
+/* From any task (not an ISR). Never blocks. Ordinary events use FIFO and
+ * reject a full queue; STOP uses an independent sticky lane and disables
+ * outputs immediately even when FIFO is full. */
 bool controller_post(const controller_event_t *event);
 
 /* Copy of the latest status; false if not initialised or busy. */
 bool controller_get_status(controller_status_t *status);
+/* Bind after controller init and before any start. Existing STOP-only users
+ * need no change. No hook means motion commands fail closed. */
+ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
+    uint32_t boot_session, uint32_t caution_mm_s, uint32_t cruise_mm_s);
+bool controller_post_motion(const controller_motion_request_t *request);
+bool controller_post_motion_result(const motion_goal_result_t *result);
+bool controller_post_motion_stop(stop_reason_mask_t reasons, uint32_t evidence_id);
+bool controller_get_motion_status(controller_motion_status_t *status);
+bool controller_urgent_stop_pending(void);
 
 #endif

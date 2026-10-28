@@ -260,6 +260,15 @@ controller_action_t vehicle_controller_on_motion_result(
         return action;
     }
 
+    if (result->code == MOTION_RESULT_CANCELLED || result->code == MOTION_RESULT_REJECTED)
+    {
+        controller->active_goal = false;
+        controller->active_goal_id = 0U;
+        if (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED)
+        { controller->route_lifecycle = ROUTE_LIFECYCLE_CANCELLED; }
+        return action; /* Terminal, but never permission to resume. */
+    }
+
     if ((result->code == MOTION_RESULT_COMPLETED) &&
         is_obstacle_mission(controller->mission))
     {

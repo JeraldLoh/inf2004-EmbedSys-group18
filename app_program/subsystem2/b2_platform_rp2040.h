@@ -2,6 +2,7 @@
 #define GROUP18_B2_PLATFORM_RP2040_H
 #include "motion_hal.h"
 #include "b2_trial.h"
+#include "measured_motion_executor.h"
 #include "../project_config/gpio_dispatcher.h"
 
 typedef struct
@@ -20,6 +21,11 @@ typedef struct
  * Does not start motion. Existing enabled IRQ ownership causes refusal. */
 bool b2_platform_init(motion_hal_t *hal, b2_trial_io_t *trial_io);
 void b2_platform_take_events(b2_platform_events_t *events);
+/* Executor uses peek + conditional acknowledgement AFTER controller latches
+ * the reason. A queued/full controller transport must not clear an inhibit. */
+void b2_platform_peek_events(b2_platform_events_t *events);
+bool b2_platform_ack_events(uint32_t evidence_id);
+bool b2_platform_executor_io(measured_motion_executor_io_t *io);
 gpio_dispatcher_t *b2_platform_dispatcher(void);
 bool b2_platform_start_pressed(void);
 bool b2_platform_stop_pressed(void);

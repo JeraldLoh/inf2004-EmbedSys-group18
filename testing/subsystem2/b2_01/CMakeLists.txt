@@ -10,6 +10,9 @@ add_library(b2_foundation STATIC
     ${B2_SOURCE}/motion_hal.c
     ${B2_SOURCE}/drv_motor.c
     ${B2_SOURCE}/drv_encoder.c
+    ${B2_SOURCE}/wheel_measurement.c
+    ${B2_SOURCE}/wheel_pid.c
+    ${B2_SOURCE}/measured_motion_executor.c
     ${B2_SOURCE}/subsystem2.c
 )
 target_include_directories(b2_foundation PUBLIC ${B2_SOURCE} stubs)
@@ -63,6 +66,8 @@ add_library(b2_runtime_policy STATIC
     ${B2_SOURCE}/b2_trial.c ${B2_SOURCE}/b2_gesture.c
     ${B2_SOURCE}/../project_config/gpio_dispatcher.c
     ${B2_SOURCE}/../vehicle_controller/vehicle_controller.c
+    ${B2_SOURCE}/../vehicle_controller/controller_service.c
+    ${B2_SOURCE}/../vehicle_controller/controller_motion.c
     ${B2_SOURCE}/../vehicle_controller/safety.c
     ${B2_SOURCE}/../contracts/hardware_faults.c)
 target_link_libraries(b2_runtime_policy PUBLIC b2_fake)
@@ -78,5 +83,16 @@ foreach(case IN ITEMS timer_owner gpio_owner irq_failure output_failure clock_fa
     add_test(NAME b2_platform_${case} COMMAND test_platform_binding ${case})
 endforeach()
 
+add_executable(test_motion_control test_motion_control.c)
+target_link_libraries(test_motion_control PRIVATE b2_runtime_policy)
+foreach(case IN ITEMS measurement pid admission forward reverse left right both_wheels stall overshoot stop_race ttl controller result_adapter)
+    add_test(NAME b2_motion_${case} COMMAND test_motion_control ${case})
+endforeach()
+add_executable(test_controller_transport test_controller_transport.c
+    ${B2_SOURCE}/../vehicle_controller/controller_task.c)
+target_link_libraries(test_controller_transport PRIVATE b2_runtime_policy)
+foreach(case IN ITEMS stop latest result)
+    add_test(NAME b2_transport_${case} COMMAND test_controller_transport ${case})
+endforeach()
 get_property(b2_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${b2_tests} PROPERTIES LABELS subsystem2)

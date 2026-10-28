@@ -81,8 +81,22 @@ int main(int argc, char **argv)
     assert(sonar_events == 1U);
     assert(subsystem2_read_encoders(&sample) == MOTION_OK);
     assert(sample.left_count == 1U && sample.right_count == 1U);
-    b2_platform_take_events(&events);
+    b2_platform_peek_events(&events);
     assert(events.reasons & STOP_REASON_PHYSICAL);
+    assert(!b2_platform_ack_events(0U));
+    {
+        uint32_t previous=events.stop_events;
+        mock_gpio_edges(0U,(uint32_t)1U<<21);
+        mock_fire_irq(13U);
+        assert(!b2_platform_ack_events(previous)); /* New evidence cannot be cleared by old ACK. */
+        b2_platform_peek_events(&events);
+        assert(events.stop_events>previous);
+        assert(b2_platform_ack_events(events.stop_events));
+        assert(io.stop_pending(io.context)); /* Held button still blocks authorization. */
+        b2_trial_service(&trial,events.reasons,events.cutoff_fired);
+    }
+    b2_platform_take_events(&events);
+    assert(events.reasons==STOP_REASON_NONE);
     b2_trial_service(&trial, events.reasons, events.cutoff_fired);
     assert(b2_trial_take_result(&trial, &result) && result.state == B2_TRIAL_STOPPED);
     assert(b2_trial_begin(&trial, 150, 0, 250000U) == MOTION_INHIBITED);

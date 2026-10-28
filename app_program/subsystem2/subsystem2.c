@@ -134,3 +134,15 @@ motion_status_t subsystem2_read_encoders(motion_encoder_snapshot_t *snapshot)
 drv_motor_t *subsystem2_bench_motor(void) { return started ? &motor : NULL; }
 drv_encoder_t *subsystem2_bench_encoder(void) { return started ? &encoder : NULL; }
 #endif
+
+bool subsystem2_executor_drivers(drv_motor_t **m, drv_encoder_t **e)
+{
+#if APP_B2_BENCH
+    (void)m; (void)e;
+    return false;
+#else
+    if (!initialized || started || m == NULL || e == NULL) { return false; }
+    *m = &motor; *e = &encoder;
+    return true;
+#endif
+}

@@ -151,3 +151,13 @@ void controller_service_status(
         *status = service->status;
     }
 }
+
+void controller_service_motion_result(controller_service_t *service,
+    const motion_goal_result_t *result)
+{
+    controller_action_t action;
+    if (service == NULL || !service->initialized || result == NULL) { return; }
+    action = vehicle_controller_on_motion_result(&service->controller, result);
+    execute(service, &action);
+    refresh_status(service);
+}

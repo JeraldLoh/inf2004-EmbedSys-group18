@@ -9,6 +9,7 @@ typedef int ID;
 typedef unsigned char UB;
 typedef unsigned int UINT;
 typedef uint32_t UW;
+typedef int32_t SZ;
 typedef int BOOL;
 #define EXPORT
 #define IMPORT extern
@@ -25,6 +26,22 @@ typedef int BOOL;
 #define TA_USERBUF 0x20U
 #define TA_ASSPRC 0x10000U
 #define TP_PRC1 1U
+#define TA_INHERIT 2U
+#define TA_TFIFO 0U
+#define TMO_POL 0
+#define TMO_FEVR (-1)
+typedef struct { UINT mtxatr; } T_CMTX;
+typedef struct { UINT mbfatr; INT maxmsz; SZ bufsz; } T_CMBF;
+typedef struct { UW hi, lo; } SYSTIM;
+ID tk_cre_mtx(const T_CMTX *config);
+ER tk_del_mtx(ID id);
+ER tk_loc_mtx(ID id, INT timeout);
+ER tk_unl_mtx(ID id);
+ID tk_cre_mbf(const T_CMBF *config);
+ER tk_del_mbf(ID id);
+ER tk_snd_mbf(ID id, const void *message, INT size, INT timeout);
+INT tk_rcv_mbf(ID id, void *message, INT timeout);
+ER tk_get_otm(SYSTIM *time);
 typedef void (*FP)(); /* Matches the course's generic C11 function pointer. */
 typedef struct { UINT intatr; FP inthdr; } T_DINT;
 ER tk_def_int(UINT intno, const T_DINT *handler);

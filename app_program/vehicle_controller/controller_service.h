@@ -6,8 +6,9 @@
  * hooks. No kernel calls, so it is unit tested on a PC; controller_task.c is
  * the thin kernel wrapper (queue + task) around it.
  *
- * Only STOP_MOTION has an executor today (Buddy 2's urgent stop). Other
- * actions are recorded in last_action for whoever executes them later.
+ * Legacy actions use the STOP hook and record other actions in last_action.
+ * controller_motion.h adds typed motion ingress without extending this
+ * two-field output interface or changing the existing wire protocol.
  */
 #include "vehicle_controller.h"
 
@@ -71,5 +72,7 @@ bool controller_service_handle(
 void controller_service_status(
     const controller_service_t *service,
     controller_status_t *status);
+void controller_service_motion_result(controller_service_t *service,
+    const motion_goal_result_t *result);
 
 #endif
