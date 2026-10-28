@@ -55,6 +55,24 @@ float range_effective_cm(range_reading_t r, float max_cm) {
     }
 }
 
+float range_cm_per_us(float celsius) {
+    float speed_m_s = 331.3f + 0.606f * celsius;
+    return speed_m_s * 100.0f / 1e6f / 2.0f;
+}
+
+range_reading_t range_from_echo_us(uint32_t width_us, float cm_per_us, float min_cm,
+                                   float max_cm) {
+    range_reading_t r = {RANGE_NO_ECHO, 0.0f};
+    float cm = (float)width_us * cm_per_us;
+    if (cm < min_cm) {
+        r.status = RANGE_TOO_CLOSE;
+    } else if (cm <= max_cm) {
+        r.status = RANGE_OK;
+        r.cm = cm;
+    }
+    return r;
+}
+
 const char *range_status_name(range_status_t s) {
     switch (s) {
         case RANGE_OK: return "ok";

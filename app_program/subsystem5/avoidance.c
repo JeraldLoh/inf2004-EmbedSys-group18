@@ -157,6 +157,15 @@ static bool turn_to(av_t *a, uint32_t now, int heading_deg) {
     return true;
 }
 
+static bool motion_failed(const av_t *a) {
+    return a->hw.motion_failed != NULL && a->hw.motion_failed(a->hw.ctx);
+}
+
+static void fail_motion(av_t *a, uint32_t now) {
+    a->metrics.motion_failures++;
+    fail(a, now, "motion request failed");
+}
+
 static uint32_t settle_ms(const av_t *a, int delta_deg) {
     if (delta_deg == 0) return 0;
     return a->cfg.servo_settle_base_ms + (uint32_t)(a->cfg.servo_ms_per_deg * (float)delta_deg + 0.5f);
@@ -574,7 +583,9 @@ static void on_reverse(av_t *a, uint32_t now) {
         a->reverse_issued = true;
         return;
     }
-    if (a->hw.motion_done(a->hw.ctx)) {
+    if (motion_failed(a)) {
+        fail_motion(a, now);
+    } else if (a->hw.motion_done(a->hw.ctx)) {
         start_coarse(a);
     } else if (time_reached(now, a->deadline)) {
         a->metrics.motion_timeouts++;
@@ -603,6 +614,10 @@ static void on_bypass(av_t *a, uint32_t now) {
         a->hw.motion_forward(a->hw.ctx, a->legs[i].cm);
         a->deadline = now + a->cfg.motion_timeout_ms;
         a->leg_active = true;
+        return;
+    }
+    if (motion_failed(a)) {
+        fail_motion(a, now);
         return;
     }
     if (a->hw.motion_done(a->hw.ctx)) {
@@ -657,6 +672,11 @@ static void on_reacquire(av_t *a, uint32_t now) {
         return;
     }
 
+    if (motion_failed(a)) {
+        fail_motion(a, now);
+        return;
+    }
+
     if (time_reached(now, a->deadline)) {
         if (a->reacquire_attempts >= a->cfg.max_reacquire_attempts) {
             a->metrics.reacquire_fail++;
@@ -705,7 +725,10 @@ void av_tick(av_t *a) {
 
     // A car turn in progress blocks every state until it finishes and settles.
     if (a->turn_pending) {
-        if (a->hw.motion_done(a->hw.ctx)) {
+        if (motion_failed(a)) {
+            a->turn_pending = false;
+            fail_motion(a, now);
+        } else if (a->hw.motion_done(a->hw.ctx)) {
             a->turn_pending = false;
             a->body_settling = true;
             a->body_settle_until = now + a->cfg.turn_settle_ms;

@@ -85,6 +85,10 @@ typedef struct {
     void (*motion_search_line)(void *ctx, side_t toward);
     void (*motion_resume_line_follow)(void *ctx);
     bool (*motion_done)(void *ctx);
+    // Optional: true once the last turn/forward/reverse/search was refused or
+    // aborted (for example no motion executor yet). Avoids waiting for the
+    // timeout. NULL means motion never reports failure.
+    bool (*motion_failed)(void *ctx);
 
     // Buddy 3 (line sensors).
     bool (*line_detected)(void *ctx);
@@ -148,6 +152,7 @@ typedef struct {
     uint32_t reacquire_retries;
     uint32_t reacquire_fail;
     uint32_t motion_timeouts;
+    uint32_t motion_failures;   // motion_failed() reported a refused/aborted command
     uint32_t sensor_faults;
     uint32_t failures;
     uint32_t last_scan_ms;      // detection -> decision

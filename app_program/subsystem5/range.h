@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define RANGE_MAX_SAMPLES 15
 
@@ -28,6 +29,14 @@ range_reading_t range_combine(const range_reading_t *samples, size_t count);
 // Distance to use in comparisons: NO_ECHO counts as max_cm (open),
 // TOO_CLOSE and FAULT count as 0 (blocked).
 float range_effective_cm(range_reading_t r, float max_cm);
+
+// Speed of sound for the round trip, in cm per microsecond of echo pulse.
+float range_cm_per_us(float celsius);
+
+// One HC-SR04 ping from its echo pulse width. Under min_cm is TOO_CLOSE,
+// over max_cm is NO_ECHO (nothing usable in range), otherwise OK.
+range_reading_t range_from_echo_us(uint32_t width_us, float cm_per_us, float min_cm,
+                                   float max_cm);
 
 const char *range_status_name(range_status_t s);
 

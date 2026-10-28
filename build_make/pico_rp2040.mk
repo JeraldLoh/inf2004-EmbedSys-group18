@@ -103,6 +103,22 @@ endif
 TEST_SUFFIX := _b2bench
 endif
 
+# Separate opt-in path: Buddy 5 obstacle task + vehicle controller task on
+# B2's motor/STOP foundation (motors stay inhibited; moves are refused).
+B5_RUN ?= 0
+ifneq ($(filter $(B5_RUN),0 1),$(B5_RUN))
+$(error Unknown B5_RUN '$(B5_RUN)'; use 0 or 1)
+endif
+ifeq ($(B5_RUN),1)
+ifeq ($(B2_BENCH),1)
+$(error B5_RUN=1 and B2_BENCH=1 cannot be combined)
+endif
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error B5_RUN=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+TEST_SUFFIX := _b5run
+endif
+
 # CRASH_REPORT=1 also copies every console line to UART0 on GP0 (TX) /
 # GP1 (RX), 115200 8N1.  UART output is sent immediately, so it still shows
 # the last messages and the kernel's crash report after a crash, when the
@@ -115,6 +131,11 @@ CRASH_REPORT ?= 0
 ifeq ($(B2_BENCH),1)
 ifneq ($(CRASH_REPORT),0)
 $(error B2_BENCH=1 requires CRASH_REPORT=0 to keep GP0 free)
+endif
+endif
+ifeq ($(B5_RUN),1)
+ifneq ($(CRASH_REPORT),0)
+$(error B5_RUN=1 requires CRASH_REPORT=0 to keep GP0 free)
 endif
 endif
 ifneq ($(filter $(CRASH_REPORT),0 1),$(CRASH_REPORT))
@@ -199,6 +220,7 @@ ASFLAGS += -DCNF_SMP=1
 endif
 CFLAGS  += -DAPP_TEST=$(TEST)
 CFLAGS  += -DAPP_B2_BENCH=$(B2_BENCH)
+CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)
 CFLAGS  += -DBOARD_UART0_FREE=1
@@ -231,7 +253,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

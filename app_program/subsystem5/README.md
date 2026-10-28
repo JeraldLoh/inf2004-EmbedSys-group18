@@ -52,7 +52,41 @@ Controller missions for each Buddy 5 state (`../vehicle_controller/README.md`):
 | back to `MONITOR` | `VERIFY_LINE` (left the line) or `TRACK_LINE` | `obstacle_cleared()` |
 | `FAILED` | `SAFE_STOP` | `latch_stop(STOP_REASON_RECOVERY_FAILED)`, or `SENSOR_CRITICAL` for a sensor fault |
 
-Not wired yet: Buddy 5 has no task and does not call these functions.
+`b5_mission_bridge.c` makes these calls (as controller events) after every
+`av_tick()`, filling in any step the controller requires that Buddy 5 passes
+through within one tick.
+
+## Kernel task (`B5_RUN=1`)
+
+| File | Runs on | Purpose |
+|---|---|---|
+| `subsystem5.c/.h` | Pico | Task (core 0, 10 ms tick): `av_tick()`, bridge, posts events to the controller |
+| `drv_sonar.c/.h` | Pico | HC-SR04: TRIG output, ECHO edges through the shared GPIO dispatcher |
+| `drv_servo.c/.h` | Pico | Scan servo: 50 Hz PWM, 1 us per count, slice 6 |
+| `b5_mission_bridge.c/.h` | both | Avoidance state -> controller mission events (host-tested) |
+| `b5_run_target.c/.h` | Pico | `B5_RUN=1` bring-up: B2 foundation, controller task, Buddy 5 task |
+
+Build from `build_make`:
+
+```
+make -j4 SMP=1 CONSOLE=usb_cdc CRASH_REPORT=0 WIFI=none NET=none MQTT=0 TEST=0 B5_RUN=1 PICO_SDK_PATH=<sdk path>
+```
+
+The default build (`B5_RUN=0`) starts nothing, as before.
+
+What it does now: watches ahead, stops the motors on an obstacle (directly
+through `subsystem2_urgent_stop()`, and the controller does too), scans with
+the servo, decides a side and reports each step to the controller.
+
+What it cannot do yet, and refuses instead of faking:
+- car turns, forward/reverse moves and line searches: Buddy 2 has no goal
+  executor (motors stay inhibited). A refused move fails the encounter at
+  once, so anything wider than the servo arc ends in a latched safe stop;
+- line detection: Buddy 3 is not wired to Buddy 5.
+
+Not run on hardware: compiled against the kernel headers with the team flags
+for every profile (B5_RUN, default SMP=0/1, B2_BENCH); not linked or flashed
+here (no `make` on this machine).
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

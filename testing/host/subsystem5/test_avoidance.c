@@ -54,6 +54,8 @@ typedef struct {
     uint32_t turn_ms, forward_ms, reverse_ms;
     bool bypass_never_done;
     bool turns_never_done;
+    int refuse_kind;           // 0 none, 1 turn, 2 forward, 3 reverse, 4 line search
+    bool refused;              // motion_failed() result for the current command
     bool vanish_on_stop;       // obstacle disappears on the first stop
     bool open_on_reverse;      // boxed-in walls vanish when reversing
     bool vanish_late_on_estop; // late obstacle vanishes on an emergency stop
@@ -135,6 +137,7 @@ static void s_turn(void *ctx, float deg) {
     sim_t *s = ctx;
     s->turns++;
     s->turns_since_return++;
+    s->refused = s->refuse_kind == 1;
     s->heading += (int)(deg < 0.0f ? deg - 0.5f : deg + 0.5f);
     if (abs(s->heading) > s->max_abs_heading) s->max_abs_heading = abs(s->heading);
     start_motion(s, s->turn_ms);
@@ -145,6 +148,7 @@ static void s_forward(void *ctx, float cm) {
     sim_t *s = ctx;
     (void)cm;
     s->forwards++;
+    s->refused = s->refuse_kind == 2;
     start_motion(s, s->forward_ms);
 }
 
@@ -152,6 +156,7 @@ static void s_reverse(void *ctx, float cm) {
     sim_t *s = ctx;
     (void)cm;
     s->reverses++;
+    s->refused = s->refuse_kind == 3;
     start_motion(s, s->reverse_ms);
     if (s->open_on_reverse) {
         s->bg_cm = 150.0f;
@@ -163,6 +168,7 @@ static void s_search(void *ctx, side_t toward) {
     sim_t *s = ctx;
     if (s->searches < MAX_SEARCHES) s->search_sides[s->searches] = toward;
     s->searches++;
+    s->refused = s->refuse_kind == 4;
     s->searching = true;
     s->search_start = s->t;
 }
@@ -173,6 +179,8 @@ static void s_resume(void *ctx) {
     s->searching = false;
     s->bypassing = false;
 }
+
+static bool s_failed(void *ctx) { return ((sim_t *)ctx)->refused; }
 
 static bool s_done(void *ctx) {
     sim_t *s = ctx;
@@ -218,6 +226,7 @@ static av_platform_t platform_for(sim_t *s) {
         .motion_search_line = s_search,
         .motion_resume_line_follow = s_resume,
         .motion_done = s_done,
+        .motion_failed = s_failed,
         .line_detected = s_line,
         .on_event = s_event,
     };
@@ -736,6 +745,59 @@ static void bypass_timeout_fails_safe(void) {
     CHECK(!s.motion_active);
 }
 
+// Runs until FAILED and returns how long after the refused command it took.
+static uint32_t refused_motion_fails_fast(int kind, blob_t obstacle, float bg_cm) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = obstacle;
+    s.bg_cm = bg_cm;
+    s.refuse_kind = kind;
+    s.line_never = kind != 4;
+    uint32_t start = 0;
+    uint32_t end = s.t + 120000;
+    while ((int32_t)(s.t - end) < 0 && av_state(&av) != AV_STATE_FAILED) {
+        bool before = s.refused;
+        av_tick(&av);
+        if (!before && s.refused) start = s.t;
+        s.t += TICK_MS;
+    }
+    CHECK_INT(av_state(&av), AV_STATE_FAILED);
+    CHECK(av_fail_reason(&av) != NULL && strstr(av_fail_reason(&av), "motion request failed"));
+    CHECK_INT(av_metrics(&av)->motion_failures, 1);
+    CHECK_INT(av_metrics(&av)->motion_timeouts, 0);
+    CHECK(!s.motion_active); // stopped
+    return s.t - start;
+}
+
+static void refused_motion_fails_without_waiting(void) {
+    blob_t wide = {70, 110, 12.0f, true};   // needs a turn scan
+    blob_t narrow = {87, 93, 12.0f, true};  // servo alone, straight to bypass
+    // Turn refused during the scan.
+    CHECK(refused_motion_fails_fast(1, wide, 150.0f) < 200);
+    // First bypass turn refused.
+    CHECK(refused_motion_fails_fast(1, narrow, 150.0f) < 200);
+    // Forward leg refused.
+    CHECK(refused_motion_fails_fast(2, narrow, 150.0f) < 200);
+    // Reverse refused while boxed in.
+    CHECK(refused_motion_fails_fast(3, (blob_t){0, 0, 0.0f, false}, 10.0f) < 200);
+    // Line search refused.
+    CHECK(refused_motion_fails_fast(4, narrow, 150.0f) < 200);
+}
+
+static void no_motion_failed_callback_still_works(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    av_platform_t p = platform_for(&s);
+    p.motion_failed = NULL; // optional
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
 static void scan_turn_timeout_fails_safe(void) {
     sim_t s;
     av_t av;
@@ -921,6 +983,8 @@ void run_avoidance_tests(void) {
     RUN(reverse_opens_a_path);
     RUN(bypass_timeout_fails_safe);
     RUN(scan_turn_timeout_fails_safe);
+    RUN(refused_motion_fails_without_waiting);
+    RUN(no_motion_failed_callback_still_works);
     RUN(line_found_on_return_leg);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);

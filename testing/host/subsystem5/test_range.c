@@ -62,6 +62,22 @@ static void effective_distance_mapping(void) {
     CHECK_NEAR(range_effective_cm(st(RANGE_FAULT), 400.0f), 0.0f, 1e-6);
 }
 
+static void echo_width_to_distance(void) {
+    float k = range_cm_per_us(20.0f);
+    CHECK_NEAR(k, 0.017172f, 1e-5);             // 343.4 m/s round trip
+    CHECK_NEAR(range_cm_per_us(0.0f), 0.016565f, 1e-5);
+
+    range_reading_t r = range_from_echo_us(583U, k, 2.0f, 400.0f); // ~10 cm
+    CHECK_INT(r.status, RANGE_OK);
+    CHECK_NEAR(r.cm, 10.01f, 0.02);
+    CHECK_INT(range_from_echo_us(116U, k, 2.0f, 400.0f).status, RANGE_TOO_CLOSE); // 1.99 cm
+    CHECK_INT(range_from_echo_us(117U, k, 2.0f, 400.0f).status, RANGE_OK);        // 2.01 cm
+    CHECK_INT(range_from_echo_us(23200U, k, 2.0f, 400.0f).status, RANGE_OK);      // 398.4 cm
+    CHECK_INT(range_from_echo_us(23400U, k, 2.0f, 400.0f).status, RANGE_NO_ECHO); // 401.8 cm
+    CHECK_INT(range_from_echo_us(38000U, k, 2.0f, 400.0f).status, RANGE_NO_ECHO); // sensor timeout
+    CHECK_INT(range_from_echo_us(0U, k, 2.0f, 400.0f).status, RANGE_TOO_CLOSE);
+}
+
 void run_range_tests(void) {
     RUN(median_rejects_single_spike);
     RUN(median_of_unsorted_input);
@@ -71,4 +87,5 @@ void run_range_tests(void) {
     RUN(invalid_inputs_are_faults);
     RUN(non_finite_or_negative_samples_rejected);
     RUN(effective_distance_mapping);
+    RUN(echo_width_to_distance);
 }

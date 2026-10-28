@@ -79,6 +79,53 @@ endif()
 add_test(NAME obstacle_avoidance_host_tests
          COMMAND obstacle_avoidance_host_tests)
 
+# Controller task core: events in, STOP out through a fake motion output.
+add_executable(controller_service_host_tests
+    test_controller_service.c
+    ../../app_program/contracts/hardware_faults.c
+    ../../app_program/vehicle_controller/safety.c
+    ../../app_program/vehicle_controller/vehicle_controller.c
+    ../../app_program/vehicle_controller/controller_service.c
+)
+
+if(MSVC)
+    target_compile_options(controller_service_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(controller_service_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+
+add_test(NAME controller_service_host_tests
+         COMMAND controller_service_host_tests)
+
+# Buddy 5 avoidance states driving the real controller's obstacle missions.
+add_executable(obstacle_mission_bridge_host_tests
+    subsystem5/test_bridge.c
+    ../../app_program/subsystem5/range.c
+    ../../app_program/subsystem5/obstacle.c
+    ../../app_program/subsystem5/avoidance.c
+    ../../app_program/subsystem5/b5_mission_bridge.c
+    ../../app_program/contracts/hardware_faults.c
+    ../../app_program/vehicle_controller/safety.c
+    ../../app_program/vehicle_controller/vehicle_controller.c
+    ../../app_program/vehicle_controller/controller_service.c
+)
+
+target_include_directories(obstacle_mission_bridge_host_tests PRIVATE
+    ../../app_program/subsystem5
+)
+
+if(MSVC)
+    target_compile_options(obstacle_mission_bridge_host_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(obstacle_mission_bridge_host_tests PRIVATE
+        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    target_link_libraries(obstacle_mission_bridge_host_tests PRIVATE m)
+endif()
+
+add_test(NAME obstacle_mission_bridge_host_tests
+         COMMAND obstacle_mission_bridge_host_tests)
+
 add_executable(subsystem3_sensor_host_tests
     test_subsystem3_sensors.c
     ../../app_program/contracts/hardware_faults.c

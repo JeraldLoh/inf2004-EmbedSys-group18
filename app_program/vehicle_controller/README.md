@@ -38,7 +38,22 @@ Also allowed: `PLAN_BYPASS -> SCAN` (rescan or reverse), `BYPASS -> SCAN` and
   `STOP_REASON_SENSOR_CRITICAL`) with `vehicle_controller_latch_stop()`; it
   needs `vehicle_controller_clear_stop()` and AUTO again to restart.
 
-A dedicated controller task, kernel message transport, button/remote adapters,
+## Controller task
+
+- `controller_service.c/.h` (portable, host-tested): owns the controller,
+  applies one `controller_event_t` at a time and runs the resulting action.
+  Only `STOP_MOTION` has an executor (the `stop_motion` output, which is
+  `subsystem2_urgent_stop()` in `B5_RUN`); a stop that fails latches
+  `STOP_REASON_MOTION_FAULT`. Other actions are recorded in `last_action`.
+- `controller_task.c/.h` (kernel): one task (priority 10, provisional) owns
+  the service and reads events from a message buffer (16 deep).
+  `controller_post()` never blocks; `controller_get_status()` copies the
+  status under a mutex.
+
+Started by `B5_RUN=1` (see `../subsystem5/README.md`). No other startup uses
+it yet.
+
+A kernel message transport for other subsystems, button/remote adapters,
 goal dispatch, line-stability confirmation, recovery permits and full fault policy
 are future work. Keep a single runtime owner of mutable controller state. Do not
 call the portable state-mutating functions concurrently from both cores.

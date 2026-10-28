@@ -18,6 +18,7 @@ bounded-test approval and a physical power cut.
 | S5-B05 | Scan, width and side choice | Servo + hand-turned car scan; width within +/-30% of measured; walled side avoided | Not run |
 | S5-B06 | Boxed-in handling | Rescan x2, reverse, repeat, then FAILED (no clear path) | Not run |
 | S5-B07 | Obstacle removed mid-scan | Resumes line following without bypass | Not run |
+| S5-T01 | Kernel task bring-up (`B5_RUN=1`) | Flash with motors raised/disconnected; console shows `[B5 RUN] ... running`; hand under 25 cm prints `[B5] obstacle ahead`; motors never move; GP21 STOP works | Not run |
 | S5-B08 | Bypass path and return | Follow motion prompts by hand; legs mirrored, no contact, ends facing line direction | Not run |
 
 Bench procedures: `bench_firmware/README.md`.
@@ -35,3 +36,4 @@ under docs/template-reference and are not results for this team.
 |---|---|---|---|---|---|---|
 | 2026-10-21 | S5-H01 host unit tests (range, obstacle, avoidance) | branch buddy5, testing/host CTest, Release, zig cc | Buddy 5 | PASS, 248 checks, 0 failures; all 4 host suites pass | ctest output in branch commit notes | Host only: simulated sonar/servo/motion/line. No target build, flash or hardware run. |
 | 2026-10-21 | S5-H02 host unit tests after turn scan + mirrored bypass | branch buddy5, testing/host CTest, zig cc | Buddy 5 | PASS, 383 checks, 0 failures; all 4 host suites pass | ctest output | Host only: simulated world turns with the car heading. No hardware run. |
+| 2026-10-28 | S5-H03 controller task core + mission bridge + refused-motion path | branch buddy5, testing/host CTest, zig cc | Buddy 5 | PASS, 7/7 host suites (Buddy 5 core 432 checks, bridge 76 checks, controller service, controller) | ctest output | Host only. Kernel files compiled (not linked) with the team flags for B5_RUN, default SMP=0/1 and B2_BENCH. No flash or hardware run. |
