@@ -40,5 +40,19 @@ accuracy remain unverified. Avoidance
 proposes actions to the controller; it must not compete with Buddy 2 for PWM.
 Keep evidence in `../../testing/subsystem5/`.
 
+Controller missions for each Buddy 5 state (`../vehicle_controller/README.md`):
+
+| Buddy 5 state | Controller mission | Call when entering it |
+|---|---|---|
+| obstacle confirmed in `MONITOR` | `OBSTACLE_STOP` | `vehicle_controller_on_obstacle()` |
+| `COARSE_SCAN`, `FINE_SCAN_*`, `TURN_SCAN_*`, `WAIT_RESCAN`, `REVERSE` | `SCAN` | `obstacle_progress(MISSION_SCAN)` |
+| `DECIDE` | `PLAN_BYPASS` | `obstacle_progress(MISSION_PLAN_BYPASS)` |
+| `BYPASS` | `BYPASS` | `obstacle_progress(MISSION_BYPASS)` |
+| `REACQUIRE` | `RECOVERY` | `obstacle_progress(MISSION_RECOVERY)` |
+| back to `MONITOR` | `VERIFY_LINE` (left the line) or `TRACK_LINE` | `obstacle_cleared()` |
+| `FAILED` | `SAFE_STOP` | `latch_stop(STOP_REASON_RECOVERY_FAILED)`, or `SENSOR_CRITICAL` for a sensor fault |
+
+Not wired yet: Buddy 5 has no task and does not call these functions.
+
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

@@ -18,6 +18,15 @@ static controller_action_t make_action(
     return action;
 }
 
+static bool is_obstacle_mission(mission_state_t mission)
+{
+    return (mission == MISSION_OBSTACLE_STOP) ||
+           (mission == MISSION_SCAN) ||
+           (mission == MISSION_PLAN_BYPASS) ||
+           (mission == MISSION_BYPASS) ||
+           (mission == MISSION_RECOVERY);
+}
+
 static bool route_is_available(
     route_command_t command,
     const junction_observation_t *junction)
@@ -167,6 +176,13 @@ controller_action_t vehicle_controller_on_junction(
         return action;
     }
 
+    /* While going around an obstacle the line sensors can cross the line at
+     * an angle; that is not a junction. */
+    if (is_obstacle_mission(controller->mission))
+    {
+        return action;
+    }
+
     if (!junction->confirmed)
     {
         if (junction->candidate)
@@ -208,6 +224,15 @@ controller_action_t vehicle_controller_on_motion_result(
         (result->goal_id != controller->active_goal_id) ||
         (result->authority_generation != controller->authority_generation))
     {
+        return action;
+    }
+
+    if ((result->code == MOTION_RESULT_COMPLETED) &&
+        is_obstacle_mission(controller->mission))
+    {
+        /* One step of the obstacle manoeuvre: Buddy 5 decides what is next. */
+        controller->active_goal = false;
+        controller->active_goal_id = 0U;
         return action;
     }
 
@@ -264,4 +289,126 @@ uint32_t vehicle_controller_apply_speed_caps(
         permitted_speed = 0U;
     }
     return permitted_speed;
+}
+
+bool vehicle_controller_in_obstacle_mission(
+    const vehicle_controller_t *controller)
+{
+    return (controller != NULL) && is_obstacle_mission(controller->mission);
+}
+
+/* Starts a new authority generation so results of goals issued before the
+ * change (line following, a junction turn, an earlier obstacle step) are
+ * ignored by vehicle_controller_on_motion_result(). */
+static void enter_mission(
+    vehicle_controller_t *controller,
+    mission_state_t mission)
+{
+    controller->authority_generation++;
+    controller->active_goal = false;
+    controller->active_goal_id = 0U;
+    controller->mission = mission;
+}
+
+controller_action_t vehicle_controller_on_obstacle(
+    vehicle_controller_t *controller)
+{
+    controller_action_t action = {0};
+
+    if ((controller == NULL) ||
+        (controller->mode != SYSTEM_MODE_AUTO) ||
+        !safety_motion_allowed(&controller->safety) ||
+        is_obstacle_mission(controller->mission))
+    {
+        return action;
+    }
+
+    /* A junction turn cannot be finished safely around an obstacle. */
+    if (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED)
+    {
+        controller->route_lifecycle = ROUTE_LIFECYCLE_CANCELLED;
+    }
+
+    enter_mission(controller, MISSION_OBSTACLE_STOP);
+    return make_action(controller, CONTROLLER_ACTION_STOP_MOTION);
+}
+
+static bool obstacle_transition_allowed(
+    mission_state_t from,
+    mission_state_t to)
+{
+    switch (from)
+    {
+        case MISSION_OBSTACLE_STOP:
+            return to == MISSION_SCAN;
+        case MISSION_SCAN:
+            return (to == MISSION_PLAN_BYPASS) || (to == MISSION_RECOVERY);
+        case MISSION_PLAN_BYPASS:
+            return (to == MISSION_BYPASS) || (to == MISSION_SCAN);
+        case MISSION_BYPASS:
+            return (to == MISSION_RECOVERY) || (to == MISSION_SCAN);
+        case MISSION_RECOVERY:
+            return to == MISSION_SCAN;
+        default:
+            return false;
+    }
+}
+
+controller_action_t vehicle_controller_obstacle_progress(
+    vehicle_controller_t *controller,
+    mission_state_t next)
+{
+    controller_action_t action = {0};
+
+    if ((controller == NULL) ||
+        !safety_motion_allowed(&controller->safety) ||
+        !obstacle_transition_allowed(controller->mission, next))
+    {
+        return action;
+    }
+
+    enter_mission(controller, next);
+    if (next == MISSION_SCAN)
+    {
+        return make_action(controller, CONTROLLER_ACTION_START_SCAN);
+    }
+    if (next == MISSION_RECOVERY)
+    {
+        return make_action(controller, CONTROLLER_ACTION_ENTER_RECOVERY);
+    }
+    return action;
+}
+
+controller_action_t vehicle_controller_obstacle_cleared(
+    vehicle_controller_t *controller,
+    bool rejoined_line)
+{
+    controller_action_t action = {0};
+
+    if ((controller == NULL) ||
+        !safety_motion_allowed(&controller->safety) ||
+        !is_obstacle_mission(controller->mission))
+    {
+        return action;
+    }
+
+    enter_mission(
+        controller,
+        rejoined_line ? MISSION_VERIFY_LINE : MISSION_TRACK_LINE);
+    return make_action(controller, CONTROLLER_ACTION_START_LINE_TRACKING);
+}
+
+bool vehicle_controller_motion_allowed(
+    const vehicle_controller_t *controller,
+    motion_source_t source)
+{
+    if ((controller == NULL) || !safety_motion_allowed(&controller->safety))
+    {
+        return false;
+    }
+    if (is_obstacle_mission(controller->mission))
+    {
+        return source == MOTION_SOURCE_OBSTACLE;
+    }
+    return source != MOTION_SOURCE_OBSTACLE;
 }
