@@ -6,12 +6,14 @@
 #define CONTROLLER_TASK_STACK 2048
 #define CONTROLLER_STATUS_WAIT_MS 10
 
-typedef enum { MAIL_EVENT = 0, MAIL_MOTION, MAIL_RESULT, MAIL_SAFETY, MAIL_WAKE } mail_kind_t;
+typedef enum { MAIL_EVENT = 0, MAIL_MOTION, MAIL_RESULT, MAIL_SAFETY, MAIL_WAKE, MAIL_REMOTE_START } mail_kind_t;
 typedef struct
 {
     mail_kind_t kind;
+    uint32_t restart_stop_sequence;
     union
     {
+        uint32_t remote_start_sequence;
         controller_event_t event;
         controller_motion_request_t motion;
         motion_goal_result_t result;
@@ -100,9 +102,22 @@ static void controller_task_main(INT code, void *exinf)
             switch (mail.kind)
             {
                 case MAIL_EVENT:
+                {
+                    bool restart=mail.value.event.type==CONTROLLER_EVENT_CLEAR_STOP ||
+                        (mail.value.event.type==CONTROLLER_EVENT_SET_MODE &&
+                         mail.value.event.mode==SYSTEM_MODE_AUTO);
+                    if(restart){
+                        UINT saved=ingress_enter();
+                        bool stale=mail.restart_stop_sequence!=urgent_sequence ||
+                            urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX;
+                        ingress_leave(saved);
+                        if(stale) break;
+                    }
                     (void)controller_service_handle(&service, &mail.value.event);
                     controller_motion_sync(&motion);
+                    if(restart) drain_urgent();
                     break;
+                }
                 case MAIL_MOTION:
                     (void)controller_motion_handle(&motion, &mail.value.motion, now_ms());
                     break;
@@ -113,6 +128,21 @@ static void controller_task_main(INT code, void *exinf)
                     controller_motion_stop_evidence(&motion, mail.value.safety.reasons,
                         mail.value.safety.evidence_id);
                     break;
+                case MAIL_REMOTE_START:
+                {
+                    uint32_t sequence;
+                    bool pending;
+                    UINT saved=ingress_enter();
+                    sequence=urgent_sequence;pending=urgent_reasons!=STOP_REASON_NONE;
+                    ingress_leave(saved);
+                    (void)controller_service_remote_start(&service,
+                        mail.value.remote_start_sequence,sequence,pending);
+                    controller_motion_sync(&motion);
+                    /* A STOP racing with the conditional transition is applied
+                     * before this task can issue any new line request. */
+                    drain_urgent();
+                    break;
+                }
                 case MAIL_WAKE:
                 default: break;
             }
@@ -196,6 +226,19 @@ static bool post(controller_mail_t *mail)
 {
     return started && tk_snd_mbf(queue, mail, (INT)sizeof(*mail), TMO_POL) == E_OK;
 }
+bool controller_post_remote_start(void)
+{
+    controller_mail_t mail={0};
+    UINT saved;
+    if(!started) return false;
+    saved=ingress_enter();
+    if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX){
+        ingress_leave(saved);return false;
+    }
+    mail.kind=MAIL_REMOTE_START;mail.value.remote_start_sequence=urgent_sequence;
+    ingress_leave(saved);
+    return post(&mail);
+}
 bool controller_post(const controller_event_t *event)
 {
     controller_mail_t mail = {0};
@@ -213,6 +256,16 @@ bool controller_post(const controller_event_t *event)
         mail.kind = MAIL_WAKE;
         (void)post(&mail);
         return true;
+    }
+    /* Physical restart events also cannot erase a newer remote/physical STOP. */
+    if(event->type==CONTROLLER_EVENT_CLEAR_STOP ||
+       (event->type==CONTROLLER_EVENT_SET_MODE && event->mode==SYSTEM_MODE_AUTO)){
+        UINT saved=ingress_enter();
+        if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX){
+            ingress_leave(saved);return false;
+        }
+        mail.restart_stop_sequence=urgent_sequence;
+        ingress_leave(saved);
     }
     mail.kind = MAIL_EVENT; mail.value.event = *event; return post(&mail);
 }

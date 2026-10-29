@@ -3,8 +3,9 @@
 #include <assert.h>
 #include <stdio.h>
 static bool pressed,armed;
+static uint32_t expected=250000U;
 static bool stop(void *p) { (void)p; return pressed; }
-static bool cutoff(void *p,uint32_t us) { (void)p; assert(us==250000U); armed=true; return true; }
+static bool cutoff(void *p,uint32_t us) { (void)p; assert(us==expected); armed=true; return true; }
 static void cancel(void *p) { (void)p; armed=false; }
 int main(void) {
     fake_motion_hal_t f;
@@ -39,5 +40,22 @@ int main(void) {
     f.now_us+=250000U; b2_trial_service(&t,0U,true);
     assert(b2_trial_take_result(&t,&result) && result.state==B2_TRIAL_TIME_ENDED && !armed);
     fake_assert_safe(&f);
+#if APP_B2_MOVE_TEST
+    expected=100000U;
+    assert(b2_trial_init_movement(&t,&m,&e,&c,&io));
+    assert(b2_trial_begin(&t,300,0,5000001U)==MOTION_INVALID);
+    assert(b2_trial_begin(&t,300,0,5000000U)==MOTION_OK);
+    for(i=0;i<49U;++i) {
+        f.trace_count=0U; f.now_us+=100000U; b2_trial_service(&t,0U,false);
+        assert(t.result.state==B2_TRIAL_RUNNING && armed);
+    }
+    f.now_us+=100000U; b2_trial_service(&t,0U,true);
+    assert(b2_trial_take_result(&t,&result) && result.state==B2_TRIAL_TIME_ENDED);
+    assert(b2_trial_begin(&t,300,0,5000000U)==MOTION_OK);
+    f.now_us+=100000U; b2_trial_service(&t,0U,true);
+    assert(b2_trial_take_result(&t,&result) && result.state==B2_TRIAL_STOPPED);
+    assert((c.safety.active_reasons&STOP_REASON_CONTROLLER_FAULT)!=0U);
+    fake_assert_safe(&f);
+#endif
     puts("PASS original bench cap, diagnostic cap/duration, STOP and finite cutoff"); return 0;
 }

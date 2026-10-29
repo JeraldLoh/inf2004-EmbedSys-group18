@@ -163,3 +163,89 @@ endif()
 
 add_test(NAME b5_motion_host_tests
          COMMAND b5_motion_host_tests)
+
+# Buddy 1 portable protocol/retry and mocked lifecycle tests. No hardware claims.
+add_executable(buddy1_protocol_tests
+    ../../host_tests/protocol_test.c
+    ../../app_program/subsystem1/buddy1_protocol.c)
+target_include_directories(buddy1_protocol_tests PRIVATE ../../app_program/subsystem1)
+add_executable(buddy1_retry_tests ../../host_tests/retry_test.c)
+target_include_directories(buddy1_retry_tests PRIVATE ../../lib/libwifi/sysdepend/pico_rp2040)
+set(BUDDY1_TEST_TARGETS buddy1_protocol_tests buddy1_retry_tests)
+foreach(mode 0 1)
+    add_executable(buddy1_lifecycle_${mode}
+        test_buddy1_lifecycle.c
+        ../../app_program/subsystem1/subsystem1.c
+        ../../app_program/app_main.c)
+    target_include_directories(buddy1_lifecycle_${mode} PRIVATE buddy1_stubs)
+    target_compile_definitions(buddy1_lifecycle_${mode} PRIVATE B1_STANDALONE_DEMO=${mode})
+    list(APPEND BUDDY1_TEST_TARGETS buddy1_lifecycle_${mode})
+endforeach()
+foreach(test_target IN LISTS BUDDY1_TEST_TARGETS)
+    if(MSVC)
+        target_compile_options(${test_target} PRIVATE /W4 /WX /UNDEBUG)
+    else()
+        target_compile_options(${test_target} PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    endif()
+    add_test(NAME ${test_target} COMMAND ${test_target})
+endforeach()
+
+add_executable(buddy1_heartbeat_tests
+    test_buddy1_heartbeat.c
+    ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem1/buddy1_protocol.c
+    ../../app_program/subsystem1/buddy1_diagnostics.c
+    ../../app_program/subsystem1/buddy1_binary.c)
+target_include_directories(buddy1_heartbeat_tests PRIVATE buddy1_stubs)
+if(MSVC)
+    target_compile_options(buddy1_heartbeat_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_heartbeat_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_heartbeat_regular COMMAND buddy1_heartbeat_tests 0)
+add_test(NAME buddy1_heartbeat_busy_once COMMAND buddy1_heartbeat_tests 5020)
+add_test(NAME buddy1_heartbeat_busy_100ms COMMAND buddy1_heartbeat_tests 5100)
+
+add_executable(buddy1_binary_tests ../../host_tests/binary_test.c
+    ../../app_program/subsystem1/buddy1_binary.c)
+if(MSVC)
+    target_compile_options(buddy1_binary_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_binary_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_binary_tests COMMAND buddy1_binary_tests)
+add_executable(buddy1_diagnostics_tests ../../host_tests/diagnostics_test.c
+    ../../app_program/subsystem1/buddy1_binary.c ../../app_program/subsystem1/buddy1_diagnostics.c)
+if(MSVC)
+    target_compile_options(buddy1_diagnostics_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_diagnostics_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_diagnostics_tests COMMAND buddy1_diagnostics_tests)
+
+# Live Buddy 1 integration: sections merge without stealing producer events.
+add_executable(buddy1_car_tests test_buddy1_car.c
+    ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem1/buddy1_binary.c
+    ../../app_program/subsystem1/buddy1_diagnostics.c
+    ../../app_program/subsystem1/buddy1_protocol.c)
+target_include_directories(buddy1_car_tests PRIVATE buddy1_stubs)
+target_compile_definitions(buddy1_car_tests PRIVATE B1_DEMO=0)
+if(MSVC)
+ target_compile_options(buddy1_car_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+ target_compile_options(buddy1_car_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_car_tests COMMAND buddy1_car_tests)
+
+add_executable(remote_start_tests test_remote_start.c
+    ../../app_program/contracts/hardware_faults.c
+    ../../app_program/vehicle_controller/safety.c
+    ../../app_program/vehicle_controller/vehicle_controller.c
+    ../../app_program/vehicle_controller/controller_service.c)
+if(MSVC)
+ target_compile_options(remote_start_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+ target_compile_options(remote_start_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME remote_start_tests COMMAND remote_start_tests)

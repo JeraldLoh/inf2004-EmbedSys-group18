@@ -28,6 +28,27 @@ bool b2_trial_init_limited(b2_trial_t *trial, drv_motor_t *motor,
     return true;
 }
 
+#if APP_B2_MOVE_TEST
+bool b2_trial_init_movement(b2_trial_t *trial, drv_motor_t *motor,
+    drv_encoder_t *encoder, vehicle_controller_t *controller,
+    const b2_trial_io_t *io)
+{
+    if (!b2_trial_init_limited(trial,motor,encoder,controller,io,300,500000U)) { return false; }
+    trial->max_duration_us=5000000U;
+    trial->watchdog_slice_us=100000U;
+    return true;
+}
+#endif
+static bool valid_duration(const b2_trial_t *trial)
+{
+    if (trial->watchdog_slice_us==0U) { return trial->max_duration_us<=B2_TRIAL_MAX_US; }
+#if APP_B2_MOVE_TEST
+    return trial->watchdog_slice_us==100000U && trial->max_duration_us<=5000000U;
+#else
+    return false;
+#endif
+}
+
 motion_status_t b2_trial_begin(b2_trial_t *trial, int16_t left_effort,
     int16_t right_effort, uint32_t duration_us)
 {
@@ -41,7 +62,7 @@ motion_status_t b2_trial_begin(b2_trial_t *trial, int16_t left_effort,
     }
     if ((duration_us == 0U) || (duration_us > trial->max_duration_us) ||
         trial->max_effort<=0 || trial->max_effort>B2_TRIAL_DIAGNOSTIC_MAX_EFFORT ||
-        trial->max_duration_us>B2_TRIAL_MAX_US ||
+        !valid_duration(trial) ||
         (left_effort < -trial->max_effort) || (left_effort > trial->max_effort) ||
         (right_effort < -trial->max_effort) || (right_effort > trial->max_effort) ||
         ((left_effort == 0) && (right_effort == 0)) ||
@@ -70,7 +91,9 @@ motion_status_t b2_trial_begin(b2_trial_t *trial, int16_t left_effort,
     }
     /* Timer armed BEFORE any nonzero PWM. A racing STOP invalidates apply. */
     if ((result == MOTION_OK) &&
-        !trial->io.arm_cutoff(trial->io.context, duration_us))
+        !trial->io.arm_cutoff(trial->io.context,
+            trial->watchdog_slice_us!=0U && duration_us>trial->watchdog_slice_us ?
+                trial->watchdog_slice_us : duration_us))
     {
         result = MOTION_INHIBITED;
     }
@@ -97,6 +120,8 @@ void b2_trial_service(b2_trial_t *trial, stop_reason_mask_t stop_reasons,
 {
     motion_encoder_snapshot_t end;
     bool stopped;
+    bool deadline_reached=false;
+    uint32_t remaining=0U;
     if ((trial == NULL) || (trial->motor == NULL)) { return; }
     if (trial->result.state == B2_TRIAL_RUNNING)
     {
@@ -105,8 +130,23 @@ void b2_trial_service(b2_trial_t *trial, stop_reason_mask_t stop_reasons,
         if (drv_encoder_capture(trial->encoder, trial->motor, &end) != MOTION_OK)
         { stop_reasons |= STOP_REASON_CONTROLLER_FAULT; }
         else if ((end.acquired_us - trial->start.acquired_us) >= trial->duration_us)
-        { cutoff_fired = true; }
+        { deadline_reached=true; cutoff_fired = true; }
+        else { remaining=trial->duration_us-(end.acquired_us-trial->start.acquired_us); }
     }
+    /* A long manual trial retains a short task-independent watchdog. Never
+     * refresh after IRQ evidence or a held/pending STOP; failed refresh stops. */
+    if (trial->result.state==B2_TRIAL_RUNNING && trial->watchdog_slice_us!=0U &&
+        stop_reasons==STOP_REASON_NONE && !cutoff_fired &&
+        !trial->io.stop_pressed(trial->io.context))
+    {
+        uint32_t slice=remaining<trial->watchdog_slice_us?remaining:trial->watchdog_slice_us;
+        if (trial->io.stop_pending(trial->io.context) || slice==0U ||
+            !trial->io.arm_cutoff(trial->io.context,slice))
+        { stop_reasons|=STOP_REASON_CONTROLLER_FAULT; }
+    }
+    if (cutoff_fired && !deadline_reached && trial->watchdog_slice_us!=0U &&
+        trial->result.state==B2_TRIAL_RUNNING)
+    { stop_reasons|=STOP_REASON_CONTROLLER_FAULT; }
     if (trial->io.stop_pressed(trial->io.context)) { stop_reasons |= STOP_REASON_PHYSICAL; }
     if ((stop_reasons & ~trial->controller->safety.active_reasons) != STOP_REASON_NONE)
     {

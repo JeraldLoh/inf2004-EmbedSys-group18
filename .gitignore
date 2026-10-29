@@ -32,3 +32,11 @@ config/wifi_secrets.h
 *.webm
 *.avi
 *.mkv
+
+# Buddy 1 local outputs
+__pycache__/
+host_tests/protocol_test
+host_tests/retry_test
+build-check.log
+.local-backups/
+output/

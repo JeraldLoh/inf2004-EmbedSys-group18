@@ -15,7 +15,7 @@ static FP entry;
 static jmp_buf boundary;
 static const char *scenario;
 static unsigned raw_arms,cal_arms,deleted;
-static bool armed,pressed,did_raw_stop,did_cal_stop,saw_power;
+static bool armed,pressed,did_raw_stop,did_cal_stop,saw_power,raw_mode;
 static uint32_t deadline,window,raw_since,release_stop;
 static b2_platform_events_t evidence;
 static char output[65536];
@@ -28,8 +28,13 @@ static void stop_event(bool cutoff) {
 static bool stop(void *p) { (void)p; return pressed; }
 static bool pending(void *p) { (void)p; return pressed || evidence.cutoff_fired || evidence.reasons!=0U; }
 static bool arm(void *p,uint32_t us) {
-    (void)p; assert(us==400000U || us==100000U); window=us; deadline=fake.now_us+us; armed=true;
-    if(us==400000U) { ++raw_arms; raw_since=fake.now_us; } else { ++cal_arms; }
+    (void)p; assert(us>0U && us<=100000U);
+    if(!armed) {
+        raw_mode=raw_arms<3U;
+        if(raw_mode) { ++raw_arms; raw_since=fake.now_us; }
+    }
+    if(!raw_mode) { ++cal_arms; }
+    window=us; deadline=fake.now_us+us; armed=true;
     return true;
 }
 static void cancel(void *p) { (void)p; armed=false; }
@@ -39,7 +44,13 @@ bool b2_platform_init(motion_hal_t *h,b2_trial_io_t *io) {
 }
 uint32_t b2_platform_now_us(void) { return fake.now_us; }
 bool b2_platform_stop_pressed(void) { return pressed; }
-static bool between(uint32_t a,uint32_t b) { return fake.now_us>=a && fake.now_us<b; }
+static bool between(uint32_t a,uint32_t b) {
+    if(!is("locked")) {
+        uint32_t shift=a>=4000000U?9200000U:(a>=2000000U?4600000U:0U);
+        a+=shift; b+=shift;
+    }
+    return fake.now_us>=a && fake.now_us<b;
+}
 bool b2_platform_start_pressed(void) {
     if(is("boot")) { return false; }
     if(is("locked")) {
@@ -55,7 +66,7 @@ bool b2_platform_start_pressed(void) {
     }
     return between(200000U,1300000U)||between(2000000U,2050000U)||between(2200000U,3300000U)||
         between(4000000U,4050000U)||between(4200000U,5300000U)||between(6000000U,6050000U)||
-        between(6200000U,6250000U)||(is("long_locked")&&between(6400000U,6450000U))||between(6500000U,7600000U);
+        (!is("flow_time")&&between(6200000U,6250000U))||(is("long_locked")&&between(6400000U,6450000U))||between(6500000U,7600000U);
 }
 void b2_platform_take_events(b2_platform_events_t *e) {
     *e=evidence; evidence.reasons=0U; evidence.cutoff_fired=false;
@@ -72,18 +83,18 @@ ER tk_dly_tsk(UINT ms) {
     bool lm=fake.enabled[4]&&(fake.compare[8]!=0U||fake.compare[9]!=0U);
     bool rm=fake.enabled[5]&&(fake.compare[10]!=0U||fake.compare[11]!=0U);
     assert(ms==5U || (is("watchdog") && ms==150U)); saw_power|=lm||rm; fake.trace_count=0U;
-    if(window==400000U) {
+    if(raw_mode || is("flow_time")) {
         if(lm && !is("missing_feedback")) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<27,0U,fake.now_us); }
         if(rm) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<5,0U,fake.now_us); }
     }
     fake.now_us+=ms*1000U;
     if(pressed && fake.now_us>=release_stop) { pressed=false; }
-    if(raw_arms==3U && armed && window==400000U && fake.now_us-raw_since>=100000U && !did_raw_stop)
+    if(raw_arms==3U && armed && raw_mode && fake.now_us-raw_since>=100000U && !did_raw_stop)
     { did_raw_stop=true; stop_event(false); }
-    if(is("flow_stop") && window==100000U && (lm||rm) && !did_cal_stop)
+    if(is("flow_stop") && !raw_mode && (lm||rm) && !did_cal_stop)
     { did_cal_stop=true; stop_event(false); }
     if(armed && fake.now_us-deadline<0x80000000UL) { stop_event(true); }
-    if(fake.now_us>10500000U) { longjmp(boundary,1); }
+    if(fake.now_us>24000000U) { longjmp(boundary,1); }
     return E_OK;
 }
 void tm_printf(UB *fmt,...) {
@@ -110,6 +121,7 @@ int main(int argc,char **argv) {
                 assert(strstr(output,"CALIBRATION request=0")!=NULL);
                 if(is("flow_stop")) { assert(did_cal_stop && strstr(output,"code=4")!=NULL); }
                 if(is("flow_stall")) { assert(strstr(output,"code=7")!=NULL); }
+                if(is("flow_time")) { assert(strstr(output,"timed straight test ended (5s / 500mm")!=NULL); }
             }
         }
     }

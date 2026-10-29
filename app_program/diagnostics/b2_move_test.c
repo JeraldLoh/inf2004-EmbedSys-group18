@@ -8,9 +8,9 @@
 
 #define CASES 10U
 static const char *const names[CASES]={
-    "LEFT 30% 400ms [RAISED]", "RIGHT 30% 400ms [RAISED]", "BOTH 30% 400ms / test GP21 [RAISED]",
-    "PID STRAIGHT 100mm/s 1.5s", "FORWARD 100mm", "FORWARD 1000mm",
-    "REVERSE 100mm", "LEFT PIVOT 90deg", "RIGHT PIVOT 90deg", "WATCHDOG cutoff [RAISED]"
+    "LEFT 30% 5s [RAISED]", "RIGHT 30% 5s [RAISED]", "BOTH 30% 5s / test GP21 [RAISED]",
+    "PID STRAIGHT 100mm/s 5s", "FORWARD 300mm", "FORWARD 1000mm",
+    "REVERSE 300mm", "LEFT PIVOT 90deg", "RIGHT PIVOT 90deg", "WATCHDOG cutoff [RAISED]"
 };
 static motion_hal_t hal;
 static b2_trial_io_t io;
@@ -85,8 +85,8 @@ static void move_main(INT code,void *exinf)
     vehicle_controller_init(&controller);
     b2_move_candidate_profile(&config);
     engine_io=(measured_motion_executor_io_t){io.context,io.stop_pending,io.arm_cutoff,io.cancel_cutoff};
-    if (!b2_trial_init_limited(&trial,subsystem2_bench_motor(),subsystem2_bench_encoder(),
-            &controller,&io,300,400000U) ||
+    if (!b2_trial_init_movement(&trial,subsystem2_bench_motor(),subsystem2_bench_encoder(),
+            &controller,&io) ||
         !measured_motion_executor_init(&executor,subsystem2_bench_motor(),subsystem2_bench_encoder(),&config,&engine_io))
     { (void)subsystem2_urgent_stop(); tm_printf((UB*)"[B2 MOVE] CRITICAL test setup failed.\n"); tk_ext_tsk(); return; }
     tm_printf((UB*)"[B2 MOVEMENT TEST] NO boot motion. Manual bounded PID TUNING, not production qualification.\n");
@@ -135,9 +135,9 @@ static void move_main(INT code,void *exinf)
         (void)measured_motion_executor_step(&executor);
         if (active && selected==3U && executor.status.authorized)
         {
-            if (now-started>=1500000U || executor.measurement.sample.travel_um[0]-timed_base[0]>=200000U ||
-                executor.measurement.sample.travel_um[1]-timed_base[1]>=200000U)
-            { tm_printf((UB*)"[B2 MOVE] timed straight test ended (1.5s / 200mm wheel-rotation cap).\n"); end_test(); active=false; }
+            if (now-started>=5000000U || executor.measurement.sample.travel_um[0]-timed_base[0]>=500000U ||
+                executor.measurement.sample.travel_um[1]-timed_base[1]>=500000U)
+            { tm_printf((UB*)"[B2 MOVE] timed straight test ended (5s / 500mm wheel-rotation cap).\n"); end_test(); active=false; }
             else if (now-last_feed>=100000U)
             {
                 motion_continuous_request_t r={0};
@@ -178,18 +178,18 @@ static void move_main(INT code,void *exinf)
             { tm_printf((UB*)"[B2 MOVE] refused: STOP/fault latched. Faults require reset after diagnosis.\n"); }
             else if (selected<3U)
             {
-                motion_status_t r=b2_trial_begin(&trial,selected==1U?0:300,selected==0U?0:300,400000U);
-                tm_printf((UB*)"[B2 MOVE] raw request=%u power=30%% duration=400ms.\n",(unsigned)r);
+                motion_status_t r=b2_trial_begin(&trial,selected==1U?0:300,selected==0U?0:300,5000000U);
+                tm_printf((UB*)"[B2 MOVE] raw request=%u power=30%% duration=5s.\n",(unsigned)r);
             }
             else if (!left_ok || !right_ok || !stop_ok)
             { tm_printf((UB*)"[B2 MOVE] LOCKED: complete cases0/1 powered feedback and interrupt a raw pulse with GP21 first.\n"); }
             else if(selected>=5U && selected<=8U && !short_ok)
-            { tm_printf((UB*)"[B2 MOVE] LOCKED: complete forward100mm first and measure actual travel before longer/reverse/pivot tests.\n"); }
+            { tm_printf((UB*)"[B2 MOVE] LOCKED: complete forward300mm first and measure actual travel before longer/reverse/pivot tests.\n"); }
             else if(selected==9U) { watchdog_test(); }
             else
             {
                 controller_action_t a=vehicle_controller_set_mode(&controller,SYSTEM_MODE_CALIBRATION);
-                uint32_t limit=selected==5U?15000000U:(selected==3U?2500000U:7000000U);
+                uint32_t limit=selected==5U?15000000U:(selected==3U?6500000U:10000000U);
                 motion_status_t r=measured_motion_executor_authorize_calibration(&executor,a.authority_generation,now,limit);
                 if (r==MOTION_OK && selected==3U)
                 {
@@ -207,7 +207,7 @@ static void move_main(INT code,void *exinf)
                     request.type=selected==6U?MOTION_GOAL_REVERSE:(selected==7U?MOTION_GOAL_PIVOT_LEFT:
                         (selected==8U?MOTION_GOAL_PIVOT_RIGHT:MOTION_GOAL_FORWARD));
                     if (selected>=7U) { request.target_mdeg=90000; }
-                    else { request.target_mm=selected==5U?1000:100; }
+                    else { request.target_mm=selected==5U?1000:300; }
                     r=measured_motion_executor_goal(&executor,&request,now,1000000U);
                 }
                 active=r==MOTION_OK; started=now; last_feed=now;

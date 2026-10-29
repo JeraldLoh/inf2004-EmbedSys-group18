@@ -15,6 +15,21 @@ This branch adds a whole-car build, `CAR_RUN=1`. In that build:
 
 Every other existing build (default, `B2_BENCH`, `B5_RUN`) still works as before. Buddy 3's `S3_BENCH` images, its bench and its host tests were removed on 2026-10-29.
 
+## Buddy 2 manual movement testing (2026-10-29)
+
+`B2_MOVE_TEST=1` builds the dedicated USB-only movement/PID test. Cases0..2
+are manually triggered raised-wheel checks at30% for up to5 seconds, with a
+100ms watchdog refreshed by the task. Case3 requests100mm/s straight for up
+to5 seconds (500mm wheel-rotation cap). Cases4/6 request300mm forward/reverse;
+optional1m and90-degree pivots remain. Powered L/R feedback and in-trial STOP
+are required before PID tests; case4 completion gates longer/reverse/pivot
+trials. No boot movement, automatic sequence, networking or navigation tasks.
+
+Candidate PID gains remain unqualified. This test-only authority is excluded
+from production; CAR_RUN START is still subject to calibration qualification.
+See [movement guide](testing/subsystem2/B2_MOVEMENT_TEST_GUIDE.md) and
+[software validation](testing/subsystem2/B2_MOVEMENT_VALIDATION.md).
+
 ## Buddy 2 CAR_RUN measured integration (2026-10-29)
 
 CAR_RUN now uses `subsystem2_motion` -> `car_motion` ->

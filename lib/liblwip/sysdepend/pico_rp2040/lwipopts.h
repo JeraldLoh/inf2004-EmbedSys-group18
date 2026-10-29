@@ -91,4 +91,6 @@
 
 #define LWIP_DEBUG                  0
 
+#define MQTT_OUTPUT_RINGBUF_SIZE 1024 /* v3 full telemetry exceeds default 256-byte ring */
+
 #endif /* LWIP_LWIPOPTS_H */

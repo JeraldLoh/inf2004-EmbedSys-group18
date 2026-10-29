@@ -5,6 +5,7 @@
  * API here. B2_BENCH=1 selects the explicit bounded, manual driver test instead.
  * B5_RUN=1 selects the Buddy 5 obstacle task + vehicle controller task instead.
  * CAR_RUN=1 selects the whole car (line following + obstacle avoidance).
+ * B1_DEMO_RUN=1 selects the separate Buddy 1 simulated networking demo.
  * Kernel USB/radio services may already be active before this hook; this is NOT
  * an electrically qualified or hardware-safe image. Do not flash it yet.
  *
@@ -28,6 +29,9 @@
 #include "vehicle_controller/car_run_target.h"
 #endif
 
+#include "subsystem1/subsystem1.h"
+
+
 EXPORT INT usermain(void)
 {
 #if APP_B2_MOVE_TEST
@@ -45,6 +49,19 @@ EXPORT INT usermain(void)
 #elif APP_CAR_RUN
     if (car_run_start() != E_OK)
     { tm_printf((UB*)"Car run failed; motors held stopped.\n"); }
+#elif B1_STANDALONE_DEMO
+    /* Explicit standalone profile only. All B1 objects exist before task start.
+     * Other buddies and the portable controller are deliberately not started. */
+    ER er = subsystem1_init();
+    if (er == E_OK) er = subsystem1_start();
+    if (er < E_OK) {
+        tm_printf((UB*)"Buddy 1 startup failed (%d); no vehicle tasks started.\n", er);
+    } else {
+        tm_printf((UB*)"Buddy 1 BINARY DEMO: simulated data/commands; no motors.\n");
+#if APP_TEST
+        subsystem1_test();
+#endif
+    }
 #else
     tm_printf((UB*)"Group 18: inactive architecture scaffold; no vehicle tasks started.\n");
 #if APP_TEST

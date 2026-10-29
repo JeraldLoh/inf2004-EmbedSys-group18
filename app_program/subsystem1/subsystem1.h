@@ -1,11 +1,9 @@
 #ifndef GROUP18_SUBSYSTEM1_H
 #define GROUP18_SUBSYSTEM1_H
-
-/* Buddy 1: Communications.
- * The shared lifecycle declarations are in app.h. No task IDs, queues,
- * hardware API or unmeasured priorities have been allocated by this scaffold.
- * Publish agreed subsystem-specific interfaces here when implementation starts.
- */
 #include "../app.h"
-
+/* Build with B1_DEMO_RUN=1 for the standalone text communication demo.
+ * Default team startup remains inactive; no motor/controller task is started. */
+#ifndef B1_STANDALONE_DEMO
+#define B1_STANDALONE_DEMO 0
+#endif
 #endif

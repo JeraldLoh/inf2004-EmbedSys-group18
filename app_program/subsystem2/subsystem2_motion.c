@@ -147,15 +147,22 @@ bool subsystem2_motion_telemetry(subsystem2_motion_telemetry_t *out)
 {
     motion_motor_state_t state;
     measured_motion_executor_t *e = &motion.executor;
+    motion_encoder_snapshot_t sample;
+    uint32_t age;
     if (out == NULL || !lock()) { return false; }
     if (drv_motor_read(motor, &state) != MOTION_OK) { unlock(); return false; }
     *out = (subsystem2_motion_telemetry_t){0};
+    if (drv_encoder_capture(encoder,motor,&sample)!=MOTION_OK) { unlock(); return false; }
+    age=sample.acquired_us-e->status.wheels.acquired_us;
+    out->sampled_ms = now_ms()-age/1000U;
+    out->valid = e->measurement.primed && sample.reset_epoch==e->status.wheels.reset_epoch &&
+        age<=e->config.measurement.max_gap_us;
     out->left_effort = state.left_effort; out->right_effort = state.right_effort;
     out->left_mm_s = (int32_t)(e->status.wheels.speed_um_s[0]/1000U);
     out->right_mm_s = (int32_t)(e->status.wheels.speed_um_s[1]/1000U);
     out->left_target_mm_s = e->status.target_um_s[0]/1000;
     out->right_target_mm_s = e->status.target_um_s[1]/1000;
-    out->speed_valid = e->status.wheels.speed_valid;
+    out->speed_valid = out->valid && e->status.wheels.speed_valid;
     out->qualified = e->config.qualified;
     out->mode = (uint32_t)e->status.state;
     out->armed_generation = state.armed ? state.authority_generation : 0U;

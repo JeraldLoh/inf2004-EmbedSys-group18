@@ -41,6 +41,7 @@ typedef struct
     uint32_t duration_us;
     int16_t max_effort;
     uint32_t max_duration_us;
+    uint32_t watchdog_slice_us; /* Only movement-test mode permits long trials. */
     b2_trial_result_t result;
     bool result_pending;
 } b2_trial_t;
@@ -53,6 +54,12 @@ bool b2_trial_init(b2_trial_t *trial, drv_motor_t *motor,
 bool b2_trial_init_limited(b2_trial_t *trial, drv_motor_t *motor,
     drv_encoder_t *encoder, vehicle_controller_t *controller,
     const b2_trial_io_t *io, int16_t max_effort, uint32_t max_duration_us);
+#if APP_B2_MOVE_TEST
+/* Raised-wheel test only: <=5s total, refreshed <=100ms hardware cutoff. */
+bool b2_trial_init_movement(b2_trial_t *trial, drv_motor_t *motor,
+    drv_encoder_t *encoder, vehicle_controller_t *controller,
+    const b2_trial_io_t *io);
+#endif
 /* Call only on a fresh manual gesture; no auto retry/queue. One retained result
  * must be consumed before another trial. Counts are rotation, not distance. */
 motion_status_t b2_trial_begin(b2_trial_t *trial, int16_t left_effort,

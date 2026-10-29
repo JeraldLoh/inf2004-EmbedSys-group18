@@ -21,6 +21,8 @@ ER controller_task_start(void);
  * reject a full queue; STOP uses an independent sticky lane and disables
  * outputs immediately even when FIFO is full. */
 bool controller_post(const controller_event_t *event);
+/* Queue one conditional remote START, invalidated by every newer STOP. */
+bool controller_post_remote_start(void);
 
 /* Copy of the latest status; false if not initialised or busy. */
 bool controller_get_status(controller_status_t *status);

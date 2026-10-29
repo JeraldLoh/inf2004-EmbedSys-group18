@@ -121,6 +121,17 @@ endif
 TEST_SUFFIX := _b5run
 endif
 
+# Optional Buddy 1 hookup to the existing car; not a standalone demo.
+CAR_MQTT ?= 0
+ifneq ($(filter $(CAR_MQTT),0 1),$(CAR_MQTT))
+$(error CAR_MQTT must be 0 or 1)
+endif
+ifeq ($(CAR_MQTT),1)
+ifneq ($(CAR_RUN)$(NET)$(MQTT)$(WIFI),1lwip1cyw43)
+$(error CAR_MQTT=1 requires CAR_RUN=1 WIFI=cyw43 NET=lwip MQTT=1)
+endif
+endif
+
 # Whole car (integration lead, Buddy 5): Buddy 2 draft executor + controller
 # line tracking + Buddy 3 line/barcode + Buddy 5 obstacles. Uses the 1 ms
 # kernel tick Buddy 3's barcode sampling needs (decision D11).
@@ -132,8 +143,14 @@ ifeq ($(CAR_RUN),1)
 ifneq ($(B2_BENCH)$(B5_RUN),00)
 $(error CAR_RUN=1 cannot be combined with B2_BENCH or B5_RUN)
 endif
+ifeq ($(CAR_MQTT),1)
+ifneq ($(SMP)$(CONSOLE)$(TEST),1usb_cdc0)
+$(error Network CAR_RUN requires SMP=1 CONSOLE=usb_cdc TEST=0)
+endif
+else
 ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
 $(error CAR_RUN=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
 endif
 TEST_SUFFIX := _carrun
 endif
@@ -213,13 +230,28 @@ ifeq ($(CONSOLE)$(CRASH_REPORT),usb_cdc1)
 CRASH_SUFFIX := _crash
 endif
 
+# Explicit Buddy 1 standalone text profile; does not start vehicle tasks.
+B1_DEMO_RUN ?= 0
+ifneq ($(filter $(B1_DEMO_RUN),0 1),$(B1_DEMO_RUN))
+$(error Unknown B1_DEMO_RUN '$(B1_DEMO_RUN)'; use 0 or 1)
+endif
+ifeq ($(B1_DEMO_RUN),1)
+ifneq ($(CAR_RUN)$(B5_RUN)$(B2_BENCH)$(CIRCUIT_TEST)$(B2_MOVE_TEST),00000)
+$(error B1_DEMO_RUN cannot be combined with car or bench profiles)
+endif
+ifneq ($(NET)$(MQTT),lwip1)
+$(error B1_DEMO_RUN=1 requires NET=lwip MQTT=1)
+endif
+B1_SUFFIX := _b1demo
+endif
+
 #
 # Images are named after the profile they were built with.  Every image is
 # flashed by hand from a downloads folder, so identically-named artifacts are
 # a live hazard: an SMP=1 build was once flashed in place of an SMP=0 one and
 # only the banner in the log revealed it.
 #
-EXE_FILE := mtk3pico_smp$(SMP)_$(CONSOLE)$(WIFI_SUFFIX)$(NET_SUFFIX)$(MQTT_SUFFIX)$(CRASH_SUFFIX)$(TEST_SUFFIX)
+EXE_FILE := mtk3pico_smp$(SMP)_$(CONSOLE)$(WIFI_SUFFIX)$(NET_SUFFIX)$(MQTT_SUFFIX)$(CRASH_SUFFIX)$(TEST_SUFFIX)$(B1_SUFFIX)$(if $(filter 1,$(CAR_MQTT)),_b1live)
 
 GCC := arm-none-eabi-gcc
 AS := arm-none-eabi-gcc
@@ -283,10 +315,10 @@ ifeq ($(SMP),1)
 CFLAGS  += -DCNF_SMP=1
 ASFLAGS += -DCNF_SMP=1
 endif
-CFLAGS  += -DAPP_TEST=$(TEST)
+CFLAGS  += -DAPP_TEST=$(TEST) -DB1_STANDALONE_DEMO=$(B1_DEMO_RUN)
 CFLAGS  += -DAPP_B2_BENCH=$(B2_DRIVERS)
 CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
-CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN)
+CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST)
 ifeq ($(B2_MOVE_TEST),1)
@@ -347,7 +379,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

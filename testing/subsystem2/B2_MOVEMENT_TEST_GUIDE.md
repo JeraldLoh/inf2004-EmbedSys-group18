@@ -27,13 +27,13 @@ with short 30% raised-wheel checks before permitting PID/distance commands.
 
 | Case | Requested test | Where / limit |
 |---|---|---|
-| 0 | Left positive, right off | RAISED; 30% for 400ms |
-| 1 | Right positive, left off | RAISED; 30% for 400ms |
-| 2 | Both positive; exercise GP21 during pulse | RAISED; 30% for 400ms |
-| 3 | Straight PID target 100mm/s, curvature zero | First RAISED; ends at1.5s or200mm rotation on either wheel |
-| 4 | Forward 100mm | First RAISED for logic, then a clear level floor for accuracy |
+| 0 | Left positive, right off | RAISED; 30% for 5s |
+| 1 | Right positive, left off | RAISED; 30% for 5s |
+| 2 | Both positive; exercise GP21 during pulse | RAISED; 30% for 5s |
+| 3 | Straight PID target 100mm/s, curvature zero | First RAISED; ends at5s or500mm rotation on either wheel |
+| 4 | Forward 300mm | First RAISED for logic, then a clear level floor for accuracy |
 | 5 | Forward 1000mm | Clear level floor, only after case4 completed and was measured |
-| 6 | Reverse 100mm | Clear level floor, only after case4 |
+| 6 | Reverse 300mm | Clear level floor, only after case4 |
 | 7 | Left pivot 90 degrees | Clear level floor, only after case4 |
 | 8 | Right pivot 90 degrees | Clear level floor, only after case4 |
 | 9 | Watchdog cutoff exercise | RAISED; both30%, alarm100ms, task withheld150ms |
@@ -57,14 +57,18 @@ reviewing the log and tuning before floor tests. The candidate gains are not
 a promise that either wheel will track100mm/s accurately under your load.
 
 For floor tests, use a level clear area and keep people/hands clear of wheels.
-Start with case4 (100mm), with GP21 accessible. Measure actual travel and side
+Start with case4 (300mm), with GP21 accessible. Measure actual travel and side
 drift. Case4's encoder completion sets `SHORT=1`, unlocking cases5..8; it does
 not prove actual floor distance or orientation. Do not attempt1m or pivots
 until you have inspected the short physical result.
 
+The five-second raw checks refresh a100ms hardware cutoff on each service;
+a missed service stops the wheels early and is a failure, not a passed check.
+The original bench and circuit pulse limits stay unchanged.
+
 Every action ends stopped and needs a new manual gesture. There is no chained
 forward/reverse/turn or automatic retry. Case5 has a15s outer test limit; other
-goals7s, and the timed speed test2.5s (normally stops at1.5s). The executor also
+goals10s, and the timed speed test6.5s (normally stops at5s). The executor also
 derives finite goal deadlines, detects wheel stall/overshoot and requires both
 wheels to reach tolerance and settle. A motion fault requires reset after
 diagnosis; a physical STOP can be cleared only by a fresh manual start.
@@ -140,7 +144,7 @@ exclusive. The core-0 test task uses a6144-byte static stack and nominal5ms
 service; the real executor uses20ms updates and100ms watchdog. Motor hardware
 is still the production driver/IRQ path. No sensor navigation tasks are started.
 
-110 B2/circuit/movement native CTests pass. New coverage includes bounded test
+111 B2/circuit/movement native CTests pass. New coverage includes bounded test
 authority, production refusal unchanged, deadline and raw-clock wrap, STOP
 races, simulated calibrated1m/reverse/pivot completion, actual task boot/locks,
 missing feedback, STOP/stall, long-test lock and watchdog exercise. These use
