@@ -28,9 +28,9 @@ class StateTests(unittest.TestCase):
         s.broker_connected = True
         self.assertEqual(s.status(1), "waiting for heartbeat")
     def test_commands(self):
-        for cmd in ("START", "STOP", "SET_SPEED 0", "SET_SPEED 100"):
+        for cmd in ("START", "STOP"):
             self.assertEqual(validate_command(cmd), cmd)
-        for cmd in ("", "start", "SET_SPEED -1", "SET_SPEED 101", "SET_SPEED 2x", "STOP now", "START\x00"):
+        for cmd in ("", "start", "SET_SPEED 0", "SET_SPEED 100", "SET_SPEED -1", "SET_SPEED 101", "SET_SPEED 2x", "STOP now", "START\x00"):
             with self.assertRaises(ValueError): validate_command(cmd)
 
 if __name__ == "__main__": unittest.main()

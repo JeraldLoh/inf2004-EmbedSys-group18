@@ -11,7 +11,7 @@
 #define B1_TOPIC_PREFIX "group18/robot1"
 #endif
 #define COMMAND_TOPIC B1_TOPIC_PREFIX "/command"
-static const char *topics[3]={B1_TOPIC_PREFIX "/heartbeat",B1_TOPIC_PREFIX "/telemetry",B1_TOPIC_PREFIX "/command_result"};
+static const char *topics[4]={B1_TOPIC_PREFIX "/heartbeat",B1_TOPIC_PREFIX "/telemetry",B1_TOPIC_PREFIX "/command_result",B1_TOPIC_PREFIX "/diagnostics"};
 static mqtt_client_t *client;
 static unsigned int next_try, attempt_at, last_pump;
 static int connecting, subscribed, active, rx_valid;
@@ -66,10 +66,10 @@ void mqtt_utk_poll(int link_up) {
  last_pump=now;
  b1_connection(1); /* Also publishes ready state if application init finished after SUBACK. */
  /* One latest slot per type: a broker outage never creates a backlog. */
- for(unsigned int k=0;k<3;k++) {
+ for(unsigned int k=0;k<4;k++) {
   b1_packet packet;
   if(b1_network_take(k,&packet)) {
-   err_t result=mqtt_publish(client,topics[k],packet.text,(u16_t)strlen(packet.text),0,0,0,0);
+   err_t result=mqtt_publish(client,topics[k],packet.text,(u16_t)packet.length,0,0,0,0);
    if(result!=ERR_OK) b1_network_restore(&packet);
 #if APP_TEST
    /* Queued into lwIP, not a delivery acknowledgement. Compare with broker logs.

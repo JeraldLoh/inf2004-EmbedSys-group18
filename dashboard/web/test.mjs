@@ -17,9 +17,9 @@ test('reject malformed data and ignore retained heartbeats',()=>{
  assert.equal(s.lastHeartbeat,null);
  assert.throws(()=>s.receive('telemetry','{"schema":1,"demo":false,"speed_percent":101,"distance_cm":1}',0));
 });
-test('strict commands with bounded speed',()=>{
- for(const c of ['START','STOP','SET_SPEED 0','SET_SPEED 100']) assert.equal(validateCommand(c),c);
- for(const c of ['START\n','START\0','SET_SPEED -1','SET_SPEED 101','SET_SPEED 2x']) assert.throws(()=>validateCommand(c));
+test('START and STOP only; speed selection is rejected',()=>{
+ for(const c of ['START','STOP']) assert.equal(validateCommand(c),c);
+ for(const c of ['START\n','START\0','SET_SPEED 0','SET_SPEED 100','SET_SPEED -1','SET_SPEED 101','SET_SPEED 2x']) assert.throws(()=>validateCommand(c));
 });
 test('MQTT framing tolerates a split packet and multiple packets',()=>{
  const p=packet(0x30,new Uint8Array(150));assert.equal(p[1],150%128+128);

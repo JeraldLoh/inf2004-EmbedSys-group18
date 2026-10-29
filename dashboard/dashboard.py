@@ -6,7 +6,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 import paho.mqtt.client as mqtt
-from model import RobotState, validate_command
+from model import RobotState, validate_command, encode_command
 
 def main():
     parser = argparse.ArgumentParser()
@@ -50,22 +50,20 @@ def main():
         ttk.Label(frame, textvariable=variable, font=("Segoe UI", 12)).pack(anchor="w", pady=7)
     row = ttk.Frame(frame)
     row.pack(anchor="w", pady=16)
-    speed = ttk.Spinbox(row, from_=0, to=100, width=5)
-    speed.set("30")
+    command_id = 0
     buttons = []
     def send(command):
+        nonlocal command_id
         try:
             validate_command(command)
             if state.status(time.monotonic()) != "online" or not client.is_connected():
                 raise ValueError("Wait for a live robot heartbeat")
-            info = client.publish(prefix + "/command", command, qos=0, retain=False)
+            command_id = command_id % 0xffffffff + 1
+            info = client.publish(prefix + "/command", encode_command(command,command_id), qos=0, retain=False)
             feedback.set("Sent to MQTT; waiting for robot result" if info.rc == mqtt.MQTT_ERR_SUCCESS else "Publish failed")
         except ValueError as error: feedback.set(str(error))
     for label, command in (("Start", "START"), ("Stop", "STOP")):
         b = ttk.Button(row, text=label, command=lambda c=command: send(c)); b.pack(side="left", padx=4); buttons.append(b)
-    speed.pack(side="left", padx=8)
-    b = ttk.Button(row, text="Set speed %", command=lambda: send("SET_SPEED " + speed.get()))
-    b.pack(side="left"); buttons.append(b)
     ttk.Label(frame, textvariable=feedback, wraplength=550).pack(anchor="w", pady=8)
     def update():
         for _ in range(128):
@@ -85,7 +83,16 @@ def main():
         live = client.is_connected()
         status.set(state.status(time.monotonic()) if live else "broker disconnected")
         mode.set("Mode: " + ("SIMULATED DATA" if state.demo else "robot data" if state.demo is False else "unknown"))
-        readings.set(json.dumps(state.telemetry, indent=2) if state.telemetry else "Waiting for readings")
+        if state.telemetry:
+            age = max(0, time.monotonic() - state.telemetry_at)
+            stale = not live or state.status(time.monotonic()) != "online" or age >= 3
+            # This optional desktop view is a raw protocol inspector. The web
+            # dashboard applies per-module validity and measurement-age rules.
+            readings.set(("STALE · " if stale else "") + f"Raw protocol · received {age:.1f}s ago\n"
+                         + json.dumps({k: v for k, v in state.telemetry.items() if k != "buddies"}, indent=2)
+                         + "\nUse the web dashboard for subsystem validity and age.")
+        else:
+            readings.set("Waiting for readings")
         enabled = live and state.status(time.monotonic()) == "online"
         for button in buttons: button.configure(state="normal" if enabled else "disabled")
         root.after(100, update)

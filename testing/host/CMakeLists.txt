@@ -82,7 +82,9 @@ endforeach()
 add_executable(buddy1_heartbeat_tests
     test_buddy1_heartbeat.c
     ../../app_program/subsystem1/buddy1_bridge.c
-    ../../app_program/subsystem1/buddy1_protocol.c)
+    ../../app_program/subsystem1/buddy1_protocol.c
+    ../../app_program/subsystem1/buddy1_diagnostics.c
+    ../../app_program/subsystem1/buddy1_binary.c)
 target_include_directories(buddy1_heartbeat_tests PRIVATE buddy1_stubs)
 if(MSVC)
     target_compile_options(buddy1_heartbeat_tests PRIVATE /W4 /WX /UNDEBUG)
@@ -92,3 +94,20 @@ endif()
 add_test(NAME buddy1_heartbeat_regular COMMAND buddy1_heartbeat_tests 0)
 add_test(NAME buddy1_heartbeat_busy_once COMMAND buddy1_heartbeat_tests 5020)
 add_test(NAME buddy1_heartbeat_busy_100ms COMMAND buddy1_heartbeat_tests 5100)
+
+add_executable(buddy1_binary_tests ../../host_tests/binary_test.c
+    ../../app_program/subsystem1/buddy1_binary.c)
+if(MSVC)
+    target_compile_options(buddy1_binary_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_binary_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_binary_tests COMMAND buddy1_binary_tests)
+add_executable(buddy1_diagnostics_tests ../../host_tests/diagnostics_test.c
+    ../../app_program/subsystem1/buddy1_binary.c ../../app_program/subsystem1/buddy1_diagnostics.c)
+if(MSVC)
+    target_compile_options(buddy1_diagnostics_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_diagnostics_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_diagnostics_tests COMMAND buddy1_diagnostics_tests)

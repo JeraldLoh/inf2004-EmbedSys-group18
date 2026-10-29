@@ -1,3 +1,4 @@
+import {encodeCommand} from './commands.mjs';
 /* MQTT 3.1.1 over WebSocket: clean sessions, QoS 0, no offline command queue. */
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 const join=(...arrays)=>new Uint8Array(arrays.flatMap(a=>Array.from(a)));
@@ -26,7 +27,7 @@ export function decodePublish({header,body}){
  if(((header>>1)&3)!==0)throw Error('Unsupported publish QoS');
  if(body.length<2)throw Error('Missing topic');
  const n=(body[0]<<8)|body[1];if(!n||n+2>body.length)throw Error('Invalid topic length');
- return {topic:decoder.decode(body.slice(2,2+n)),payload:decoder.decode(body.slice(2+n)),retained:!!(header&1)};
+ return {topic:decoder.decode(body.slice(2,2+n)),payload:body.slice(2+n),retained:!!(header&1)};
 }
 export function validateConnection(url,prefix){
   const parsed=new URL(url);if(!['ws:','wss:'].includes(parsed.protocol)||parsed.username||parsed.password)throw Error('Use ws://host:9001 or wss://host:port');
@@ -74,11 +75,11 @@ export class MqttConnection {
   const type=frame.header>>4,b=frame.body;
   if(type===2){
    if(b.length!==2||b[0]!==0||b[1]!==0)throw Error('Broker rejected clean-session connection');
-   const topics=['heartbeat','telemetry','command_result'].map(s=>join(mqttString(this.prefix+'/'+s),[0]));
+   const topics=['heartbeat','telemetry','command_result','diagnostics'].map(s=>join(mqttString(this.prefix+'/'+s),[0]));
    ws.send(packet(0x82,join([0,1],...topics)));
   }else if(type===9){
    if(this.ready)throw Error('Unexpected duplicate subscription acknowledgement');
-   if(b.length!==5||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
+   if(b.length!==6||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
    clearTimeout(this.deadline);this.ready=true;this.retry=1000;this.onState('connected');
    this.pinger=setInterval(()=>{
     if(this.pingAt){this.onLog('Broker heartbeat timed out','warning');ws.close();return;}
@@ -87,9 +88,9 @@ export class MqttConnection {
   }else if(type===3){if(this.ready)this.onMessage(decodePublish(frame));}
   else if(type===13){if(b.length!==0)throw Error('Invalid PINGRESP');this.pingAt=0;}
  }
- publish(command){
+ publish(command,id){
   if(!this.ready||!this.socket||this.socket.readyState!==WebSocket.OPEN)throw Error('Broker is disconnected');
   if(this.socket.bufferedAmount>4096)throw Error('Network busy; command was not queued');
-  this.socket.send(packet(0x30,join(mqttString(this.prefix+'/command'),encoder.encode(command))));
+  this.socket.send(packet(0x30,join(mqttString(this.prefix+'/command'),encodeCommand(command,id))));
  }
 }
