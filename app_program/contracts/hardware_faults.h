@@ -20,6 +20,14 @@ typedef uint32_t hardware_fault_mask_t;
 #define HARDWARE_FAULT_WIDTH 20U
 #define HARDWARE_FAULT_VALID_MASK ((hardware_fault_mask_t)0x000fffffUL)
 
+/*
+ * PROVISIONAL allocations (Buddy 4 proposal, team to confirm). Bits 12..15
+ * follow the tribunal's one-block-of-4-per-buddy idea. Detection and clear
+ * rules are in app_program/subsystem4/README.md; not yet verified on the car.
+ */
+#define HARDWARE_FAULT_IMU ((hardware_fault_mask_t)1UL << 12)  /* B4: IMU unreachable or stale >= 1 s */
+#define HARDWARE_FAULT_MAG ((hardware_fault_mask_t)1UL << 13)  /* B4: magnetometer missing/failing >= 1 s */
+
 typedef struct
 {
     hardware_fault_mask_t latched;

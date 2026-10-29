@@ -65,9 +65,11 @@ EXPORT ER knl_start_device( void )
 		if(err < E_OK) return err;
 	#endif
 
-	/* I2C unit.0 "iica" */
+	/* I2C unit.1 "iicb" (I2C1, GP2/GP3): Group 18 Buddy 4 IMU.
+	   Unit 0 is not started, so its default GP8/GP9 (motor) pins
+	   are never claimed. */
 	#if DEVCNF_USE_IIC
-		err = dev_init_i2c(0);
+		err = dev_init_i2c(1);
 		if(err < E_OK) return err;
 	#endif
 
