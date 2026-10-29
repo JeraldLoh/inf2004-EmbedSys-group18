@@ -10,6 +10,12 @@
 #include "drv_servo.h"
 #include "drv_sonar.h"
 #include "../project_config/pinmap.h"
+#if APP_CAR_MQTT
+#include "../subsystem1/buddy1_bridge.h"
+#include <math.h>
+static b1_s5_telemetry b5_wifi = {.front_status=4U,.last_status=4U};
+static uint32_t b5_wifi_at;
+#endif
 
 #define B5_TASK_PRIORITY 12   /* provisional: below the controller (10) */
 #define B5_TASK_STACK 2048
@@ -60,7 +66,23 @@ static void cb_servo_set(void *ctx, int angle_deg)
 static range_reading_t cb_measure(void *ctx)
 {
     (void)ctx;
-    return drv_sonar_read(&sonar, B5_SAMPLES, B5_SAMPLE_SPACING_MS);
+    range_reading_t reading=drv_sonar_read(&sonar, B5_SAMPLES, B5_SAMPLE_SPACING_MS);
+#if APP_CAR_MQTT
+    {
+        uint32_t at=cb_now_ms(NULL), mm=0;
+        range_status_t status=reading.status;
+        if ((unsigned)status>=RANGE_STATUS_COUNT ||
+            (status==RANGE_OK && (!isfinite(reading.cm) || reading.cm<2.0f || reading.cm>400.0f))) status=RANGE_FAULT;
+        if(status==RANGE_OK) mm=(uint32_t)(reading.cm*10.0f+0.5f);
+        b5_wifi.last_status=status;b5_wifi.last_mm=mm;b5_wifi.last_at_ms=at;
+        b5_wifi.direction_halfdeg=2*(av.heading_deg-av.origin_deg)+
+            2*(av.servo_deg-av.cfg.center_deg)*(av.cfg.left_deg>av.cfg.right_deg?1:-1);
+        if(av.servo_deg==av.cfg.center_deg && av.heading_deg==av.origin_deg){
+            b5_wifi.front_status=status;b5_wifi.front_mm=mm;b5_wifi.front_at_ms=at;
+        }
+    }
+#endif
+    return reading;
 }
 
 /* ---- Moves: Buddy 2 goals (CAR_RUN, b5_motion.c) or refused (B5_RUN) ---- */
@@ -168,6 +190,10 @@ static bool cb_line_detected(void *ctx)
 static void cb_on_event(void *ctx, const av_event_t *e)
 {
     (void)ctx;
+#if APP_CAR_MQTT
+    if(e->type==AV_EVT_OBSTACLE_DETECTED){++b5_wifi.encounter;b5_wifi.decision_valid=0;}
+    if(e->type==AV_EVT_DECISION){b5_wifi.decision_valid=1;b5_wifi.side=e->side;}
+#endif
     switch (e->type)
     {
         case AV_EVT_OBSTACLE_DETECTED:
@@ -319,6 +345,9 @@ static void subsystem5_task(INT stacd, void *exinf)
         if (!now_armed && armed)
         {
             av_reset(&av);              /* back to MONITOR for the next run */
+#if APP_CAR_MQTT
+            b5_wifi.front_status=4;b5_wifi.last_status=4;b5_wifi.decision_valid=0;
+#endif
             b5_bridge_init(&bridge);
         }
         armed = now_armed;
@@ -331,6 +360,30 @@ static void subsystem5_task(INT stacd, void *exinf)
             queue_events(events, count);
         }
         flush_events();
+#if APP_CAR_MQTT
+        {
+            uint32_t at=cb_now_ms(NULL);
+            if((uint32_t)(at-b5_wifi_at)>=100U){
+                const av_metrics_t *m=av_metrics(&av);
+                b5_wifi.state=av_state(&av);
+                b5_wifi.heading_deg=av.heading_deg;
+                b5_wifi.servo_valid=av.servo_known;
+                b5_wifi.servo_deg=av.servo_deg;
+                b5_wifi.detections=m->detections;b5_wifi.cleared=m->obstacle_cleared;
+                b5_wifi.bypass_left=m->bypass_left;b5_wifi.bypass_right=m->bypass_right;
+                b5_wifi.total_rescans=m->rescans;b5_wifi.total_reverses=m->reverses;
+                b5_wifi.emergency_stops=m->emergency_stops;b5_wifi.sensor_faults=m->sensor_faults;
+                b5_wifi.failures=m->failures;b5_wifi.motion_timeouts=m->motion_timeouts;
+                b5_wifi.line_search_ok=m->reacquire_ok;b5_wifi.line_search_retry=m->reacquire_retries;
+                b5_wifi.line_search_fail=m->reacquire_fail;b5_wifi.car_turns=m->car_turns;
+                b5_wifi.profiles_complete=m->profiles_complete;b5_wifi.profiles_partial=m->profiles_partial;
+                b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
+                b5_wifi.max_encounter_ms=m->max_encounter_ms;
+                /* No event stream/profile/plan API is exported by this hookup. */
+                if(b1_submit_section(5,&b5_wifi,at)) b5_wifi_at=at;
+            }
+        }
+#endif
         if ((uint32_t)(cb_now_ms(NULL) - last_status_ms) >= B5_STATUS_PERIOD_MS)
         {
             last_status_ms = cb_now_ms(NULL);

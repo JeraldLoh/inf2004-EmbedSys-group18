@@ -17,3 +17,11 @@ test('Buddy 5 no-echo never appears as a valid zero or maximum distance',()=>{
  const v=buddyView(p,5,200);assert.match(v.rows[1][1],/No echo/);assert.doesNotMatch(v.rows[1][1],/400/);
  assert.match(v.rows[1][1],/700 ms/);assert.equal(buddyView(p,5,2000).stale,true);
 });
+
+
+test('probe routes and missing durations never invent a barcode bar measurement',async()=>{
+ const {barcodeDurationText}=await import('./telemetry-view.mjs');
+ assert.equal(barcodeDurationText({scan_valid:1,barcode_source:1,bar_ms:25}),'Unavailable');
+ assert.equal(barcodeDurationText({scan_valid:1,barcode_source:0,bar_ms:0}),'Unavailable');
+ assert.equal(barcodeDurationText({scan_valid:1,barcode_source:0,bar_ms:25}),'25 ms');
+});

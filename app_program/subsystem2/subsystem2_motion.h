@@ -22,6 +22,8 @@
 
 typedef struct
 {
+    uint32_t sampled_ms;      /* kernel clock, updated only after capture succeeds */
+    bool valid;               /* at least one successful producer sample */
     int16_t left_effort;
     int16_t right_effort;
     int32_t left_mm_s;        /* measured; sign from the command */

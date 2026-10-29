@@ -8,7 +8,11 @@
 #define B1_DIAGNOSTICS 3
 #define B1_PAYLOAD_MAX B1_BINARY_MAX
 #ifndef B1_DEMO
+#if APP_CAR_MQTT
+#define B1_DEMO 0
+#else
 #define B1_DEMO 1
+#endif
 #endif
 /* Plain C ABI: safe to include from the SDK/lwIP namespace or uTKernel. */
 typedef struct { unsigned int speed_percent, distance_cm; } b1_snapshot;
@@ -26,6 +30,9 @@ int b1_submit_snapshot(const b1_snapshot *snapshot);
  * Returns 0 on invalid input or mutex contention; caller retries later.
  * fault_mask is reserved for agreed hardware/sensor failures; bits not assigned yet. */
 int b1_submit_binary_snapshot(const b1_binary_snapshot *snapshot);
+/* Copy one owner-produced section without erasing other buddies. */
+int b1_submit_section(unsigned int id, const void *section, unsigned int at_ms);
+int b1_is_online(void);
 int b1_receive_vehicle(b1_command *command);
 void b1_telemetry_task(int stacd, void *exinf);
 #endif

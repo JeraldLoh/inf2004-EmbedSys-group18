@@ -208,6 +208,12 @@ bool controller_service_authority(
     motion_source_t source,
     authority_generation_t *generation);
 
+/* Conditional remote START, applied by the controller owner as one operation.
+ * Rejects a request superseded by any STOP, or while safety stops remain. */
+bool controller_service_remote_start(controller_service_t *service,
+    uint32_t requested_stop_sequence, uint32_t current_stop_sequence,
+    bool urgent_stop_pending);
+
 void controller_service_motion_result(controller_service_t *service,
     const motion_goal_result_t *result);
 

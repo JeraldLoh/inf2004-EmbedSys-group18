@@ -41,6 +41,12 @@
 #include "barcode_sensor.h"
 #include "barcode_decoder.h"
 #include "barcode_edges.h"
+#if APP_CAR_MQTT
+#include "../subsystem1/buddy1_bridge.h"
+static b1_s3_telemetry s3_wifi;
+static uint32_t s3_wifi_at;
+static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo; }
+#endif
 
 #ifndef S3_BARCODE_USE_EDGES
 #define S3_BARCODE_USE_EDGES 0   /* 1 = digital D0 + GPIO edge interrupts */
@@ -167,6 +173,9 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
 LOCAL void s3_publish_junction(const junction_observation_t *junction)
 {
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+#if APP_CAR_MQTT
+    s3_wifi.junction_counter=(s3_wifi.junction_counter+1U)&65535U;
+#endif
     s3_junction = *junction;
     s3_junction_pending = TRUE;
     (void)tk_unl_mtx(s3_mtx);
@@ -184,6 +193,12 @@ LOCAL void s3_publish_route(route_command_t command, char character, uint32_t no
     route.valid = true;
 
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+#if APP_CAR_MQTT
+    s3_wifi.route=(uint32_t)command;
+    s3_wifi.barcode_source=character=='-' ? 1U : 0U;
+    s3_wifi.scan_valid=1U;
+    s3_wifi.route_counter=(s3_wifi.route_counter+1U)&65535U;
+#endif
     s3_route = route;
     s3_route_pending = TRUE;
     (void)tk_unl_mtx(s3_mtx);
@@ -347,6 +362,10 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #else
         {
             bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
+#if APP_CAR_MQTT
+            s3_wifi.adc_valid=have_raw;
+            s3_wifi.adc=have_raw ? raw : 0U;
+#endif
 
             if (!s3_calibrate_step(&bar, &decoder, have_raw, raw, now_ms) &&
                 have_raw)
@@ -354,6 +373,18 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 barcode_black = barcode_sensor_is_black(&bar, raw);
                 barcode_decoder_feed(&decoder, barcode_black, now_us);
             }
+        }
+#endif
+#if APP_CAR_MQTT
+        /* Duration is copied from the actual most recent completed run. */
+        if(decoder.run_count>0U){
+            uint32_t ms=decoder.run_us[decoder.run_count-1U]/1000U;
+            if(ms<=6000U) s3_wifi.bar_ms=ms;
+        }
+        /* take() resets the decoder; retain direction before that reset. */
+        if (decoder.state == BARCODE_DECODER_COMPLETE) {
+            s3_wifi.reversed=barcode_decoder_was_reversed(&decoder);
+            s3_wifi.scan_counter=(s3_wifi.scan_counter+1U)&65535U;
         }
 #endif
         if (barcode_decoder_take(&decoder, &command, &character))
@@ -379,6 +410,27 @@ LOCAL void s3_task(INT stacd, void *exinf)
         /* ---- Publish: build locally, store once (atomic byte) ---- */
         line_follow_set_barcode_active(&line, barcode_decoder_busy(&decoder));
         s3_line = line.status;
+#if APP_CAR_MQTT
+        {
+            uint32_t at=s3_kernel_ms();
+            if ((uint32_t)(at-s3_wifi_at)>=100U) {
+                s3_wifi.left_black=line.status.left_black;
+                s3_wifi.right_black=line.status.right_black;
+                s3_wifi.line_state=line.status.state;
+                s3_wifi.last_side=line.status.last_side;
+                s3_wifi.steering=s3_steer_value;
+                s3_wifi.black=barcode_black;
+                s3_wifi.calibrated=s3_barcode_ready!=FALSE;
+                s3_wifi.decoder_state=decoder.state;
+#if !S3_BARCODE_USE_EDGES
+                s3_wifi.calibration_low=bar.threshold_low;
+                s3_wifi.calibration_high=bar.threshold_high;
+#endif
+                /* Pattern is unavailable: do not invent a decoded mask. */
+                if(b1_submit_section(3,&s3_wifi,at)) s3_wifi_at=at;
+            }
+        }
+#endif
 
 #if S3_DEBUG_RAW
         if ((now_ms - last_debug_ms) >= S3_DEBUG_PERIOD_MS)

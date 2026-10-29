@@ -701,3 +701,24 @@ void controller_service_motion_result(controller_service_t *service,
     execute(service, &action);
     refresh_status(service);
 }
+
+/* Called while the controller task owns its guard. No separately queued CLEAR
+ * can outlive this request and erase a newer STOP. The task re-drains urgent
+ * ingress after this operation and before issuing motion on its next tick. */
+bool controller_service_remote_start(controller_service_t *s,
+    uint32_t requested, uint32_t current, bool pending)
+{
+    controller_status_t status;
+    controller_event_t clear={CONTROLLER_EVENT_CLEAR_STOP,SYSTEM_MODE_IDLE,
+        STOP_REASON_REMOTE,MISSION_IDLE,false};
+    controller_event_t start={CONTROLLER_EVENT_SET_MODE,SYSTEM_MODE_AUTO,
+        STOP_REASON_NONE,MISSION_IDLE,false};
+    if(s==NULL || !s->initialized || requested!=current || current==UINT32_MAX || pending)
+        return false;
+    controller_service_status(s,&status);
+    if((status.mode!=SYSTEM_MODE_STARTUP && status.mode!=SYSTEM_MODE_IDLE && status.mode!=SYSTEM_MODE_STOPPED) ||
+       status.hardware_faults!=0U ||
+       (status.stop_reasons & ~((uint32_t)STOP_REASON_REMOTE))!=0U) return false;
+    if(status.stop_reasons!=0U && !controller_service_handle(s,&clear)) return false;
+    return controller_service_handle(s,&start);
+}

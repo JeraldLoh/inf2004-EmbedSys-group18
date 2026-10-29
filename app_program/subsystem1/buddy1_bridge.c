@@ -5,6 +5,9 @@
 #include "../app.h"
 #include "buddy1_bridge.h"
 #include "buddy1_diagnostics.h"
+#if defined(_PICO_RP2040_)
+#include <tk/smp.h>
+#endif
 /* All queue objects are created before ready is published. */
 static ID guard, incoming, vehicle;
 static atomic_int ready, online;
@@ -13,6 +16,29 @@ static b1_packet slots[4];
 static int occupied[4], have_snapshot;
 static b1_diagnostics diagnostic;
 static atomic_uint busy_submissions;
+#if defined(_PICO_RP2040_) && TK_SUPPORT_SMP
+static T_SPLOCK busy_lock;
+#endif
+static void count_busy(void) {
+ /* ARMv6-M lacks the atomic fetch-add instruction/libcall. Use the kernel's
+  * cross-core interrupt-safe lock, only around this diagnostic increment. */
+#if defined(_PICO_RP2040_)
+ UINT saved;
+#if TK_SUPPORT_SMP
+ (void)ISpinLock(&busy_lock,&saved);
+#else
+ saved=disint();
+#endif
+ atomic_store(&busy_submissions,atomic_load(&busy_submissions)+1U);
+#if TK_SUPPORT_SMP
+ (void)ISpinUnlock(&busy_lock,saved);
+#else
+ set_primask(saved);
+#endif
+#else
+ atomic_fetch_add(&busy_submissions,1);
+#endif
+}
 static b1_binary_snapshot latest;
 static unsigned int snapshot_at;
 typedef struct { unsigned int length, epoch, at; char data[128]; } incoming_msg;
@@ -51,7 +77,7 @@ int b1_submit_snapshot(const b1_snapshot *s) {
  b1_binary_snapshot candidate={0};b1_validation_error error;
  if(s){candidate.base_valid=1;candidate.speed_percent=s->speed_percent;candidate.distance_cm=s->distance_cm;}
  int valid=b1_binary_validate(s?&candidate:0,&error);
- if(!lock()){atomic_fetch_add(&busy_submissions,1);return 0;}
+ if(!lock()){count_busy();return 0;}
  if(!valid){++diagnostic.rejected;if(error.reason==2)++diagnostic.out_of_range;
   diagnostic.last=error;diagnostic.last_at_ms=now_ms();tk_unl_mtx(guard);return 0;}
  latest.base_valid=1;latest.speed_percent=s->speed_percent;latest.distance_cm=s->distance_cm;
@@ -59,10 +85,27 @@ int b1_submit_snapshot(const b1_snapshot *s) {
 }
 int b1_submit_binary_snapshot(const b1_binary_snapshot *s) {
  b1_validation_error error;int valid=b1_binary_validate(s,&error);
- if(!lock()){atomic_fetch_add(&busy_submissions,1);return 0;}
+ if(!lock()){count_busy();return 0;}
  if(!valid){++diagnostic.rejected;if(error.reason==2)++diagnostic.out_of_range;
   diagnostic.last=error;diagnostic.last_at_ms=now_ms();tk_unl_mtx(guard);return 0;}
  latest=*s;have_snapshot=1;snapshot_at=now_ms();tk_unl_mtx(guard);return 1;
+}
+int b1_is_online(void) { return atomic_load(&online); }
+int b1_submit_section(unsigned int id,const void *section,unsigned int at) {
+ /* Scratch is protected by guard, avoiding a full snapshot on sensor stacks. */
+ static b1_binary_snapshot candidate;
+ b1_validation_error error;
+ if(!section || (id!=2 && id!=3 && id!=5)) return 0;
+ if(!lock()){count_busy();return 0;}
+ candidate=latest;
+ if(id==2){candidate.s2=*(const b1_s2_telemetry*)section;candidate.s2_at_ms=at;candidate.present|=B1_SECTION_2;candidate.fault_mask=candidate.s2.hardware_faults;}
+ if(id==3){candidate.s3=*(const b1_s3_telemetry*)section;candidate.s3_at_ms=at;candidate.present|=B1_SECTION_3;}
+ if(id==5){candidate.s5=*(const b1_s5_telemetry*)section;candidate.s5_at_ms=at;candidate.present|=B1_SECTION_5;}
+ if(!b1_binary_validate(&candidate,&error)){
+  ++diagnostic.rejected;if(error.reason==2)++diagnostic.out_of_range;
+  diagnostic.last=error;diagnostic.last_at_ms=now_ms();tk_unl_mtx(guard);return 0;
+ }
+ latest=candidate;have_snapshot=1;snapshot_at=now_ms();tk_unl_mtx(guard);return 1;
 }
 int b1_network_take(unsigned int kind,b1_packet *p) {
  int result=0;

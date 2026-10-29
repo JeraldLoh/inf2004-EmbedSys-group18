@@ -7,6 +7,30 @@
 #include "../subsystem2/b2_gesture.h"
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem5/subsystem5.h"
+#if APP_CAR_MQTT
+#include "../subsystem1/subsystem1.h"
+#include "../subsystem1/buddy1_bridge.h"
+#include "../subsystem1/buddy1_car_policy.h"
+static uint32_t wifi_command_id;
+static uint32_t wifi_telemetry_at;
+static void wifi_telemetry(uint32_t now)
+{
+    subsystem2_motion_telemetry_t m;
+    controller_status_t c;
+    b1_s2_telemetry s={0};
+    if((uint32_t)(now-wifi_telemetry_at)<200U ||
+       !subsystem2_motion_telemetry(&m) || !controller_get_status(&c) || !m.valid) return;
+    s.left_speed_mm_s=m.left_mm_s;s.right_speed_mm_s=m.right_mm_s;
+    s.left_speed_valid=1;s.right_speed_valid=1;
+    s.motion_active=m.mode!=0U;s.sequence=(m.sampled_ms/5U)&255U;s.uptime_ms=m.sampled_ms;
+    s.system_mode=c.mode;s.mission_state=c.mission;s.route_command=c.last_route;
+    s.stop_reasons=c.stop_reasons;s.hardware_faults=c.hardware_faults;
+    s.authority_generation=c.authority_generation;s.last_command_id=wifi_command_id;
+    s.communication_state=b1_is_online()?1U:0U;
+    /* No target, integrated distance or goal acknowledgement accessor here. */
+    if(b1_submit_section(2,&s,m.sampled_ms)) wifi_telemetry_at=now;
+}
+#endif
 
 #define SUPERVISOR_PERIOD_MS 5
 #define STATUS_PERIOD_MS 1000U
@@ -179,6 +203,9 @@ static ER bring_up(void)
     er = subsystem2_motion_init(&trial_io);
     if (er == E_OK) { er = controller_task_init(&outputs); }
     if (er == E_OK) { er = controller_task_bind_junction(&junction); }
+#if APP_CAR_MQTT
+    if (er == E_OK) { er = subsystem1_init(); }
+#endif
     if (er == E_OK) { er = subsystem3_init(); }
     if (er == E_OK) { er = subsystem5_bind(&b5); }
     if (er == E_OK) { er = subsystem5_init(); }
@@ -194,6 +221,9 @@ static ER bring_up(void)
     if (er == E_OK) { er = controller_task_start(); }
     if (er == E_OK) { er = subsystem3_start(); }
     if (er == E_OK) { er = subsystem5_start(); }
+#if APP_CAR_MQTT
+    if (er == E_OK) { er = subsystem1_start(); }
+#endif
     if (er != E_OK)
     {
         (void)subsystem2_urgent_stop();
@@ -273,6 +303,9 @@ static void supervise(void)
     uint32_t last_line_ms = 0U;
     uint32_t last_status = now_ms();
     bool running = false;
+#if APP_CAR_MQTT
+    bool remote_start_waiting = false;
+#endif
 
     for (;;)
     {
@@ -289,6 +322,38 @@ static void supervise(void)
                     : STOP_REASON_CONTROLLER_FAULT);
         }
 
+#if APP_CAR_MQTT
+        {
+            b1_command command;unsigned choice=0U;uint32_t id=0U;bool start_queued=false;
+            for(unsigned n=0;n<8U && b1_receive_vehicle(&command);++n){
+                unsigned next=b1_car_command_choice(choice,command.kind);
+                if(choice!=B1_STOP || command.kind==B1_STOP) id=command.command_id;
+                choice=next;
+            }
+            if(choice==B1_STOP){
+                wifi_command_id=id;remote_start_waiting=false;
+                stop_run(&running,"MQTT STOP",STOP_REASON_REMOTE);
+            } else if(choice==B1_START && events.reasons==STOP_REASON_NONE && !events.cutoff_fired &&
+                      !controller_urgent_stop_pending() && controller_get_status(&status) &&
+                      (status.mode==SYSTEM_MODE_STARTUP || status.mode==SYSTEM_MODE_IDLE || status.mode==SYSTEM_MODE_STOPPED) &&
+                      b1_car_start_allowed(status.stop_reasons,b2_platform_stop_pressed(),running,status.hardware_faults)){
+                if(controller_post_remote_start()){
+                    wifi_command_id=id;running=true;started_ms=t;last_line_ms=t;start_queued=true;remote_start_waiting=true;
+                    tm_printf((UB*)"[CAR] MQTT START requested at configured car speed\n");
+                }
+            }
+            wifi_telemetry(t);
+            /* A physical start gesture cannot undo remote STOP in this cycle. */
+            if(choice==B1_STOP || start_queued){(void)tk_dly_tsk(SUPERVISOR_PERIOD_MS);continue;}
+        }
+#endif
+#if APP_CAR_MQTT
+        if(remote_start_waiting && controller_get_status(&status)){
+            int progress=b1_car_start_progress(status.mode,status.stop_reasons,started_ms,t);
+            if(progress!=0) remote_start_waiting=false;
+            if(progress<0) stop_run(&running,"MQTT START not applied",STOP_REASON_REMOTE);
+        }
+#endif
         if (!running)
         {
             b2_ui_event_t ui = b2_gesture_update(&gesture, b2_platform_now_us(),
@@ -334,10 +399,15 @@ static void supervise(void)
         }
         else if (controller_get_status(&status) && (status.mode != SYSTEM_MODE_AUTO))
         {
+#if APP_CAR_MQTT
+            if(!remote_start_waiting)
+#endif
+            {
             /* Controller stopped by itself (avoidance failed, fault...). */
             tm_printf((UB*)"[CAR] controller left AUTO: mission=%d stops=0x%lx\n",
                 (int)status.mission, (unsigned long)status.stop_reasons);
             running = false;
+            }
         }
 
         if ((t - last_status) >= STATUS_PERIOD_MS)
@@ -368,6 +438,9 @@ static void supervisor_task(INT code, void *exinf)
         tk_ext_tsk();
     }
     tm_printf((UB*)"[CAR] whole-car build: B2 draft executor, controller, B3 line, B5 obstacle.\n");
+#if APP_CAR_MQTT
+    tm_printf((UB*)"[CAR] Buddy 1 LIVE MQTT enabled: B2/B3/B5 telemetry and controller START/STOP.\n");
+#endif
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
     tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");
     subsystem3_calibrate_barcode();

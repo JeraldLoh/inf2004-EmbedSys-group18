@@ -222,3 +222,30 @@ else()
     target_compile_options(buddy1_diagnostics_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
 endif()
 add_test(NAME buddy1_diagnostics_tests COMMAND buddy1_diagnostics_tests)
+
+# Live Buddy 1 integration: sections merge without stealing producer events.
+add_executable(buddy1_car_tests test_buddy1_car.c
+    ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem1/buddy1_binary.c
+    ../../app_program/subsystem1/buddy1_diagnostics.c
+    ../../app_program/subsystem1/buddy1_protocol.c)
+target_include_directories(buddy1_car_tests PRIVATE buddy1_stubs)
+target_compile_definitions(buddy1_car_tests PRIVATE B1_DEMO=0)
+if(MSVC)
+ target_compile_options(buddy1_car_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+ target_compile_options(buddy1_car_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_car_tests COMMAND buddy1_car_tests)
+
+add_executable(remote_start_tests test_remote_start.c
+    ../../app_program/contracts/hardware_faults.c
+    ../../app_program/vehicle_controller/safety.c
+    ../../app_program/vehicle_controller/vehicle_controller.c
+    ../../app_program/vehicle_controller/controller_service.c)
+if(MSVC)
+ target_compile_options(remote_start_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+ target_compile_options(remote_start_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME remote_start_tests COMMAND remote_start_tests)

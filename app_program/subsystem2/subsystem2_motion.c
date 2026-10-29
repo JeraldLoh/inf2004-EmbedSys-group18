@@ -101,6 +101,8 @@ static void service(void)
         fail(MOTION_RESULT_ABORTED);
     }
 
+    telemetry.sampled_ms = now_ms();
+    telemetry.valid = true;
     telemetry.left_effort = executor.last_left;
     telemetry.right_effort = executor.last_right;
     telemetry.left_mm_s = executor.left_mm_s;
