@@ -14,6 +14,9 @@
 #ifndef CAR_RUN_LIMIT_MS
 #define CAR_RUN_LIMIT_MS 60000U   /* whole run, then stop; override with -D */
 #endif
+#ifndef CAR_LINE_LOST_MS
+#define CAR_LINE_LOST_MS 3000U    /* no black while following, then stop */
+#endif
 
 /* Operator stops a fresh START gesture may clear. Motion, controller and
  * sensor faults are not in this list: they stay latched until reset. */
@@ -114,6 +117,23 @@ static bool line_seen(void)
     line_status_t status = subsystem3_line_status();
     return (status.state != LINE_STATE_REACQUIRE) &&
         ((status.left_black != 0U) || (status.right_black != 0U));
+}
+
+/* True once neither line sensor has seen black for CAR_LINE_LOST_MS while
+ * the controller is following the line. Junction and obstacle moves leave
+ * the line on purpose, so they restart the timer instead. */
+static bool line_lost(uint32_t *last_line_ms, uint32_t now)
+{
+    controller_status_t status;
+
+    if (!controller_get_status(&status) || line_seen() ||
+        ((status.mission != MISSION_TRACK_LINE) &&
+         (status.mission != MISSION_VERIFY_LINE)))
+    {
+        *last_line_ms = now;
+        return false;
+    }
+    return (now - *last_line_ms) >= CAR_LINE_LOST_MS;
 }
 
 static void line_reacquire(bool toward_left)
@@ -250,6 +270,7 @@ static void supervise(void)
     b2_gesture_t gesture = {0};
     controller_status_t status;
     uint32_t started_ms = 0U;
+    uint32_t last_line_ms = 0U;
     uint32_t last_status = now_ms();
     bool running = false;
 
@@ -290,6 +311,7 @@ static void supervise(void)
                 {
                     running = true;
                     started_ms = t;
+                    last_line_ms = t;
                     tm_printf((UB*)"[CAR] RUN: following the line (limit %lu s)\n",
                         (unsigned long)(CAR_RUN_LIMIT_MS / 1000U));
                     if (!subsystem3_barcode_calibrated())
@@ -303,6 +325,12 @@ static void supervise(void)
         else if ((t - started_ms) >= CAR_RUN_LIMIT_MS)
         {
             stop_run(&running, "run time limit", STOP_REASON_NONE);
+        }
+        else if (line_lost(&last_line_ms, t))
+        {
+            /* Without this the curve hold steer turns the car in circles. */
+            stop_run(&running, "line lost (no black for 3 s); GP20 restarts",
+                STOP_REASON_NONE);
         }
         else if (controller_get_status(&status) && (status.mode != SYSTEM_MODE_AUTO))
         {
