@@ -103,24 +103,7 @@ endif
 TEST_SUFFIX := _b2bench
 endif
 
-# Buddy 3 bench: S3_BENCH=1 sensors only (motors held off), S3_BENCH=2
-# line follow on Buddy 2's bench drivers. Same profile rules as B2_BENCH,
-# plus a 1 ms kernel tick for barcode sampling. Cannot combine with B2_BENCH.
-S3_BENCH ?= 0
-ifneq ($(filter $(S3_BENCH),0 1 2),$(S3_BENCH))
-$(error Unknown S3_BENCH '$(S3_BENCH)'; use 0, 1 or 2)
-endif
 B2_DRIVERS := $(B2_BENCH)
-ifneq ($(S3_BENCH),0)
-ifeq ($(B2_BENCH),1)
-$(error Use B2_BENCH=1 or S3_BENCH=$(S3_BENCH), not both)
-endif
-ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
-$(error S3_BENCH requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
-endif
-B2_DRIVERS := 1
-TEST_SUFFIX := _s3bench$(S3_BENCH)
-endif
 
 # Separate opt-in path: Buddy 5 obstacle task + vehicle controller task on
 # B2's motor/STOP foundation (motors stay inhibited; moves are refused).
@@ -131,9 +114,6 @@ endif
 ifeq ($(B5_RUN),1)
 ifeq ($(B2_BENCH),1)
 $(error B5_RUN=1 and B2_BENCH=1 cannot be combined)
-endif
-ifneq ($(S3_BENCH),0)
-$(error B5_RUN=1 and S3_BENCH=$(S3_BENCH) cannot be combined)
 endif
 ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
 $(error B5_RUN=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
@@ -149,8 +129,8 @@ ifneq ($(filter $(CAR_RUN),0 1),$(CAR_RUN))
 $(error Unknown CAR_RUN '$(CAR_RUN)'; use 0 or 1)
 endif
 ifeq ($(CAR_RUN),1)
-ifneq ($(B2_BENCH)$(S3_BENCH)$(B5_RUN),000)
-$(error CAR_RUN=1 cannot be combined with B2_BENCH, S3_BENCH or B5_RUN)
+ifneq ($(B2_BENCH)$(B5_RUN),00)
+$(error CAR_RUN=1 cannot be combined with B2_BENCH or B5_RUN)
 endif
 ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
 $(error CAR_RUN=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
@@ -170,11 +150,6 @@ CRASH_REPORT ?= 0
 ifeq ($(B2_BENCH),1)
 ifneq ($(CRASH_REPORT),0)
 $(error B2_BENCH=1 requires CRASH_REPORT=0 to keep GP0 free)
-endif
-endif
-ifneq ($(S3_BENCH),0)
-ifneq ($(CRASH_REPORT),0)
-$(error S3_BENCH requires CRASH_REPORT=0: GP0 is the right line sensor)
 endif
 endif
 ifeq ($(B5_RUN),1)
@@ -269,17 +244,27 @@ ASFLAGS += -DCNF_SMP=1
 endif
 CFLAGS  += -DAPP_TEST=$(TEST)
 CFLAGS  += -DAPP_B2_BENCH=$(B2_DRIVERS)
-CFLAGS  += -DAPP_S3_BENCH=$(S3_BENCH)
-ifneq ($(S3_BENCH),0)
-CFLAGS  += -DCNF_TIMER_PERIOD=1
-endif
-ifeq ($(S3_BENCH),1)
-CFLAGS  += -DS3_DEBUG_RAW=1
-endif
 CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN)
 ifeq ($(CAR_RUN),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
+# Floor tuning from the 2026-10-29 traces (B2/B3 to review): the right motor
+# ran ~20% slow at equal effort and stalled at ~18% effort, so it gets +30%.
+# Full steer was reached in 140 ms, which swung the car across the tape, so
+# the ramp to full steer now takes ~420 ms.
+CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
+CFLAGS  += -DLINE_STEER_RAMP_MS=6U
+# Slower floor cruise (150 -> 110 mm/s command, effort ~146 L / ~190 R) so
+# the corrections keep up on the curves. At 115 both wheels kept turning;
+# 100 was too slow on the floor.
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
+# Junction-probe and avoidance pivots stalled at 15% and latched a motion
+# fault, and still stalled at 20% on the foam mat; goals now ask for 30%.
+CFLAGS  += -DMOTION_GOAL_MIN_EFFORT=300
+# Curves: steering snapped to 0 (and briefly counter-steered) each time the
+# inner sensor left the tape, so the car straightened and ran off. Hold a
+# gentle steer toward the last-seen side instead, with no counter-steer.
+CFLAGS  += -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 endif
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)
@@ -313,7 +298,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-s3bench$(S3_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

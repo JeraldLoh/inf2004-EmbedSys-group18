@@ -66,6 +66,11 @@ static void test_init_rejects_bad_config(void)
     motion_executor_default_config(&bad);
     bad.goal_min_effort = 400;
     assert(!motion_executor_init(&mx, &bad));
+    motion_executor_default_config(&bad);
+    bad.right_trim_permille = 499U;
+    assert(!motion_executor_init(&mx, &bad));
+    bad.right_trim_permille = 1501U;
+    assert(!motion_executor_init(&mx, &bad));
     assert(!motion_executor_init(NULL, &cfg));
     assert(!motion_executor_init(&mx, NULL));
 }
@@ -87,6 +92,25 @@ static void test_straight_line_request_matches_b3_bench(void)
     out = motion_executor_step(&mx, 5U, 0U, 0U);
     assert(out.active && out.generation == 1U);
     assert(out.left == 199 && out.right == 199); /* 150 * 133 / 100 */
+}
+
+static void test_right_trim_scales_continuous_right_effort(void)
+{
+    motion_continuous_request_t r = line_request(1U, 150, 0, 100U);
+    motion_executor_output_t out;
+    motion_executor_default_config(&cfg);
+    cfg.right_trim_permille = 1200U;
+    assert(motion_executor_init(&mx, &cfg));
+    assert(motion_executor_continuous(&mx, &r, 0U));
+    out = motion_executor_step(&mx, 5U, 0U, 0U);
+    assert(out.left == 199 && out.right == 238); /* 199 * 1.2 */
+
+    /* Full left steer: the right cap scales too (350 * 1.2), so the
+     * trim is not clipped away exactly when the weak wheel matters. */
+    r = line_request(1U, 150, 20000000, 100U);
+    assert(motion_executor_continuous(&mx, &r, 10U));
+    out = motion_executor_step(&mx, 15U, 0U, 0U);
+    assert(out.left == 0 && out.right == 420);
 }
 
 static void test_curvature_steers_and_never_reverses(void)
@@ -371,6 +395,7 @@ int main(void)
     test_init_rejects_bad_config();
     test_idle_outputs_zero();
     test_straight_line_request_matches_b3_bench();
+    test_right_trim_scales_continuous_right_effort();
     test_curvature_steers_and_never_reverses();
     test_speed_cap_applies();
     test_continuous_expires();

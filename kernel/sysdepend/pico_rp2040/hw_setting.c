@@ -33,6 +33,10 @@
 
 #include "sysdepend.h"
 
+/* RP2040 watchdog TICK register: generates the TIMER's 1 us tick. */
+#define WATCHDOG_TICK		(0x40058000 + 0x2C)
+#define WATCHDOG_TICK_ENABLE	(1 << 9)
+
 /* 
  * Setup register data 
  */
@@ -45,6 +49,10 @@ typedef struct {
  * Release peripheral’s reset
  */
 LOCAL const UW module_tbl[] = {
+	/* The 1 us TIMER (TIMERAWL) is read by the GP20 gesture, sonar and IR
+	 * drivers.  Only a BOOTSEL boot left it running from the bootrom; after
+	 * a cold power-up it stayed in reset and read a frozen value. */
+	RESETS_RESET_TIMER,		/* TIMER */
 	RESETS_RESET_IO_BANK0,		/* IO_BANK0 */
 	RESETS_RESET_PADS_BANK0,	/* PADS_BANK0 */
 	RESETS_RESET_UART0,		/* UART0 */
@@ -187,6 +195,9 @@ EXPORT void knl_startup_hw(void)
 
 	/* Startup System Clock */
 	startup_clock(CLKATR_USB | CLKATR_ADC | CLKATR_RTC | CLKATR_PREI);
+
+	/* TIMER tick: clk_ref (XOSC) divided to 1 MHz, as the pico-sdk does. */
+	out_w(WATCHDOG_TICK, WATCHDOG_TICK_ENABLE | XOSC_MHz);
 
 	for(INT i = 0; (rst = module_tbl[i]); i++) {
 		set_w(RESETS_RESET, rst);

@@ -13,7 +13,7 @@ This branch adds a whole-car build, `CAR_RUN=1`. In that build:
 - Buddy 5 stops the car for obstacles and drives around them.
 - The shared controller decides who may move the car at any moment.
 
-Every existing build (default, `B2_BENCH`, `S3_BENCH`, `B5_RUN`) still works as before.
+Every other existing build (default, `B2_BENCH`, `B5_RUN`) still works as before. Buddy 3's `S3_BENCH` images, its bench and its host tests were removed on 2026-10-29.
 
 ## Buddy 2 measured executor addition (2026-10-28)
 
@@ -53,7 +53,6 @@ includes the existing draft executor, line-tracking and Buddy 5 motion tests.
 |---|---|
 | (none) | Starts nothing; prints the scaffold message |
 | `B2_BENCH=1` | Buddy 2 wheel bench: 15% for 250 ms, started by hand |
-| `S3_BENCH=1` / `2` | Buddy 3: sensors only / line follow on the bench drivers |
 | `B5_RUN=1` | Buddy 5 obstacle task plus the controller; motors stay off |
 | `CAR_RUN=1` | **New:** whole car |
 
@@ -66,7 +65,7 @@ includes the existing draft executor, line-tracking and Buddy 5 motion tests.
 | `9a68d5c` | Controller line tracking, plus the check that decides who may move the car | `vehicle_controller/controller_service.*`, `controller_task.*` |
 | `f2a376e` | Buddy 5 moves become Buddy 2 goals; line detection and line search come from Buddy 3 | `subsystem5/b5_motion.*`, `subsystem5.*` |
 | `162f5c9` | `CAR_RUN=1` startup, buttons, run limit, 1 ms tick in this build only; decisions D11–D14; test plan | `vehicle_controller/car_run_target.*`, `app.h`, `app_main.c`, `pico_rp2040.mk`, `docs/`, `testing/integration/` |
-| `5dd0c39` | Makefile: changing `S3_BENCH` now forces a full rebuild | `pico_rp2040.mk` |
+| `5dd0c39` | Makefile: changing `S3_BENCH` now forces a full rebuild (option since removed) | `pico_rp2040.mk` |
 | (this commit) | Measured track width (112 mm) and this file | `motion_executor.h`, `controller_service.c`, docs |
 
 ### 2.1 How the whole car works
@@ -103,9 +102,9 @@ GP20 hold + release = start    GP21 = STOP (Buddy 2 interrupt, at once)    60 s 
 - With the wheels raised, measure power against speed: the `[CAR]` status line prints both wheel speeds in mm/s.
 
 **Buddy 3 (line and barcode).**
-- Review the 1 ms kernel tick, which is used in the whole-car build only (D11), and the makefile fix (`5dd0c39`).
-- Check the steering scale: steer 100 should give an inner wheel of about 0, the same as your bench.
-- Junction routes are not driven yet (D14). We need to agree how the controller runs your junction probe and the barcode turns. Until then, test on a loop with no junctions.
+- Review the 1 ms kernel tick, which is used in the whole-car build only (D11).
+- Check the steering scale: steer 100 should give an inner wheel of about 0, the same as your old line-follow bench.
+- Junctions are now driven in `CAR_RUN` (D14, 2026-10-29): barcode route, or your probe when there is no barcode, then Buddy 2 goals (forward to the junction centre, pivot). Review the flow in `controller_service.h`, then test INT-28 (raised) and INT-29 (floor). Measure the line-sensor-to-axle distance for `approach_mm`.
 
 **Buddy 4 (IMU).**
 - `testing/host/test_lsm303_decode.c` is still missing on `main`, so the per-subsystem CMake test build fails without it.
@@ -123,7 +122,7 @@ GP20 hold + release = start    GP21 = STOP (Buddy 2 interrupt, at once)    60 s 
 
 | Image | Ready? | Notes |
 |---|---|---|
-| default, `B2_BENCH`, `S3_BENCH=1/2`, `B5_RUN` | Yes | Same as `main`; `S3_BENCH=2` is now really the line-follow image |
+| default, `B2_BENCH`, `B5_RUN` | Yes | Same as `main` |
 | `CAR_RUN`, **wheels raised** | Yes | Start/STOP, steering response, obstacle stop/scan/turn, run limit: INT-25 and INT-26 |
 | `CAR_RUN`, **floor** | After Buddy 2's review | INT-27: a slow loop with no junctions, someone on STOP |
 

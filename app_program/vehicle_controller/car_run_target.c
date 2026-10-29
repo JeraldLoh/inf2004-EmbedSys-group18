@@ -60,6 +60,50 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
     return true;
 }
 
+/* Junctions: Buddy 3's events and probe, Buddy 2's goals. */
+static bool junction_take_route(void *context, route_instruction_t *route)
+{
+    (void)context;
+    return subsystem3_take_route(route) != FALSE;
+}
+
+static bool junction_take(void *context, junction_observation_t *junction)
+{
+    (void)context;
+    return subsystem3_take_junction(junction) != FALSE;
+}
+
+static bool junction_probe_requested(void *context)
+{
+    (void)context;
+    return subsystem3_probe_requested() != FALSE;
+}
+
+static bool junction_probe_begin(void *context)
+{
+    (void)context;
+    return subsystem3_probe_begin() == E_OK;
+}
+
+static bool junction_probe_end(void *context)
+{
+    (void)context;
+    return subsystem3_probe_end() == E_OK;
+}
+
+static bool junction_goal(void *context, const motion_goal_request_t *goal)
+{
+    (void)context;
+    return subsystem2_motion_goal(goal);
+}
+
+static bool junction_goal_result(void *context, goal_id_t goal_id,
+    motion_goal_result_t *result)
+{
+    (void)context;
+    return subsystem2_motion_goal_result(goal_id, result);
+}
+
 static bool urgent_stop(void)
 {
     return subsystem2_urgent_stop() == MOTION_OK;
@@ -85,6 +129,9 @@ static ER bring_up(void)
 {
     controller_outputs_t outputs = {NULL, controller_stop, controller_drive,
         controller_read_line};
+    controller_junction_outputs_t junction = {NULL, junction_take_route,
+        junction_take, junction_probe_requested, junction_probe_begin,
+        junction_probe_end, junction_goal, junction_goal_result};
     subsystem5_bindings_t b5 = {0};
     ER er;
 
@@ -111,6 +158,7 @@ static ER bring_up(void)
 
     er = subsystem2_motion_init(&trial_io);
     if (er == E_OK) { er = controller_task_init(&outputs); }
+    if (er == E_OK) { er = controller_task_bind_junction(&junction); }
     if (er == E_OK) { er = subsystem3_init(); }
     if (er == E_OK) { er = subsystem5_bind(&b5); }
     if (er == E_OK) { er = subsystem5_init(); }
@@ -167,12 +215,15 @@ static void print_status(bool running)
         return;
     }
     tm_printf((UB*)"[CAR] run=%d mode=%d mission=%d stops=0x%lx steer=%d | "
-        "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu\n",
+        "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
+        "junc phase=%d seen=%lu done=%lu ign=%lu route=%d\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, (int)t.left_effort, (int)t.right_effort,
         (long)t.left_mm_s, (long)t.right_mm_s, (unsigned long)c.drive_requests,
         (unsigned long)c.drive_rejected, (unsigned long)t.rejected,
-        (unsigned long)t.driver_errors);
+        (unsigned long)t.driver_errors, (int)c.junction_phase,
+        (unsigned long)c.junctions_seen, (unsigned long)c.junctions_done,
+        (unsigned long)c.junctions_ignored, (int)c.last_route);
 }
 
 static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)
@@ -241,6 +292,11 @@ static void supervise(void)
                     started_ms = t;
                     tm_printf((UB*)"[CAR] RUN: following the line (limit %lu s)\n",
                         (unsigned long)(CAR_RUN_LIMIT_MS / 1000U));
+                    if (!subsystem3_barcode_calibrated())
+                    {
+                        tm_printf((UB*)"[CAR] barcode NOT calibrated: barcodes ignored, "
+                            "every junction uses the probe. Reset to recalibrate.\n");
+                    }
                 }
             }
         }
@@ -286,7 +342,8 @@ static void supervisor_task(INT code, void *exinf)
     tm_printf((UB*)"[CAR] whole-car build: B2 draft executor, controller, B3 line, B5 obstacle.\n");
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
     tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");
-    tm_printf((UB*)"[CAR] Junction routes not executed in this build: use a loop without junctions.\n");
+    subsystem3_calibrate_barcode();
+    tm_printf((UB*)"[CAR] Junctions: barcode route, else Buddy 3's probe. Turn geometry is a placeholder.\n");
     supervise();
 }
 

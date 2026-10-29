@@ -42,6 +42,19 @@
 #define MOTION_TRACK_WIDTH_MM 112u
 #endif
 
+/* Open-loop right-wheel trim for continuous moves, per-mille (1000 = none).
+ * CAR_RUN sets it from the 2026-10-29 floor trace: at equal effort 199 the
+ * right wheel ran ~74 mm/s against ~92 mm/s on the left. */
+#ifndef MOTION_RIGHT_TRIM_PERMILLE
+#define MOTION_RIGHT_TRIM_PERMILLE 1000u
+#endif
+
+/* Lowest effort a goal (pivot, short drive) may ask for. CAR_RUN raises it:
+ * on the floor 15% left both wheels stalled in junction and avoidance pivots. */
+#ifndef MOTION_GOAL_MIN_EFFORT
+#define MOTION_GOAL_MIN_EFFORT 150
+#endif
+
 typedef struct
 {
     motion_calibration_t calibration;  /* wheelbase_mm = track width */
@@ -54,6 +67,7 @@ typedef struct
     uint32_t max_speed_mm_s;           /* requests above this are rejected */
     uint32_t default_goal_timeout_ms;  /* when a goal gives 0 */
     uint32_t slow_zone_permille;       /* half speed after this much progress */
+    uint32_t right_trim_permille;      /* continuous right effort scale, 500..1500 */
 } motion_executor_config_t;
 
 typedef enum

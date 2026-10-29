@@ -24,6 +24,10 @@ bool controller_post(const controller_event_t *event);
 
 /* Copy of the latest status; false if not initialised or busy. */
 bool controller_get_status(controller_status_t *status);
+/* Junctions (see controller_service.h): after controller_task_init() with
+ * the line-tracking outputs, before any start. Not with the typed motion
+ * adapter below. */
+ER controller_task_bind_junction(const controller_junction_outputs_t *outputs);
 /* Bind after controller init and before any start. Existing STOP-only users
  * need no change. No hook means motion commands fail closed. */
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,

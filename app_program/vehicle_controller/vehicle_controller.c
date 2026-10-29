@@ -185,6 +185,13 @@ bool vehicle_controller_receive_route(
         return false;
     }
 
+    /* A barcode with no junction after it must not block the next one. */
+    if ((controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
+        (now_ms > controller->route.expires_ms))
+    {
+        controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
+    }
+
     if ((controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) ||
         (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED))
     {

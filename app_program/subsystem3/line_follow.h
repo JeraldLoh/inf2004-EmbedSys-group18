@@ -117,6 +117,13 @@ typedef struct
 #define LINE_DAMP_MS 40U
 #endif
 
+/* Hold: while centred (both white), steer this much toward the side the
+ * tape was last seen. Keeps a curve going instead of snapping straight;
+ * on a straight the car weaves gently between the sensors. 0 = off. */
+#ifndef LINE_HOLD_STEER
+#define LINE_HOLD_STEER 0
+#endif
+
 /* Steering used while searching for a lost line. */
 #ifndef LINE_REACQUIRE_STEER
 #define LINE_REACQUIRE_STEER 60

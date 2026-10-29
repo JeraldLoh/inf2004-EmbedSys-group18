@@ -148,7 +148,7 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
             return clamp_steer(magnitude);
         case LINE_STATE_CENTRED:
             /* Damping after a correction: steer slightly the other way. */
-            if (age < LINE_DAMP_MS)
+            if ((age < LINE_DAMP_MS) && (LINE_DAMP_STEER != 0))
             {
                 if (lf->previous_state == (uint8_t)LINE_STATE_STEER_LEFT)
                 {
@@ -158,6 +158,16 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
                 {
                     return (int8_t)(-LINE_DAMP_STEER);
                 }
+            }
+            /* Hold: keep turning gently toward the side the tape was last
+             * seen, so a continuous curve is not forgotten (0 = off). */
+            if (lf->status.last_side == (uint8_t)LINE_SIDE_LEFT)
+            {
+                return (int8_t)(-LINE_HOLD_STEER);
+            }
+            if (lf->status.last_side == (uint8_t)LINE_SIDE_RIGHT)
+            {
+                return (int8_t)LINE_HOLD_STEER;
             }
             return 0;
         case LINE_STATE_REACQUIRE:

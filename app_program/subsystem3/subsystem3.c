@@ -29,7 +29,12 @@
  * setting). With S3_BARCODE_USE_EDGES = 1 the barcode is timed by GPIO edge
  * interrupts instead and a 10 ms period is enough.
  *
- * app_main.c does not call init/start yet; that is a team integration step.
+ * BARCODE CALIBRATION runs only when asked (subsystem3_calibrate_barcode(),
+ * called by the CAR_RUN startup at its "sweep now" prompt): 3 s of samples
+ * set the black/white thresholds, while line following carries on. Until a
+ * calibration succeeds every sample reads white, so no barcode is decoded.
+ *
+ * Started only by the CAR_RUN startup (vehicle_controller/car_run_target.c).
  */
 #include "subsystem3.h"
 #include "drv_ir.h"
@@ -87,6 +92,11 @@ LOCAL s3_probe_state_t s3_probe = S3_PROBE_IDLE;
 LOCAL BOOL s3_reacquire_request = FALSE;
 LOCAL line_side_t s3_reacquire_hint = LINE_SIDE_NONE;
 
+/* Barcode calibration: requested by startup, run by s3_task alongside line
+ * following. s3_barcode_ready is one word written only by s3_task. */
+LOCAL BOOL s3_calibrate_request = FALSE;
+LOCAL volatile BOOL s3_barcode_ready = FALSE;
+
 #if S3_BARCODE_USE_EDGES
 LOCAL barcode_edges_t s3_edges;
 #endif
@@ -98,24 +108,49 @@ LOCAL void s3_cyclic_handler(void *exinf)
 }
 
 #if !S3_BARCODE_USE_EDGES
-LOCAL void s3_calibrate(barcode_sensor_t *bar)
+/* One sample of the barcode calibration sweep. Starts on a request from
+ * subsystem3_calibrate_barcode() and ends S3_CALIBRATION_MS later; line
+ * following carries on meanwhile. Returns true while calibrating: the sample
+ * is used for calibration, not decoded. */
+LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
+                             bool have_raw, uint16_t raw, uint32_t now_ms)
 {
-    uint32_t start_ms = drv_ir_now_us() / 1000U;
-    uint16_t raw;
+    static bool active = false;
+    static uint32_t start_ms = 0U;
+    BOOL requested;
 
-    tm_printf((UB *)"[S3] Calibrating: sweep barcode sensor over black and white for %d ms\n",
-              (INT)S3_CALIBRATION_MS);
-    barcode_sensor_reset(bar);
-    while ((drv_ir_now_us() / 1000U - start_ms) < S3_CALIBRATION_MS)
+    (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+    requested = s3_calibrate_request;
+    s3_calibrate_request = FALSE;
+    (void)tk_unl_mtx(s3_mtx);
+
+    if (requested)
     {
-        (void)tk_slp_tsk(TMO_FEVR);
-        if (drv_ir_read_barcode(&raw) == E_OK)
-        {
-            barcode_sensor_calibrate_sample(bar, raw);
-        }
+        tm_printf((UB *)"[S3] Calibrating: sweep barcode sensor over black and white for %d ms\n",
+                  (INT)S3_CALIBRATION_MS);
+        barcode_sensor_reset(bar);   /* barcodes ignored until it succeeds */
+        barcode_decoder_reset(decoder);
+        s3_barcode_ready = FALSE;
+        active = true;
+        start_ms = now_ms;
     }
+    if (!active)
+    {
+        return false;
+    }
+    if (have_raw)
+    {
+        barcode_sensor_calibrate_sample(bar, raw);
+    }
+    if ((now_ms - start_ms) < S3_CALIBRATION_MS)
+    {
+        return true;
+    }
+
+    active = false;
     if (barcode_sensor_calibrate_finish(bar))
     {
+        s3_barcode_ready = TRUE;
         tm_printf((UB *)"[S3] Barcode OK: white %d black %d, thresholds %d/%d\n",
                   (INT)bar->white_level, (INT)bar->black_level,
                   (INT)bar->threshold_low, (INT)bar->threshold_high);
@@ -125,6 +160,7 @@ LOCAL void s3_calibrate(barcode_sensor_t *bar)
         tm_printf((UB *)"[S3] Barcode calibration FAILED: white %d black %d (contrast too low)\n",
                   (INT)bar->white_level, (INT)bar->black_level);
     }
+    return true;
 }
 #endif
 
@@ -246,7 +282,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
     line_follow_reset(&line);
     barcode_decoder_reset(&decoder);
 #if !S3_BARCODE_USE_EDGES
-    s3_calibrate(&bar);
+    barcode_sensor_reset(&bar);   /* reads white until calibrated */
 #endif
 
     for (;;)
@@ -309,10 +345,15 @@ LOCAL void s3_task(INT stacd, void *exinf)
         }
         barcode_decoder_feed(&decoder, barcode_black, now_us);
 #else
-        if (drv_ir_read_barcode(&raw) == E_OK)
         {
-            barcode_black = barcode_sensor_is_black(&bar, raw);
-            barcode_decoder_feed(&decoder, barcode_black, now_us);
+            bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
+
+            if (!s3_calibrate_step(&bar, &decoder, have_raw, raw, now_ms) &&
+                have_raw)
+            {
+                barcode_black = barcode_sensor_is_black(&bar, raw);
+                barcode_decoder_feed(&decoder, barcode_black, now_us);
+            }
         }
 #endif
         if (barcode_decoder_take(&decoder, &command, &character))
@@ -505,6 +546,24 @@ EXPORT void subsystem3_reacquire(line_side_t side_hint)
     s3_reacquire_request = TRUE;
     s3_reacquire_hint = side_hint;
     (void)tk_unl_mtx(s3_mtx);
+}
+
+EXPORT void subsystem3_calibrate_barcode(void)
+{
+#if !S3_BARCODE_USE_EDGES
+    (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+    s3_calibrate_request = TRUE;
+    (void)tk_unl_mtx(s3_mtx);
+#endif
+}
+
+EXPORT BOOL subsystem3_barcode_calibrated(void)
+{
+#if S3_BARCODE_USE_EDGES
+    return TRUE;   /* digital D0: thresholded by the sensor itself */
+#else
+    return s3_barcode_ready;
+#endif
 }
 
 #if S3_BARCODE_USE_EDGES

@@ -389,11 +389,33 @@ static void test_failed_avoidance_latches_safe_stop(void)
     assert(controller.mission == MISSION_TRACK_LINE);
 }
 
+static void test_expired_pending_route_is_replaced(void)
+{
+    vehicle_controller_t controller;
+    route_instruction_t route = {0};
+
+    vehicle_controller_init(&controller);
+    (void)vehicle_controller_set_mode(&controller, SYSTEM_MODE_AUTO);
+    route.command = ROUTE_COMMAND_LEFT;
+    route.expires_ms = 1000U;
+    route.valid = true;
+    assert(vehicle_controller_receive_route(&controller, &route, 100U));
+
+    /* No junction came: a later barcode replaces it. */
+    route.command = ROUTE_COMMAND_RIGHT;
+    route.expires_ms = 3000U;
+    assert(!vehicle_controller_receive_route(&controller, &route, 1000U));
+    assert(vehicle_controller_receive_route(&controller, &route, 1001U));
+    assert(controller.route.command == ROUTE_COMMAND_RIGHT);
+    assert(controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
+}
+
 int main(void)
 {
     test_no_command_does_not_stop_normal_tracking();
     test_confirmed_junction_without_command_stops();
     test_valid_route_is_reserved_once();
+    test_expired_pending_route_is_replaced();
     test_stop_invalidates_old_goal_result();
     test_terrain_cap_and_stop_compose();
     test_obstacle_mission_full_bypass();

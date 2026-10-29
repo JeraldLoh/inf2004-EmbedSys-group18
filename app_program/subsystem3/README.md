@@ -7,7 +7,8 @@ This subsystem publishes evidence and never writes motor PWM. Other buddies
 may contribute, but Buddy 3 remains accountable for its contracts, calibration,
 and evidence. Save evidence in `../../testing/subsystem3/`.
 
-Status: DRAFT. Host tests pass; nothing has been run on the car yet.
+Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
+2026-10-29. Nothing has been run on the car yet.
 
 ## Pins (from `project_config/pinmap.h`)
 
@@ -16,7 +17,6 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 | GP0 | Right line sensor, digital D0 (also UART0 TX: use USB console, `CRASH_REPORT=0`) |
 | GP7 | Left line sensor, digital D0 |
 | GP26 / ADC0 | Barcode sensor, analogue A0 |
-| TBD | Optional barcode D0 for edge-interrupt timing (`S3_BARCODE_USE_EDGES`) |
 
 ## Files
 
@@ -27,8 +27,6 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 | `barcode_sensor.c/.h` | Pico + host | ADC to black/white: calibration, hysteresis, adaptation |
 | `barcode_decoder.c/.h` | Pico + host | Full Code 39 (A-Z, 0-9), both directions, validated |
 | `barcode_map.c/.h` | Pico + host | Letter-to-command map, set at run time with `MAP` over MQTT |
-| `line_drive.c/.h` | Pico + host | BENCH ONLY: steering to wheel effort, junction stop / straight rule |
-| `s3_bench.c/.h` | Pico | BENCH ONLY: `S3_BENCH=1` sensors, `S3_BENCH=2` line follow |
 | `barcode_edges.c/.h` | Pico + host | Optional ISR-to-task edge buffer (lock-free) |
 | `subsystem3.c/.h` | Pico | Task, cyclic handler, published interface |
 
@@ -45,42 +43,12 @@ Status: DRAFT. Host tests pass; nothing has been run on the car yet.
 - `line_status.barcode_active` is 1 while a barcode is read: the controller
   should hold a steady speed until it clears.
 - `subsystem3_reacquire()` searches for the line after a bypass.
-
-## Bench builds (physical testing)
-
-Both use Buddy 2's bench platform: GP21 = STOP, GP20 = start gesture, motor
-pins held low by his driver from boot. Same profile as `B2_BENCH`:
-
-```
-make -C build_make -j4 SMP=1 CONSOLE=usb_cdc CRASH_REPORT=0 WIFI=none NET=none \
-  MQTT=0 TEST=0 S3_BENCH=1 PICO_SDK_PATH=/path/to/pico-sdk
-```
-
-| Build | Image | What it does |
-|---|---|---|
-| `S3_BENCH=1` | `mtk3pico_smp1_usb_cdc_s3bench1.uf2` | Sensors only, motors never armed. Prints `[S3 RAW] L= R= steer= adc=` every 100 ms, plus decoded barcodes and junctions. |
-| `S3_BENCH=2` | `mtk3pico_smp1_usb_cdc_s3bench2.uf2` | Line follow. Hold GP20 >= 1 s, release to start. At a junction: stop 1.5 s, then the barcode turn, or STRAIGHT if no barcode. |
-
-Bench-only settings (not shared defaults): 1 ms kernel tick and GP26 analogue
-mode. Normal builds are unchanged (10 ms tick, ADC pin off).
-
-Line-follow safety: GP21 STOP interrupt stops the motors directly; TIMER
-alarm0 is re-armed every 5 ms cycle as a 100 ms hardware watchdog; 20 s run
-limit; effort 0..35% and never negative (no reversal); any driver error ends
-the run. **First runs with the wheels raised.** U-turn barcodes end the run.
-
-Tuning: edit the `#define` defaults at the top of `line_drive.c` and
-`s3_bench.c` (the makefile has no hook for extra `-D` flags):
-`S3_BENCH_BASE_EFFORT` (200), `S3_BENCH_GAIN` (2), `S3_BENCH_MAX_EFFORT` (350),
-`S3_BENCH_JUNCTION_WAIT_MS` (1500), `S3_BENCH_CROSS_MS` (400),
-`S3_BENCH_TURN_MS` (700), `S3_BENCH_RUN_MS` (20000). Sensor polarity:
-`S3_LINE_BLACK_LEVEL` in `drv_ir.h`.
-
-Note: the bench's no-barcode rule is "straight". The normal subsystem 3 rule
-is still the probe ("+" straight, T right); pick one as a team.
-
-`s3_bench.c` drives Buddy 2's motor driver through his bench seams, so it
-needs Buddy 2's review before floor use.
+- Sensor polarity: `S3_LINE_BLACK_LEVEL` in `drv_ir.h`.
+- Barcode calibration runs only when `subsystem3_calibrate_barcode()` is
+  called (the `CAR_RUN` startup does it when it prints "Sweep the barcode
+  sensor now"): sweep the sensor over black and white for 3 s. Line following
+  runs throughout. Until it succeeds barcodes are ignored and every junction
+  uses the probe; `subsystem3_barcode_calibrated()` says which.
 
 ## Demo day: setting the barcode letters over MQTT
 
@@ -114,12 +82,15 @@ if (barcode_map_is_command(m.data, m.length)) {
 
 ## Integration checklist (shared items, need team agreement)
 
-- [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1 (or use `S3_BARCODE_USE_EDGES`)
-- [ ] `device/adc/sysdepend/rp2040/adc_cnf_sysdep.h`: `DEVCONF_ADC_PIN_INIT_0` TRUE
+- [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1 (or use `S3_BARCODE_USE_EDGES`).
+      `CAR_RUN=1` already builds with 1 ms (D11)
+- [x] `device/adc/sysdepend/rp2040/adc_cnf_sysdep.h`: `DEVCONF_ADC_PIN_INIT_0` TRUE
+      in `CAR_RUN` builds only (GP26 analogue mode)
 - [x] `pinmap.h` updated to the agreed map
 - [ ] `app_main.c` calls `subsystem3_init()` / `subsystem3_start()`; priority agreed
-- [ ] Controller: take route before junction each cycle; implement the probe
-      handshake with Buddy 2's pivot; hold speed on `barcode_active`
+- [x] Controller: route and junction handling, probe handshake with Buddy 2's
+      pivot, slow speed on `barcode_active` (`CAR_RUN`, decision D14; not yet
+      run on the car)
 - [ ] Buddy 5: call `subsystem3_reacquire()` at the end of a bypass
 - [ ] Buddy 1: forward `MAP ...` messages to `barcode_map_command()` (snippet above)
 

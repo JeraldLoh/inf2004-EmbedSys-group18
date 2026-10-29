@@ -26,8 +26,6 @@ tools/elf2uf2.exe ../tools/elf2uf2/main.cpp` once, before `make`).
 COMMON="SMP=1 CONSOLE=usb_cdc CRASH_REPORT=0 WIFI=none NET=none MQTT=0 TEST=0 PICO_SDK_PATH=<path to pico-sdk 2.3.1>"
 make -j4 $COMMON              # default: starts nothing
 make -j4 $COMMON B2_BENCH=1   # Buddy 2 wheel bench
-make -j4 $COMMON S3_BENCH=1   # Buddy 3 sensors only
-make -j4 $COMMON S3_BENCH=2   # Buddy 3 line follow (B2 bench drivers)
 make -j4 $COMMON B5_RUN=1     # Buddy 5 obstacle task, motors off
 make -j4 $COMMON CAR_RUN=1    # whole car
 ```
@@ -43,8 +41,6 @@ Flash: hold BOOTSEL, plug in USB, drag the `.uf2` onto the RPI-RP2 drive.
 |---|---|---|---|
 | INT-20 | default | Flash, open console | Prints `inactive architecture scaffold`; nothing moves |
 | INT-21 | B2_BENCH | Follow `../subsystem2/B2_RUNTIME_TEST_GUIDE.md` cases 0-5, raised | Each wheel turns the commanded way; encoder counts rise on that wheel; STOP during a trial stops it |
-| INT-22 | S3_BENCH=1 | Sweep barcode sensor 3 s at boot; move black tape under each IR sensor; pass a barcode | `[S3 RAW]` values change; barcode letter printed; motors never move |
-| INT-23 | S3_BENCH=2 | Raised; hold GP20 1 s, release; move tape under the sensors | Wheels speed up/slow down to steer toward the tape; STOP stops |
 | INT-24 | B5_RUN | Test S5-T01 (`../subsystem5/TEST_LOG.md`): hand under 25 cm | `[B5] obstacle ahead`, servo sweeps, `refused` lines; motors never move; status line every 1 s |
 
 ## 3. Whole car (`CAR_RUN=1`)
@@ -53,8 +49,11 @@ Boot banner: `[CAR] whole-car build ...`. Two status lines every second:
 - `[CAR] run=.. mode=.. mission=.. stops=0x.. steer=.. | effort L R speed L R mm/s | drive rej exec_rej drv_err`
 - `[B5] state=.. servo=.. dist=..cm | ctrl mode=.. mission=.. | move=.. ...`
 
-Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 5 OBSTACLE_STOP,
-6 SCAN, 7 PLAN_BYPASS, 8 BYPASS, 9 RECOVERY, 10 SAFE_STOP.
+Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 2 JUNCTION_APPROACH,
+3 JUNCTION_EXECUTE, 4 VERIFY_LINE, 5 OBSTACLE_STOP, 6 SCAN, 7 PLAN_BYPASS,
+8 BYPASS, 9 RECOVERY, 10 SAFE_STOP. `junc phase`: 0 idle, 1 probe settle,
+2/3 probe pivot out/back, 4 probe result, 5 approach, 6 turn. `route`:
+1 LEFT, 2 RIGHT, 3 STRAIGHT, 4 UTURN.
 
 | ID | Where | Steps | Pass | Record |
 |---|---|---|---|---|
@@ -69,6 +68,11 @@ Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 5 OBSTACLE_STOP,
 | INT-27a | Floor | Slow loop of tape, no junctions; GP20 start | Follows the loop for 60 s or until STOP; stays on the line | Video, laps, off-line count |
 | INT-27b | Floor | Box on the loop | Stops before it (>= 6 cm), scans, goes round, finds the line again, carries on | Video, log, encounter time |
 | INT-27c | Floor | Wide wall across the loop | Gives up safely: latched safe stop (`stops` shows 0x80), no collision | Video, log |
+| INT-28a | Raised | Running; pass a mapped barcode (e.g. `A` = LEFT) under the barcode sensor, then black tape across both line sensors | `route=1`; mission 3; both wheels forward briefly (phase 5), then a left pivot (phase 6); then mission 4 and line following | Log, video |
+| INT-28b | Raised | Running; tape across both line sensors, no barcode | Mission 2; wheels stop (phase 1); small pivot left and back (phases 2, 3); then a route and the approach/turn as in INT-28a | Log, video |
+| INT-28c | Raised | Pass a mapped barcode, wait more than 10 s (route expires), then tape across both line sensors | Latched stop `stops` 0x100 (ROUTE_REQUIRED); a new GP20 start clears it | Log |
+| INT-29a | Floor | `+` junction on the loop, barcode before it | Turns the barcode's way, finds the new line, carries on | Video, log |
+| INT-29b | Floor | `+` and T junctions with no barcode | `+`: straight on; T: right | Video, log |
 
 ## 4. Calibration to do during these tests
 
@@ -78,6 +82,8 @@ Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 5 OBSTACLE_STOP,
 | Effort vs speed | INT-25c: read `speed L/R` at effort 200 | `effort_per_100_mm_s` in `motion_executor_default_config()` |
 | Start effort | Lowest effort that moves both wheels on the floor | `goal_min_effort` |
 | Cruise speed / steering | INT-27a: off-line count at 150 mm/s; adjust if it weaves or cuts corners | `controller_line_default_config()` |
+| Junction approach | Ruler: line sensors to wheel axle (placeholder 50 mm). INT-29a: the car should pivot over the junction centre | `approach_mm` in `controller_junction_default_config()` |
+| Probe angle | INT-29b: a `+` must read CROSS and a T must read T (`[S3] No barcode: junction is ...`) | `probe_mdeg` (10 deg) in `controller_junction_default_config()` |
 
 Record the old and new value, the date and the evidence (log/video) in
 `../../docs/calibration/`.
@@ -86,6 +92,11 @@ Record the old and new value, the date and the evidence (log/video) in
 
 - Buddy 2's executor is a DRAFT (decision D13): open-loop speed, no PID,
   placeholders above. Buddy 2 must review it before floor runs.
-- Junction routes are not driven (D14): use a loop without junctions.
+- Junction geometry (approach distance, probe angle, 90 deg turns) is untested
+  placeholders (D14): test INT-28 raised before INT-29 on the floor.
+- Barcode calibration: sweep the sensor over black and white for 3 s right
+  after `[CAR] Sweep the barcode sensor ... now`; check for `[S3] Barcode OK`.
+  If it says FAILED, barcodes are ignored (every junction uses the probe)
+  until the board is reset.
 - Turn angles use the ruler-measured 112 mm track; not yet pivot-checked (D12).
 - Not run on hardware at all yet.

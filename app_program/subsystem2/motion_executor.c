@@ -30,6 +30,14 @@ static int16_t clamp_effort(int32_t value, int16_t limit)
     return (int16_t)value;
 }
 
+/* Right-wheel cap: max_effort scaled by the trim, never above full power. */
+static int16_t right_limit(const motion_executor_config_t *config)
+{
+    int32_t limit = ((int32_t)config->max_effort *
+        (int32_t)config->right_trim_permille) / 1000;
+    return (int16_t)((limit > MOTION_EFFORT_MAX) ? MOTION_EFFORT_MAX : limit);
+}
+
 static int32_t feedforward(const motion_executor_config_t *config,
     int32_t speed_mm_s)
 {
@@ -56,7 +64,7 @@ void motion_executor_default_config(motion_executor_config_t *config)
         MOTION_RIGHT_BOTH_EDGE_COUNTS_PER_REV;
     /* Matches Buddy 3's line-follow bench: 150 mm/s -> effort 200 (20%). */
     config->effort_per_100_mm_s = 133;
-    config->goal_min_effort = 150;   /* B2 bench: 15% may not start a wheel */
+    config->goal_min_effort = MOTION_GOAL_MIN_EFFORT; /* B2 bench: 15% may not start a wheel */
     config->max_effort = 350;        /* Buddy 3 bench cap (35%) */
     config->straight_gain_per_mm = 8;
     config->straight_max = 60;
@@ -64,6 +72,7 @@ void motion_executor_default_config(motion_executor_config_t *config)
     config->max_speed_mm_s = 250U;
     config->default_goal_timeout_ms = 5000U;
     config->slow_zone_permille = 750U;
+    config->right_trim_permille = MOTION_RIGHT_TRIM_PERMILLE;
 }
 
 bool motion_executor_init(motion_executor_t *executor,
@@ -78,7 +87,9 @@ bool motion_executor_init(motion_executor_t *executor,
         (config->default_goal_speed_mm_s == 0U) ||
         (config->default_goal_speed_mm_s > config->max_speed_mm_s) ||
         (config->default_goal_timeout_ms == 0U) ||
-        (config->slow_zone_permille > 1000U))
+        (config->slow_zone_permille > 1000U) ||
+        (config->right_trim_permille < 500U) ||
+        (config->right_trim_permille > 1500U))
     {
         return false;
     }
@@ -344,11 +355,15 @@ static void continuous_effort(motion_executor_t *executor,
         (int64_t)(executor->config.calibration.wheelbase_mm / 2U)) / 1000000LL;
     *left = (int32_t)(((int64_t)base * (1000LL - k)) / 1000LL);
     *right = (int32_t)(((int64_t)base * (1000LL + k)) / 1000LL);
+    *right = (int32_t)(((int64_t)*right *
+        (int64_t)executor->config.right_trim_permille) / 1000LL);
     /* Never reverse a wheel in continuous mode: clamp toward zero. */
     if (sign_of(*left) != sign_of(base)) { *left = 0; }
     if (sign_of(*right) != sign_of(base)) { *right = 0; }
     if (*left > limit) { *left = limit; }
     if (*left < -limit) { *left = -limit; }
+    /* The weak wheel's cap scales with its trim, or full steer clips it away. */
+    limit = right_limit(&executor->config);
     if (*right > limit) { *right = limit; }
     if (*right < -limit) { *right = -limit; }
 }
@@ -454,7 +469,7 @@ motion_executor_output_t motion_executor_step(motion_executor_t *executor,
     if ((sign_of(right) * sign_of(executor->last_right)) < 0) { right = 0; }
 
     out.left = clamp_effort(left, executor->config.max_effort);
-    out.right = clamp_effort(right, executor->config.max_effort);
+    out.right = clamp_effort(right, right_limit(&executor->config));
     out.generation = executor->generation;
     out.active = executor->mode != MOTION_EXECUTOR_IDLE;
     executor->last_left = out.left;

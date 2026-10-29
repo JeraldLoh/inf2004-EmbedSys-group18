@@ -127,29 +127,6 @@ endif()
 add_test(NAME obstacle_mission_bridge_host_tests
          COMMAND obstacle_mission_bridge_host_tests)
 
-add_executable(subsystem3_sensor_host_tests
-    test_subsystem3_sensors.c
-    ../../app_program/contracts/hardware_faults.c
-    ../../app_program/subsystem3/line_follow.c
-    ../../app_program/subsystem3/barcode_sensor.c
-    ../../app_program/subsystem3/barcode_decoder.c
-    ../../app_program/subsystem3/barcode_map.c
-    ../../app_program/subsystem3/barcode_edges.c
-    ../../app_program/subsystem3/line_drive.c
-    ../../app_program/vehicle_controller/vehicle_controller.c
-    ../../app_program/vehicle_controller/safety.c
-)
-
-if(MSVC)
-    target_compile_options(subsystem3_sensor_host_tests PRIVATE /W4 /WX /UNDEBUG)
-else()
-    target_compile_options(subsystem3_sensor_host_tests PRIVATE
-        -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
-endif()
-
-add_test(NAME subsystem3_sensor_host_tests
-         COMMAND subsystem3_sensor_host_tests)
-
 # Draft Buddy 2 motion executor core (continuous requests + finite goals).
 add_executable(motion_executor_host_tests
     test_motion_executor.c

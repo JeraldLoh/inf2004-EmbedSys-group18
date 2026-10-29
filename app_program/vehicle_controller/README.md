@@ -71,15 +71,24 @@ continuous request (IF-02 -> IF-05) that expires after 150 ms. In any other
 state it sends nothing, so the car stops by itself. Numbers are placeholders
 in `controller_line_default_config()`: cruise 150 mm/s, 100 mm/s while a
 barcode is read, steer 100 -> 17.8 1/m curvature, i.e. inner wheel ~0 with the 112 mm
-track (matches Buddy 3's bench).
+track (matches Buddy 3's former line-follow bench).
 
 `controller_authority()` / `controller_service_authority()` (IF-04 gate):
 Buddy 5 asks it before every obstacle move and stamps the returned authority
 generation on the goal. Only granted in AUTO with motion allowed for that
 source, so obstacle moves are only possible during an obstacle mission.
 
-Not done yet: junction routes (EXECUTE_ROUTE) are recorded, not driven. That
-needs the Buddy 3 junction probe and route goals, agreed with Buddy 3.
+Junctions (`controller_service_bind_junction()`, decision D14): each tick the
+service takes Buddy 3's junction, then its route (Buddy 3 publishes the route
+first, so the junction always finds it). With no barcode it runs Buddy 3's
+probe: settle 250 ms, `probe_begin()`, pivot 10 deg left and back,
+`probe_end()`. EXECUTE_ROUTE becomes Buddy 2 goals: forward `approach_mm`
+(axle over the junction centre), then pivot 90 deg (LEFT/RIGHT) or 180 deg
+(UTURN). The last goal's result resumes line following (VERIFY_LINE).
+Junctions are ignored for 500 ms after a turn. A goal that times out or faults
+latches MOTION_FAULT; one that cannot run latches ROUTE_REQUIRED. Numbers in
+`controller_junction_default_config()` are placeholders. Route times are
+restamped on the controller's clock (Buddy 3 uses its own).
 
 ## Whole-car startup (`car_run_target.c/.h`, `CAR_RUN=1`)
 

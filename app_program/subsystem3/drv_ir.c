@@ -38,12 +38,12 @@ EXPORT ER drv_ir_init(void)
          * buttons), so it is not set up here. */
     }
 
-    /* "adc" is the device name registered by device/adc (DEVCNF_ADC_DEVNAME).
-     * NOTE: set DEVCONF_ADC_PIN_INIT_0 to TRUE in
-     * device/adc/sysdepend/rp2040/adc_cnf_sysdep.h so the driver switches
-     * GP26 to analogue mode (digital input and pulls off). That is a shared
-     * file, so agree it with the team first. */
-    adc_dd = tk_opn_dev((UB *)"adc", TD_READ);
+    /* "adca" is unit 0 as registered by device/adc: DEVCNF_ADC_DEVNAME ("adc")
+     * plus 'a' + unit. Opening plain "adc" returns E_NOEXS.
+     * GP26 is switched to analogue mode (digital input and pulls off) by
+     * the driver at boot: DEVCONF_ADC_PIN_INIT_0 in
+     * device/adc/sysdepend/rp2040/adc_cnf_sysdep.h, TRUE in CAR_RUN only. */
+    adc_dd = tk_opn_dev((UB *)"adca", TD_READ);
     return (adc_dd < E_OK) ? adc_dd : E_OK;
 }
 

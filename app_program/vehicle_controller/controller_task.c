@@ -172,6 +172,11 @@ ER controller_task_init(const controller_outputs_t *outputs)
     task = id; initialized = true;
     return E_OK;
 }
+ER controller_task_bind_junction(const controller_junction_outputs_t *outputs)
+{
+    if (!initialized || started || motion.bound) { return E_OBJ; }
+    return controller_service_bind_junction(&service, outputs) ? E_OK : E_PAR;
+}
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     uint32_t session, uint32_t caution, uint32_t cruise)
 {

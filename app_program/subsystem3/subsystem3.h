@@ -35,6 +35,12 @@ IMPORT ER subsystem3_probe_end(void);
  * seen. Done when subsystem3_line_status().state is no longer REACQUIRE. */
 IMPORT void subsystem3_reacquire(line_side_t side_hint);
 
+/* Barcode calibration: after this call, sweep the barcode sensor over black
+ * and white for 3 s. Line following carries on meanwhile. Barcodes are
+ * ignored until a calibration succeeds; call again to recalibrate. */
+IMPORT void subsystem3_calibrate_barcode(void);
+IMPORT BOOL subsystem3_barcode_calibrated(void);
+
 /* Only with S3_BARCODE_USE_EDGES = 1: call from the shared GPIO interrupt
  * dispatcher on each edge of the barcode D0 pin. */
 IMPORT void subsystem3_barcode_edge_isr(void);

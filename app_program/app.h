@@ -10,9 +10,6 @@
 #ifndef APP_TEST
 #define APP_TEST 0
 #endif
-#ifndef APP_S3_BENCH
-#define APP_S3_BENCH 0   /* 1 = S3 sensors-only bench, 2 = S3 line-follow bench */
-#endif
 #ifndef APP_B5_RUN
 #define APP_B5_RUN 0     /* 1 = Buddy 5 obstacle task + controller, motors off */
 #endif
@@ -34,7 +31,6 @@ IMPORT ER subsystem5_start(void);
 #if APP_TEST
 IMPORT void subsystem1_test(void);
 IMPORT void subsystem2_test(void);
-IMPORT void subsystem3_test(void);
 IMPORT void subsystem4_test(void);
 IMPORT void subsystem5_test(void);
 #endif
