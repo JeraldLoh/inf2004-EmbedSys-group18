@@ -119,19 +119,6 @@ static bool detach_encoders(void *context)
 bool b2_platform_stop_pressed(void) { return gpio_get_val(PIN_BUTTON_STOP) == 0U; }
 bool b2_platform_start_pressed(void) { return gpio_get_val(PIN_BUTTON_START) == 0U; }
 
-static void (*aux_stop)(void *);
-static void *aux_context;
-
-bool b2_platform_bind_aux_stop(void (*callback)(void *), void *context)
-{
-    uintptr_t key;
-    if (!initialized || callback == NULL || !registration_allowed(NULL)) { return false; }
-    key = enter(NULL);
-    if (aux_stop != NULL) { leave(NULL, key); return false; }
-    aux_context = context; aux_stop = callback;
-    leave(NULL, key); return true;
-}
-
 static void confirmed_stop(stop_reason_mask_t reasons, bool cutoff)
 {
     uint32_t confirmed = b2_platform_now_us();
@@ -141,7 +128,6 @@ static void confirmed_stop(stop_reason_mask_t reasons, bool cutoff)
     evidence.cutoff_fired |= cutoff;
     evidence.confirmed_us = confirmed;
     if (evidence.stop_events != UINT32_MAX) { ++evidence.stop_events; }
-    if (aux_stop != NULL) { aux_stop(aux_context); }
     leave(NULL, key);
     stopped = subsystem2_urgent_stop();
     key = enter(NULL);
@@ -371,6 +357,4 @@ void b2_platform_peek_events(b2_platform_events_t *events)
 { if (events != NULL) { *events = (b2_platform_events_t){0}; } }
 bool b2_platform_ack_events(uint32_t id) { (void)id; return false; }
 bool b2_platform_executor_io(measured_motion_executor_io_t *io) { (void)io; return false; }
-bool b2_platform_bind_aux_stop(void (*callback)(void *), void *context)
-{ (void)callback; (void)context; return false; }
 #endif

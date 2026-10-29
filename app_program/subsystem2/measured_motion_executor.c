@@ -48,19 +48,6 @@ static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
     unsigned i;
     motion_status_t result = inhibit ? drv_motor_stop(e->motor) :
         drv_motor_apply(e->motor, e->status.generation, 0, 0);
-    if (!inhibit && result == MOTION_INHIBITED && e->status.authorized)
-    {
-        motion_motor_state_t state;
-        /* Admission intentionally has not armed hardware yet. A controller
-         * can pause that work while outputs are already inhibited at zero.
-         * Never clear inhibit here; a new ISR STOP changes the permit ticket
-         * and is still checked by driver_ready before any future commit. */
-        if (drv_motor_read(e->motor, &state) == MOTION_OK && state.ready &&
-            state.inhibited && !state.armed && !state.io_fault && !state.sequence_exhausted &&
-            state.stop_sequence == e->permit_ticket && state.left_effort == 0 &&
-            state.right_effort == 0 && !e->io.stop_pending(e->io.context))
-        { result = MOTION_OK; }
-    }
     if (result != MOTION_OK)
     { (void)drv_motor_stop(e->motor); e->status.authorized = false; }
     e->io.cancel_watchdog(e->io.context);
@@ -73,7 +60,7 @@ static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
     return result;
 }
 
-static void finish_as(measured_motion_executor_t *e, motion_result_code_t code, bool inhibit)
+static void finish(measured_motion_executor_t *e, motion_result_code_t code)
 {
     bool reporting = e->status.state == MOTION_EXEC_GOAL;
     if (reporting)
@@ -99,24 +86,15 @@ static void finish_as(measured_motion_executor_t *e, motion_result_code_t code, 
         e->status.terminal_pending = true;
     }
     {
-        motion_status_t stopped = stop_output(e, inhibit);
+        motion_status_t stopped = stop_output(e, code != MOTION_RESULT_COMPLETED);
         if (code == MOTION_RESULT_COMPLETED && stopped != MOTION_OK)
         { code = stopped == MOTION_INHIBITED ? MOTION_RESULT_CANCELLED : MOTION_RESULT_FAULT; }
         if (reporting) { e->terminal.code = code; }
     }
     e->status.last_stop = code;
-    if (inhibit) { e->status.authorized = false; e->calibration_authorized = false; }
+    if (code != MOTION_RESULT_COMPLETED) { e->status.authorized = false; }
     e->status.state = e->status.authorized ? MOTION_EXEC_IDLE : MOTION_EXEC_DISABLED;
     e->transition = false; e->settling = false;
-}
-
-static void finish(measured_motion_executor_t *e, motion_result_code_t code)
-{ finish_as(e, code, code != MOTION_RESULT_COMPLETED); }
-
-void measured_motion_executor_pause(measured_motion_executor_t *e)
-{
-    if (e != NULL && e->motor != NULL)
-    { finish_as(e, MOTION_RESULT_CANCELLED, false); }
 }
 
 void measured_motion_executor_cancel(measured_motion_executor_t *e, motion_result_code_t code)
@@ -124,11 +102,11 @@ void measured_motion_executor_cancel(measured_motion_executor_t *e, motion_resul
     if (e != NULL && e->motor != NULL) { finish(e, code); }
 }
 
-static motion_status_t authorize(measured_motion_executor_t *e, uint32_t generation, bool calibration)
+motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *e, uint32_t generation)
 {
     motion_motor_state_t state;
     if ((e == NULL) || (e->motor == NULL)) { return MOTION_INVALID; }
-    if (!e->config.qualified && !calibration) { return MOTION_UNAVAILABLE; }
+    if (!e->config.qualified) { return MOTION_UNAVAILABLE; }
     if (e->status.terminal_pending || e->status.state == MOTION_EXEC_GOAL ||
         e->status.state == MOTION_EXEC_CONTINUOUS) { return MOTION_STATE; }
     if (!newer(generation, e->status.generation) || e->io.stop_pending(e->io.context))
@@ -139,35 +117,8 @@ static motion_status_t authorize(measured_motion_executor_t *e, uint32_t generat
     e->status.generation = generation;
     e->status.authorized = true; e->status.state = MOTION_EXEC_IDLE;
     e->last_command_id = 0U; e->last_goal_id = 0U;
-    e->calibration_authorized = false;
     return MOTION_OK; /* No arm, PWM or motion at authorization. */
 }
-
-motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *e, uint32_t generation)
-{ return authorize(e,generation,false); }
-
-#if defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST
-motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *e,
-    uint32_t generation, uint32_t now, uint32_t limit)
-{
-    motion_status_t result;
-    unsigned i;
-    if (e == NULL || e->motor == NULL || limit == 0U || limit > 20000000U ||
-        e->config.max_speed_mm_s > 120U || e->config.max_goal_mm > 1000U ||
-        e->config.watchdog_us > 100000U || e->config.period_us > 20000U)
-    { return MOTION_INVALID; }
-    for (i=0U;i<2U;++i)
-    {
-        if (e->config.pid[i].max_effort > 300U ||
-            (e->config.pid[i].kp_milli==0U && e->config.pid[i].ki_milli==0U &&
-             e->config.pid[i].feedforward_milli==0U)) { return MOTION_INVALID; }
-    }
-    result=authorize(e,generation,true);
-    if (result==MOTION_OK)
-    { e->calibration_authorized=true; e->calibration_until_us=now+limit; }
-    return result;
-}
-#endif
 
 motion_status_t measured_motion_executor_continuous(measured_motion_executor_t *e,
     const motion_continuous_request_t *r, uint32_t now, uint32_t ttl)
@@ -264,8 +215,6 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     { finish(e, MOTION_RESULT_ABORTED); return MOTION_UNAVAILABLE; }
     e->last_step_us = now; e->primed = true;
     e->status.wheels = e->measurement.sample;
-    if (e->status.authorized && e->calibration_authorized && reached(now,e->calibration_until_us))
-    { finish(e,MOTION_RESULT_TIMEOUT); return MOTION_OK; }
     if (e->status.state != MOTION_EXEC_CONTINUOUS && e->status.state != MOTION_EXEC_GOAL)
     {
         motion_motor_state_t idle;

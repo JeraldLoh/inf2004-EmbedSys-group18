@@ -39,7 +39,7 @@ void b5_motion_default_config(b5_motion_config_t *config)
     }
     /* Placeholders until measured on the car. */
     config->goal_speed_mm_s = 100U;
-    config->goal_timeout_ms = 0U; /* Measured B2 derives a finite path-dependent bound. */
+    config->goal_timeout_ms = 4000U;
     config->wait_ms = 300U;
     config->search_speed_mm_s = 80;
     config->search_curvature_u1_m = 3000000;   /* ~33 cm radius */

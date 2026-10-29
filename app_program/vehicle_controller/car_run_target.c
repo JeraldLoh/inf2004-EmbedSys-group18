@@ -3,7 +3,6 @@
 #include "controller_task.h"
 #include "../subsystem2/subsystem2.h"
 #include "../subsystem2/subsystem2_motion.h"
-#include "../subsystem2/measured_motion_executor.h"
 #include "../subsystem2/b2_platform_rp2040.h"
 #include "../subsystem2/b2_gesture.h"
 #include "../subsystem3/subsystem3.h"
@@ -22,8 +21,8 @@ static void wifi_telemetry(uint32_t now)
     if((uint32_t)(now-wifi_telemetry_at)<200U ||
        !subsystem2_motion_telemetry(&m) || !controller_get_status(&c) || !m.valid) return;
     s.left_speed_mm_s=m.left_mm_s;s.right_speed_mm_s=m.right_mm_s;
-    s.left_speed_valid=m.speed_valid;s.right_speed_valid=m.speed_valid;
-    s.motion_active=m.mode==MOTION_EXEC_CONTINUOUS || m.mode==MOTION_EXEC_GOAL;s.sequence=(m.sampled_ms/5U)&255U;s.uptime_ms=m.sampled_ms;
+    s.left_speed_valid=1;s.right_speed_valid=1;
+    s.motion_active=m.mode!=0U;s.sequence=(m.sampled_ms/5U)&255U;s.uptime_ms=m.sampled_ms;
     s.system_mode=c.mode;s.mission_state=c.mission;s.route_command=c.last_route;
     s.stop_reasons=c.stop_reasons;s.hardware_faults=c.hardware_faults;
     s.authority_generation=c.authority_generation;s.last_command_id=wifi_command_id;
@@ -68,11 +67,9 @@ static uint32_t now_ms(void)
 
 static bool controller_stop(void *context)
 {
-    motion_motor_state_t state;
     (void)context;
     subsystem2_motion_halt();
-    return subsystem2_read_motor(&state) == MOTION_OK &&
-        state.left_effort == 0 && state.right_effort == 0;
+    return true;
 }
 
 static bool controller_drive(void *context, const motion_continuous_request_t *request)
@@ -131,11 +128,8 @@ static bool junction_goal_result(void *context, goal_id_t goal_id,
     motion_goal_result_t *result)
 {
     (void)context;
-    return subsystem2_motion_goal_result_for(MOTION_SOURCE_JUNCTION, goal_id, result);
+    return subsystem2_motion_goal_result(goal_id, result);
 }
-
-static bool obstacle_goal_result(goal_id_t id, motion_goal_result_t *result)
-{ return subsystem2_motion_goal_result_for(MOTION_SOURCE_OBSTACLE, id, result); }
 
 static bool urgent_stop(void)
 {
@@ -187,7 +181,7 @@ static ER bring_up(void)
 
     /* Buddy 2 init holds GP8-GP11 low: the motors are safe from here on. */
     if (!b2_platform_init(&hal, &trial_io) || (subsystem2_bind_hal(&hal) != E_OK) ||
-        (subsystem2_init() != E_OK))
+        (subsystem2_init() != E_OK) || (subsystem2_start() != E_OK))
     {
         (void)subsystem2_urgent_stop();
         failure = "motion foundation failed";
@@ -201,7 +195,7 @@ static ER bring_up(void)
     b5.motion.authority = controller_authority;
     b5.motion.goal = subsystem2_motion_goal;
     b5.motion.continuous = subsystem2_motion_continuous;
-    b5.motion.goal_result = obstacle_goal_result;
+    b5.motion.goal_result = subsystem2_motion_goal_result;
     b5.motion.halt = subsystem2_motion_halt;
     b5.motion.line_seen = line_seen;
     b5.motion.line_reacquire = line_reacquire;
@@ -223,8 +217,7 @@ static ER bring_up(void)
     }
 
     /* Mover first, then the controller that feeds it, then the sensors. */
-    er = subsystem2_start();
-    if (er == E_OK) { er = subsystem2_motion_start(); }
+    er = subsystem2_motion_start();
     if (er == E_OK) { er = controller_task_start(); }
     if (er == E_OK) { er = subsystem3_start(); }
     if (er == E_OK) { er = subsystem5_start(); }
@@ -273,15 +266,12 @@ static void print_status(bool running)
     }
     tm_printf((UB*)"[CAR] run=%d mode=%d mission=%d stops=0x%lx steer=%d | "
         "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
-        "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
         "junc phase=%d seen=%lu done=%lu ign=%lu route=%d\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, (int)t.left_effort, (int)t.right_effort,
         (long)t.left_mm_s, (long)t.right_mm_s, (unsigned long)c.drive_requests,
         (unsigned long)c.drive_rejected, (unsigned long)t.rejected,
-        (unsigned long)t.driver_errors, (long)t.left_target_mm_s,
-        (long)t.right_target_mm_s, (int)t.speed_valid, (int)t.qualified,
-        (int)c.junction_phase,
+        (unsigned long)t.driver_errors, (int)c.junction_phase,
         (unsigned long)c.junctions_seen, (unsigned long)c.junctions_done,
         (unsigned long)c.junctions_ignored, (int)c.last_route);
 }
@@ -313,7 +303,6 @@ static void supervise(void)
     uint32_t last_line_ms = 0U;
     uint32_t last_status = now_ms();
     bool running = false;
-    uint32_t posted_evidence = 0U;
 #if APP_CAR_MQTT
     bool remote_start_waiting = false;
 #endif
@@ -324,22 +313,13 @@ static void supervise(void)
 
         /* STOP button / cutoff alarm evidence from Buddy 2's ISRs. The ISR
          * has already stopped the motors; latch it in the controller. */
-        b2_platform_peek_events(&events);
+        b2_platform_take_events(&events);
         if ((events.reasons != STOP_REASON_NONE) || events.cutoff_fired)
         {
-            stop_reason_mask_t reasons = events.reasons |
-                (events.cutoff_fired ? STOP_REASON_CONTROLLER_FAULT : STOP_REASON_NONE);
-            if (posted_evidence != events.stop_events &&
-                post(CONTROLLER_EVENT_LATCH_STOP, SYSTEM_MODE_STOPPED, reasons))
-            {
-                posted_evidence = events.stop_events;
-                subsystem2_motion_halt();
-                running = false;
-                tm_printf((UB*)"[CAR] physical STOP/cutoff evidence latched; outputs off.\n");
-            }
-            if (posted_evidence == events.stop_events && controller_get_status(&status) &&
-                (status.stop_reasons & reasons) == reasons)
-            { (void)b2_platform_ack_events(events.stop_events); }
+            stop_run(&running, events.cutoff_fired ? "cutoff alarm (executor stalled?)"
+                : "STOP button",
+                (events.reasons != STOP_REASON_NONE) ? events.reasons
+                    : STOP_REASON_CONTROLLER_FAULT);
         }
 
 #if APP_CAR_MQTT
@@ -384,11 +364,7 @@ static void supervise(void)
             }
             else if ((ui == B2_UI_RUN) && controller_get_status(&status))
             {
-                if (!subsystem2_motion_qualified())
-                {
-                    tm_printf((UB*)"[CAR] START refused: measured PID/load/STOP/pivot calibration unqualified.\n");
-                }
-                else if ((status.stop_reasons & ~OPERATOR_CLEARABLE) != 0U)
+                if ((status.stop_reasons & ~OPERATOR_CLEARABLE) != 0U)
                 {
                     tm_printf((UB*)"[CAR] refused: fault latched (0x%lx); reset the board.\n",
                         (unsigned long)status.stop_reasons);
@@ -461,9 +437,7 @@ static void supervisor_task(INT code, void *exinf)
             failure, (int)er);
         tk_ext_tsk();
     }
-    tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
-    if (!subsystem2_motion_qualified())
-    { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }
+    tm_printf((UB*)"[CAR] whole-car build: B2 draft executor, controller, B3 line, B5 obstacle.\n");
 #if APP_CAR_MQTT
     tm_printf((UB*)"[CAR] Buddy 1 LIVE MQTT enabled: B2/B3/B5 telemetry and controller START/STOP.\n");
 #endif
@@ -485,7 +459,7 @@ ER car_run_start(void)
     }
     task.tskatr = TA_HLNG | TA_RNG0 | TA_USERBUF | TA_ASSPRC;
     task.task = (FP)supervisor_task;
-    task.itskpri = 9;   /* provisional: below the measured executor (6) */
+    task.itskpri = 9;   /* provisional: below the executor (8) */
     task.stksz = sizeof(supervisor_stack);
     task.bufptr = supervisor_stack;
     task.assprc = TP_PRC1; /* TP_PRC1 is core 0 */

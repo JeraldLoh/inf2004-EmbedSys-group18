@@ -8,8 +8,7 @@
 drv_motor_t *subsystem2_bench_motor(void);
 drv_encoder_t *subsystem2_bench_encoder(void);
 #endif
-/* CAR_RUN measured motor task only. Startup access before foundation start;
- * never use these from a controller or perception task to apply PWM. */
+/* DRAFT (Buddy 2 review): CAR_RUN only, for subsystem2_motion.c alone. */
 #if APP_CAR_RUN
 drv_motor_t *subsystem2_executor_motor(void);
 drv_encoder_t *subsystem2_executor_encoder(void);

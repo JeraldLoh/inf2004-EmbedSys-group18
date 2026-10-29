@@ -90,32 +90,48 @@ requests 15% effort for 250 ms, never automatically at boot.
 builds pass. Hardware execution/timing remain pending. See
 `../../testing/subsystem2/B2_RUNTIME_TEST_GUIDE.md` before any later test.
 
-## CAR_RUN measured wheel controller (29 October 2026)
+## DRAFT motion executor (`CAR_RUN=1` only) - for Buddy 2's review
 
-CAR_RUN now uses the measured executor. The former open-loop draft remains in
-motion_executor.* for reference/regression only; it is not the CAR_RUN mover.
+Written by Buddy 5 as integration lead so the whole car can be tested
+(decision D13). Buddy 2 owns it: review, change or replace it before it is
+relied on. Nothing here changes the B2-01 drivers, the bench or the default
+build.
 
-| File | Purpose |
-|---|---|
-| car_motion.c/.h | Legacy steering units/sign conversion, external goal ID namespaces and retained results |
-| measured_motion_executor.c/.h | Wheel PID, continuous leases, bounded distance/pivot goals and STOP checks |
-| subsystem2_motion.c/.h | Core-0 task, priority 6, nominal 20 ms, static 4096-byte stack and 100 ms watchdog |
-| subsystem2.c / subsystem2_internal.h | Private CAR_RUN driver access during init, before foundation start |
+| File | Runs on | Purpose |
+|---|---|---|
+| `motion_executor.c/.h` | both | Portable core: continuous requests and finite goals -> wheel effort (host-tested) |
+| `subsystem2_motion.c/.h` | Pico | Task (core 0, priority 8, 5 ms): the only `drv_motor_apply()` caller |
+| `subsystem2.c` / `subsystem2_internal.h` | Pico | `subsystem2_executor_motor/encoder()` accessors, `APP_CAR_RUN` only |
 
-IF-05 remains subsystem2_motion_continuous() and subsystem2_motion_goal().
-IF-06 now uses subsystem2_motion_goal_result_for(source, id, result), so a
-junction and an obstacle goal with the same numeric ID cannot consume each
-other's result. A controller halt pauses at zero and blocks old LINE work;
-physical/urgent STOP stays sticky and requires a new controller generation.
-The existing junction state machine still sequences approach then pivot.
+Interfaces (types from `contracts/control_messages.h`):
+- IF-05 in: `subsystem2_motion_continuous()` (line tracking, search arcs)
+  and `subsystem2_motion_goal()` (forward/reverse mm, pivot mdeg).
+- IF-06 out: `subsystem2_motion_goal_result()`: PROGRESS, then COMPLETED,
+  CANCELLED, TIMEOUT, ABORTED or FAULT.
+- `subsystem2_motion_halt()`: zero output at once (wakes the task).
+  `subsystem2_urgent_stop()` is unchanged and still latches the inhibit.
 
-car_motion_candidate_config() deliberately has zero gains and qualified=false.
-CAR_RUN boots for diagnosis but refuses START until measured control/load/STOP/
-pivot qualification is supplied. Passing host fixtures does not qualify it.
-Encoder candidates remain 65 mm diameter, 1271/1264 B-channel both-edge counts
-per revolution; 112 mm is ruler track width, not effective pivot calibration.
+Safety rules it keeps:
+- Arms like `b2_trial_begin()`: refused while STOP is held or pending, fresh
+  authority generation, clear inhibit, arm.
+- Keeps the hardware cutoff alarm armed (100 ms) while driving: a stalled
+  task stops the motors by itself.
+- Commands with an older authority generation are rejected. After a driver
+  refusal or STOP, the same generation is rejected too (IF-07: fresh
+  authority before resuming).
+- A wheel changing direction gets one zero period first.
+- Continuous requests expire (150 ms from the controller) and never reverse a
+  wheel. Goals end on encoder counts or their timeout.
 
-See ../../testing/integration/CAR_RUN_MEASURED_PID.md for the runtime path,
-qualification boundary, startup/STOP handling, test coverage and remaining
-hardware checks. No flashing or powered motor test was performed for this
-integration.
+Placeholders that need measuring (all in `motion_executor_default_config()`):
+
+| Value | Now | How to measure |
+|---|---|---|
+| Track width | 112 mm, measured 2026-10-28 (`MOTION_TRACK_WIDTH_MM`) | Done with a ruler; still check with a 360 deg pivot on the floor |
+| Effort per 100 mm/s | 133 (150 mm/s -> 200) | Raised wheels: read `speed L/R` on the `[CAR]` line at known efforts |
+| Goal minimum effort | 150 | Lowest effort that starts both wheels on the floor |
+| Max effort | 350 | Buddy 3's bench cap |
+| Wheel diameter / counts | 65 mm, 1271/1264 | Already in `motion_calibration.h` |
+
+Open-loop speed: there is no PID yet. Speed varies with battery and load.
+Host tests: `testing/host/test_motion_executor.c`.

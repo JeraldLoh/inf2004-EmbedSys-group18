@@ -42,7 +42,7 @@ add_executable(perception_math_host_tests
     test_perception_math.c
     ../../app_program/subsystem3/barcode_decoder.c
     ../../app_program/subsystem3/barcode_map.c
-    ../../app_program/subsystem4/imu_math.c
+    ../../app_program/subsystem4/lsm303_decode.c
 )
 
 if(MSVC)

@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #include "../../app_program/subsystem3/barcode_decoder.h"
-#include "../../app_program/subsystem4/imu_math.h"
+#include "../../app_program/subsystem4/lsm303_decode.h"
 
 static void feed_code39_a(barcode_decoder_t *decoder)
 {
@@ -57,15 +57,13 @@ static void test_lsm303_signed_decode(void)
 {
     /* +1000 mg, -1000 mg, 0 mg after the sensor's 4-bit right shift. */
     const uint8_t raw[6] = {0x80U, 0x3EU, 0x80U, 0xC1U, 0x00U, 0x00U};
-    int16_t sample[3];
-    bool saturated = true;
+    lsm303_acceleration_t sample;
 
-    assert(imu_decode_accel_mg(raw, IMU_ACCEL_FS_2G, sample, &saturated));
-    assert(sample[0] == 1000);
-    assert(sample[1] == -1000);
-    assert(sample[2] == 0);
-    assert(!saturated);
-    assert(!imu_decode_accel_mg(NULL, IMU_ACCEL_FS_2G, sample, &saturated));
+    assert(lsm303_decode_acceleration(raw, &sample));
+    assert(sample.x_mg == 1000);
+    assert(sample.y_mg == -1000);
+    assert(sample.z_mg == 0);
+    assert(!lsm303_decode_acceleration(NULL, &sample));
 }
 
 int main(void)

@@ -66,8 +66,6 @@ typedef struct
     uint32_t last_step_us, transition_until_us, started_us;
     uint32_t admission_until_us, continuous_until_us, goal_until_us, settled_since_us;
     bool primed, transition, goal_started, settling;
-    bool calibration_authorized;
-    uint32_t calibration_until_us;
 } measured_motion_executor_t;
 
 /* No tuned default. Caller supplies measured calibration/control configuration. */
@@ -75,13 +73,6 @@ bool measured_motion_executor_init(measured_motion_executor_t *executor, drv_mot
     drv_encoder_t *encoder, const measured_motion_executor_config_t *config,
     const measured_motion_executor_io_t *io);
 motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *executor, uint32_t generation);
-#if defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST
-/* Dedicated movement-test build ONLY. Explicit bounded calibration authority,
- * not production qualification. Hard limits: <=120mm/s, <=30% effort,
- * <=1m goals, watchdog <=100ms and total run <=20s. No config flags changed. */
-motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *executor,
-    uint32_t generation, uint32_t now_us, uint32_t max_run_us);
-#endif
 /* Continuous speed is nonnegative; reverse is a finite explicit goal. Curvature
  * is signed whole reciprocal metres: positive turns right. Zero cap=no extra
  * cap. Controller supplies TTL in the raw-us domain after validating its ms
@@ -92,10 +83,6 @@ motion_status_t measured_motion_executor_goal(measured_motion_executor_t *execut
     const motion_goal_request_t *request, uint32_t now_us, uint32_t admission_ttl_us);
 motion_status_t measured_motion_executor_step(measured_motion_executor_t *executor);
 void measured_motion_executor_cancel(measured_motion_executor_t *executor, motion_result_code_t code);
-/* Serialized controller manoeuvre pause: zero outputs, cancel any goal, keep
- * current authority only if zero output succeeds. Not an urgent/global STOP;
- * the caller must reject in-flight continuous work before using this API. */
-void measured_motion_executor_pause(measured_motion_executor_t *executor);
 bool measured_motion_executor_result(const measured_motion_executor_t *executor, motion_goal_result_t *result);
 bool measured_motion_executor_ack(measured_motion_executor_t *executor, goal_id_t id, authority_generation_t generation);
 #endif

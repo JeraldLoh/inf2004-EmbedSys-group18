@@ -26,10 +26,9 @@ void controller_line_default_config(controller_line_config_t *config)
     {
         return;
     }
-    /* Retain the team's steering proposal: full steer approaches 2/track
-     * (17.8 1/m for 112 mm). CAR_RUN's measured adapter explicitly converts
-     * this legacy micro-1/m, positive-left value to the measured units/sign.
-     * Cruise is a speed target, not an actuator effort or tuned PID gain. */
+    /* 150 mm/s and steer 100 -> inner wheel ~0 reproduce Buddy 3's tuned
+     * (since removed) line-follow bench (base effort 200, gain 2) through Buddy 2's draft
+     * executor defaults: curvature 2 / track (112 mm) = 17.8 1/m at 100. */
     config->cruise_mm_s = CONTROLLER_LINE_CRUISE_MM_S;
     config->slow_mm_s = 100U;
     config->curvature_per_steer_u1_m = 178000;
@@ -51,7 +50,7 @@ void controller_junction_default_config(controller_junction_config_t *config)
     config->uturn_mdeg = 180000;
     config->probe_mdeg = 10000;
     config->goal_speed_mm_s = 100U;
-    config->goal_timeout_ms = 0U; /* B2 derives finite distance/speed + ramp/settle bound. */
+    config->goal_timeout_ms = 4000U;
     config->settle_ms = 250U;
     config->holdoff_ms = 500U;
 }

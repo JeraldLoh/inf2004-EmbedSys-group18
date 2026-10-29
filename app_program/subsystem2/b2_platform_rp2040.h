@@ -26,10 +26,6 @@ void b2_platform_take_events(b2_platform_events_t *events);
 void b2_platform_peek_events(b2_platform_events_t *events);
 bool b2_platform_ack_events(uint32_t evidence_id);
 bool b2_platform_executor_io(measured_motion_executor_io_t *io);
-/* Startup-only optional auxiliary cutoff (circuit-test servo). Called under
- * the common IRQ/core lock for physical STOP and alarm cutoff. Callback must
- * be bounded MMIO only: no locks, task/kernel calls or logging. */
-bool b2_platform_bind_aux_stop(void (*callback)(void *), void *context);
 gpio_dispatcher_t *b2_platform_dispatcher(void);
 bool b2_platform_start_pressed(void);
 bool b2_platform_stop_pressed(void);
