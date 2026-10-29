@@ -138,6 +138,37 @@ endif
 TEST_SUFFIX := _carrun
 endif
 
+# Full circuit diagnosis: sensing + individually confirmed actuator pulses.
+CIRCUIT_TEST ?= 0
+ifneq ($(filter $(CIRCUIT_TEST),0 1),$(CIRCUIT_TEST))
+$(error Unknown CIRCUIT_TEST '$(CIRCUIT_TEST)'; use 0 or 1)
+endif
+ifeq ($(CIRCUIT_TEST),1)
+ifneq ($(B2_BENCH)$(B5_RUN)$(CAR_RUN),000)
+$(error CIRCUIT_TEST=1 cannot be combined with B2_BENCH, B5_RUN or CAR_RUN)
+endif
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error CIRCUIT_TEST=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+B2_DRIVERS := 1
+TEST_SUFFIX := _circuittest
+endif
+
+B2_MOVE_TEST ?= 0
+ifneq ($(filter $(B2_MOVE_TEST),0 1),$(B2_MOVE_TEST))
+$(error Unknown B2_MOVE_TEST '$(B2_MOVE_TEST)'; use 0 or 1)
+endif
+ifeq ($(B2_MOVE_TEST),1)
+ifneq ($(B2_BENCH)$(B5_RUN)$(CAR_RUN)$(CIRCUIT_TEST),0000)
+$(error B2_MOVE_TEST=1 cannot be combined with other vehicle/test modes)
+endif
+ifneq ($(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),1usb_cdcnonenone00)
+$(error B2_MOVE_TEST=1 requires SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+B2_DRIVERS := 1
+TEST_SUFFIX := _b2movetest
+endif
+
 # CRASH_REPORT=1 also copies every console line to UART0 on GP0 (TX) /
 # GP1 (RX), 115200 8N1.  UART output is sent immediately, so it still shows
 # the last messages and the kernel's crash report after a crash, when the
@@ -147,6 +178,16 @@ endif
 # alone, so a subsystem may claim them in TEAM.md.
 # CONSOLE=uart always uses UART0 as the console, so it forces CRASH_REPORT=1.
 CRASH_REPORT ?= 0
+ifeq ($(B2_MOVE_TEST),1)
+ifneq ($(CRASH_REPORT),0)
+$(error B2_MOVE_TEST=1 requires CRASH_REPORT=0)
+endif
+endif
+ifeq ($(CIRCUIT_TEST),1)
+ifneq ($(CRASH_REPORT),0)
+$(error CIRCUIT_TEST=1 requires CRASH_REPORT=0 to keep GP0 free)
+endif
+endif
 ifeq ($(B2_BENCH),1)
 ifneq ($(CRASH_REPORT),0)
 $(error B2_BENCH=1 requires CRASH_REPORT=0 to keep GP0 free)
@@ -246,6 +287,14 @@ CFLAGS  += -DAPP_TEST=$(TEST)
 CFLAGS  += -DAPP_B2_BENCH=$(B2_DRIVERS)
 CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN)
+CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
+CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST)
+ifeq ($(B2_MOVE_TEST),1)
+CFLAGS  += -DCNF_TIMER_PERIOD=1
+endif
+ifeq ($(CIRCUIT_TEST),1)
+CFLAGS  += -DCNF_TIMER_PERIOD=1
+endif
 ifeq ($(CAR_RUN),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 # Floor tuning from the 2026-10-29 traces (B2/B3 to review): the right motor
@@ -298,7 +347,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

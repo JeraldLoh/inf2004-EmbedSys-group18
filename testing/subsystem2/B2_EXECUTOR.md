@@ -1,5 +1,13 @@
 # B2 movement executor and controller ingress
 
+**29 October update:** CAR_RUN is now wired to the measured engine through its
+existing controller-owned callbacks and the `car_motion` compatibility adapter.
+The draft is retained only for reference/tests. Gains remain unqualified and
+CAR_RUN START is disabled until measured calibration is supplied. See
+[CAR_RUN_MEASURED_PID.md](../integration/CAR_RUN_MEASURED_PID.md) for current
+integration and test scope; the standalone typed task instructions below remain
+valid for that separate runtime path.
+
 This adds reusable movement primitives to Buddy 2. The vehicle controller owns
 permission, source arbitration, generation and profile selection. B2 owns wheel
 measurement, separate left/right PID, PWM commits, finite goals and results.
@@ -7,9 +15,8 @@ Buddy 3 supplies continuous speed/curvature requests; higher mission code choose
 when to turn, reverse or travel a distance. Missions are not hardcoded in B2.
 
 On the testing branch this implementation is named `measured_motion_executor.*`
-with the `measured_motion_executor_` API prefix. The existing integration draft
-keeps `motion_executor.*` and remains the executor used by `CAR_RUN`. The two
-paths are deliberately separate until the whole-car producers are migrated.
+with the `measured_motion_executor_` API prefix. CAR_RUN uses it via `car_motion`.
+The typed `motion_task` runtime is separate and is not started in CAR_RUN.
 
 ## Supported internal commands
 
@@ -86,11 +93,12 @@ the course all-init-before-any-start order:
 The motion task has an explicit 4096-byte stack, provisional priority 6 and core
 0 affinity. The controller has a 2048-byte stack and provisional priority 10.
 Measure stack/CPU/timing with the full system before changing priorities or
-claiming a resource saving. Raw B2/S3 bench and CAR_RUN builds refuse measured
-executor driver binding, preventing competing PWM owners. The typed controller
+claiming a resource saving. Raw bench and CAR_RUN builds refuse standalone
+typed-task driver binding, preventing competing PWM owners. CAR_RUN uses its
+private measured adapter instead. The typed controller
 binding also rejects a legacy line-drive hook. B5_RUN remains
-its existing STOP-only path; Buddy 3/5 mission producers are not wired by this
-change. Legacy non-STOP controller actions remain recorded for their owners.
+its existing STOP-only path. Buddy 3/5 CAR_RUN producers use the measured adapter
+as described in the current integration guide.
 
 ## STOP, transport and results
 

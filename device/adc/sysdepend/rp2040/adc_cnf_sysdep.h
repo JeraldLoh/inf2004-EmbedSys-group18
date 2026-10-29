@@ -39,7 +39,8 @@
  *	  channel 0 = GP26, channel 1 = GP27, channel 2 = GP28
  *	  channel 3 = GP29 is the Pico W RADIO CLOCK: never set _3 to TRUE.
  */
-#if defined(APP_CAR_RUN) && (APP_CAR_RUN != 0)
+#if (defined(APP_CAR_RUN) && (APP_CAR_RUN != 0)) || \
+    (defined(APP_CIRCUIT_TEST) && (APP_CIRCUIT_TEST != 0))
 #define	DEVCONF_ADC_PIN_INIT_0	TRUE	/* GP26 barcode (Buddy 3), whole-car build */
 #else
 #define	DEVCONF_ADC_PIN_INIT_0	FALSE

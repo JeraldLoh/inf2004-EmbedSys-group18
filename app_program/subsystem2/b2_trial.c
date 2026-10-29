@@ -5,15 +5,26 @@ bool b2_trial_init(b2_trial_t *trial, drv_motor_t *motor,
     drv_encoder_t *encoder, vehicle_controller_t *controller,
     const b2_trial_io_t *io)
 {
+    return b2_trial_init_limited(trial,motor,encoder,controller,io,
+        B2_TRIAL_MAX_EFFORT,B2_TRIAL_MAX_US);
+}
+
+bool b2_trial_init_limited(b2_trial_t *trial, drv_motor_t *motor,
+    drv_encoder_t *encoder, vehicle_controller_t *controller,
+    const b2_trial_io_t *io, int16_t max_effort, uint32_t max_duration_us)
+{
     if ((trial == NULL) || (motor == NULL) || (encoder == NULL) ||
         (controller == NULL) || (io == NULL) || (io->stop_pressed == NULL) ||
         (io->stop_pending == NULL) || (io->arm_cutoff == NULL) ||
-        (io->cancel_cutoff == NULL)) { return false; }
+        (io->cancel_cutoff == NULL) || max_effort<=0 ||
+        max_effort>B2_TRIAL_DIAGNOSTIC_MAX_EFFORT || max_duration_us==0U ||
+        max_duration_us>B2_TRIAL_MAX_US) { return false; }
     *trial = (b2_trial_t){0};
     trial->motor = motor;
     trial->encoder = encoder;
     trial->controller = controller;
     trial->io = *io;
+    trial->max_effort=max_effort; trial->max_duration_us=max_duration_us;
     return true;
 }
 
@@ -28,9 +39,11 @@ motion_status_t b2_trial_begin(b2_trial_t *trial, int16_t left_effort,
     {
         return MOTION_STATE;
     }
-    if ((duration_us == 0U) || (duration_us > B2_TRIAL_MAX_US) ||
-        (left_effort < -B2_TRIAL_MAX_EFFORT) || (left_effort > B2_TRIAL_MAX_EFFORT) ||
-        (right_effort < -B2_TRIAL_MAX_EFFORT) || (right_effort > B2_TRIAL_MAX_EFFORT) ||
+    if ((duration_us == 0U) || (duration_us > trial->max_duration_us) ||
+        trial->max_effort<=0 || trial->max_effort>B2_TRIAL_DIAGNOSTIC_MAX_EFFORT ||
+        trial->max_duration_us>B2_TRIAL_MAX_US ||
+        (left_effort < -trial->max_effort) || (left_effort > trial->max_effort) ||
+        (right_effort < -trial->max_effort) || (right_effort > trial->max_effort) ||
         ((left_effort == 0) && (right_effort == 0)) ||
         (trial->result.trial_id == UINT32_MAX)) { return MOTION_INVALID; }
     if (trial->io.stop_pressed(trial->io.context) ||
@@ -95,7 +108,7 @@ void b2_trial_service(b2_trial_t *trial, stop_reason_mask_t stop_reasons,
         { cutoff_fired = true; }
     }
     if (trial->io.stop_pressed(trial->io.context)) { stop_reasons |= STOP_REASON_PHYSICAL; }
-    if (stop_reasons != STOP_REASON_NONE)
+    if ((stop_reasons & ~trial->controller->safety.active_reasons) != STOP_REASON_NONE)
     {
         (void)vehicle_controller_latch_stop(trial->controller, stop_reasons);
     }

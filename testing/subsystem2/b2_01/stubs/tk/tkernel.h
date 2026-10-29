@@ -15,6 +15,7 @@ typedef int BOOL;
 #define IMPORT extern
 #define E_OK 0
 #define E_SYS (-5)
+#define E_IO (-57)
 #define E_NOSPT (-9)
 #define E_PAR (-17)
 #define E_OBJ (-41)

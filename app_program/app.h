@@ -10,6 +10,12 @@
 #ifndef APP_TEST
 #define APP_TEST 0
 #endif
+#ifndef APP_CIRCUIT_TEST
+#define APP_CIRCUIT_TEST 0 /* manual circuit diagnostic, never autonomous */
+#endif
+#ifndef APP_B2_MOVE_TEST
+#define APP_B2_MOVE_TEST 0 /* bounded B2-only movement/calibration image */
+#endif
 #ifndef APP_B5_RUN
 #define APP_B5_RUN 0     /* 1 = Buddy 5 obstacle task + controller, motors off */
 #endif

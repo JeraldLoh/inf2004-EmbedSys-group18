@@ -40,6 +40,9 @@ IMPORT void subsystem3_reacquire(line_side_t side_hint);
  * ignored until a calibration succeeds; call again to recalibrate. */
 IMPORT void subsystem3_calibrate_barcode(void);
 IMPORT BOOL subsystem3_barcode_calibrated(void);
+/* Latest raw ADC0 sample, same acquisition owner as normal B3 sensing.
+ * False before a sample or after acquisition failure; no second ADC reader. */
+IMPORT bool subsystem3_barcode_raw(uint16_t *raw);
 
 /* Only with S3_BARCODE_USE_EDGES = 1: call from the shared GPIO interrupt
  * dispatcher on each edge of the barcode D0 pin. */

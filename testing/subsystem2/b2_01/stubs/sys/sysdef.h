@@ -9,6 +9,8 @@
 #define TIMER_ARMED 0x40054020U
 #define TIMER_INTR 0x40054034U
 #define TIMER_INTE 0x40054038U
+#define PWM_BASE 0x40050000U
+#define PWM_CHx_DIV 0x04U
 #define GPIO(n) (0x4001C004U + (4U * (n)))
 #define GPIO_PUE 8U
 #define GPIO_PDE 4U

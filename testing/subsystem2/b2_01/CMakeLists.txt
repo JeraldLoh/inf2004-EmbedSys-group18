@@ -13,10 +13,11 @@ add_library(b2_foundation STATIC
     ${B2_SOURCE}/wheel_measurement.c
     ${B2_SOURCE}/wheel_pid.c
     ${B2_SOURCE}/measured_motion_executor.c
+    ${B2_SOURCE}/car_motion.c
     ${B2_SOURCE}/subsystem2.c
 )
 target_include_directories(b2_foundation PUBLIC ${B2_SOURCE} stubs)
-target_compile_definitions(b2_foundation PRIVATE APP_B2_BENCH=1)
+target_compile_definitions(b2_foundation PRIVATE APP_B2_BENCH=1 APP_B2_MOVE_TEST=1)
 add_library(b2_fake STATIC fake_motion_hal.c)
 target_link_libraries(b2_fake PUBLIC b2_foundation)
 
@@ -93,6 +94,42 @@ add_executable(test_controller_transport test_controller_transport.c
 target_link_libraries(test_controller_transport PRIVATE b2_runtime_policy)
 foreach(case IN ITEMS stop latest result)
     add_test(NAME b2_transport_${case} COMMAND test_controller_transport ${case})
+endforeach()
+add_executable(test_car_motion test_car_motion.c ${B2_SOURCE}/../subsystem5/b5_motion.c)
+target_link_libraries(test_car_motion PRIVATE b2_runtime_policy)
+foreach(case IN ITEMS unqualified steering obstacle b5_goal junction stop_ids deadline)
+    add_test(NAME b2_car_${case} COMMAND test_car_motion ${case})
+endforeach()
+add_executable(test_car_startup test_car_startup.c
+    ${B2_SOURCE}/../vehicle_controller/car_run_target.c)
+target_include_directories(test_car_startup PRIVATE ${B2_SOURCE} stubs)
+target_compile_definitions(test_car_startup PRIVATE APP_CAR_RUN=1 APP_B2_BENCH=0)
+foreach(case IN ITEMS unqualified qualified init_failure stop_ack)
+    add_test(NAME b2_car_startup_${case} COMMAND test_car_startup ${case})
+endforeach()
+add_executable(test_circuit_test test_circuit_test.c bsp_stubs.c
+    ${B2_SOURCE}/../diagnostics/circuit_test.c ${B2_SOURCE}/../diagnostics/circuit_controls.c
+    ${B2_SOURCE}/../subsystem5/drv_servo.c)
+target_compile_definitions(test_circuit_test PRIVATE APP_CIRCUIT_TEST=1 APP_B2_BENCH=1)
+target_link_libraries(test_circuit_test PRIVATE b2_runtime_policy)
+foreach(case IN ITEMS boot motor left_reverse right right_reverse both both_reverse motor_stop barcode sonar imu servo servo_stop late_stop sensor_failure critical_failure create_failure start_failure power20 power25 power30 power30_stop power_no_run power_wrap imu_stale)
+    add_test(NAME circuit_${case} COMMAND test_circuit_test ${case})
+endforeach()
+add_executable(test_trial_limits test_trial_limits.c)
+target_link_libraries(test_trial_limits PRIVATE b2_runtime_policy)
+add_test(NAME b2_trial_diagnostic_limits COMMAND test_trial_limits)
+add_executable(test_move_calibration test_move_calibration.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c)
+target_compile_definitions(test_move_calibration PRIVATE APP_B2_MOVE_TEST=1)
+target_link_libraries(test_move_calibration PRIVATE b2_fake)
+foreach(case IN ITEMS bounds deadline wrap stop_race forward_1m reverse left right)
+    add_test(NAME b2_move_calibration_${case} COMMAND test_move_calibration ${case})
+endforeach()
+add_executable(test_move_task test_move_task.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c
+    ${B2_SOURCE}/../diagnostics/b2_move_test.c)
+target_compile_definitions(test_move_task PRIVATE APP_B2_MOVE_TEST=1 APP_B2_BENCH=1)
+target_link_libraries(test_move_task PRIVATE b2_runtime_policy)
+foreach(case IN ITEMS boot locked missing_feedback flow_stop flow_stall critical create start long_locked watchdog)
+    add_test(NAME b2_move_task_${case} COMMAND test_move_task ${case})
 endforeach()
 get_property(b2_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${b2_tests} PROPERTIES LABELS subsystem2)

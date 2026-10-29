@@ -6,6 +6,13 @@
 #include <string.h>
 
 static unsigned sonar_events;
+static unsigned aux_events;
+static void aux_stop(void *user)
+{
+    fake_motion_hal_t *fake=user;
+    assert(fake->locked); /* auxiliary outputs are disabled under common lock */
+    ++aux_events;
+}
 static void sonar(void *user, uint32_t rising, uint32_t falling, uint32_t when)
 {
     motion_motor_state_t state;
@@ -46,6 +53,11 @@ int main(int argc, char **argv)
         return 0;
     }
     assert(b2_platform_init(&hal, &io));
+    mock_core=1U;
+    assert(!b2_platform_bind_aux_stop(aux_stop,&fake));
+    mock_core=0U;
+    assert(b2_platform_bind_aux_stop(aux_stop,&fake));
+    assert(!b2_platform_bind_aux_stop(aux_stop,&fake));
     mock_clock_step = false;
     assert(subsystem2_bind_hal(&hal) == E_OK);
     assert(subsystem2_init() == E_OK && subsystem2_start() == E_OK);
@@ -63,6 +75,7 @@ int main(int argc, char **argv)
     assert(mock_timer_enabled == 1U && mock_timer_alarm == 250100U);
     fake.now_us = mock_timer_alarm;
     mock_fire_irq(0U); /* No task service: actual timer handler must stop PWM. */
+    assert(aux_events==1U);
     fake_assert_safe(&fake);
     b2_platform_take_events(&events);
     assert(events.cutoff_fired && events.reasons == STOP_REASON_NONE);
@@ -79,6 +92,7 @@ int main(int argc, char **argv)
     mock_fire_irq(13U);
     fake_assert_safe(&fake);
     assert(sonar_events == 1U);
+    assert(aux_events>=2U);
     assert(subsystem2_read_encoders(&sample) == MOTION_OK);
     assert(sample.left_count == 1U && sample.right_count == 1U);
     b2_platform_peek_events(&events);

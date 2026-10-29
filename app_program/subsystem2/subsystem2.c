@@ -149,7 +149,7 @@ bool subsystem2_executor_drivers(drv_motor_t **m, drv_encoder_t **e)
 }
 
 #if APP_CAR_RUN
-/* DRAFT (Buddy 2 review): the motion executor task is the only caller. */
-drv_motor_t *subsystem2_executor_motor(void) { return started ? &motor : NULL; }
-drv_encoder_t *subsystem2_executor_encoder(void) { return started ? &encoder : NULL; }
+/* The CAR_RUN measured executor task is the only caller, during startup. */
+drv_motor_t *subsystem2_executor_motor(void) { return initialized && !started ? &motor : NULL; }
+drv_encoder_t *subsystem2_executor_encoder(void) { return initialized && !started ? &encoder : NULL; }
 #endif

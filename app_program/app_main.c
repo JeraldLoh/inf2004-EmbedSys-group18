@@ -12,6 +12,12 @@
  * THEN start tasks with reviewed failure rollback, ownership and SMP policy.
  */
 #include "app.h"
+#if APP_B2_MOVE_TEST
+#include "diagnostics/b2_move_test.h"
+#endif
+#if APP_CIRCUIT_TEST
+#include "diagnostics/circuit_test.h"
+#endif
 #if APP_B2_BENCH
 #include "subsystem2/b2_bench_target.h"
 #endif
@@ -24,7 +30,13 @@
 
 EXPORT INT usermain(void)
 {
-#if APP_B2_BENCH
+#if APP_B2_MOVE_TEST
+    if (b2_move_test_start() != E_OK)
+    { tm_printf((UB*)"B2 movement-test startup failed; outputs stay disabled.\n"); }
+#elif APP_CIRCUIT_TEST
+    if (circuit_test_start() != E_OK)
+    { tm_printf((UB*)"Circuit test failed; no actuator trial permitted.\n"); }
+#elif APP_B2_BENCH
     if (b2_bench_start() != E_OK)
     { tm_printf((UB*)"B2 bench task failed; no trial permitted.\n"); }
 #elif APP_B5_RUN
