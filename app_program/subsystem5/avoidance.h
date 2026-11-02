@@ -133,6 +133,7 @@ typedef struct {
     int bypass_max_turn_deg;
     float turn_radius_cm;        // car turns are forward arcs of this radius; 0 = pivots
     float path_half_width_cm;    // "gone" needs every coarse hit outside this corridor
+    float sensor_ahead_cm;       // line sensors ahead of the wheel axle (pivot centre)
 
     uint32_t motion_timeout_ms;
     uint32_t reacquire_timeout_ms; // per search attempt
@@ -221,6 +222,7 @@ typedef struct {
     bool leg_active;
     bool reverse_issued;
     bool search_started;
+    bool aligning;        // line crossed at an angle: driving the axle over it
 
     bool off_line;
     int rescans;
