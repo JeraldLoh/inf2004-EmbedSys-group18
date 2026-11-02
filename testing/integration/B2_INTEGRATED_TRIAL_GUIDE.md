@@ -195,3 +195,26 @@ normal production gating and known post-junction resume issue are unchanged.
 Compiled successfully. Automated tests were not run, per user request. The
 updated test expectation is recorded but has not been executed. No hardware
 validation, flashing or remote push was performed for this version.
+
+## V8: outside-wheel boost during line turns
+
+The operator requested stronger turns by increasing the opposite/outside wheel.
+V8 keeps60mm/s straight cruise and all V7 steering and HIGH=black settings.
+In APP_CAR_B2_TRIAL only, continuous LINE requests receive an additional
+outside-wheel target of50% of the original absolute turn speed offset.
+This is clipped to the existing per-wheel speed cap after base cap scaling.
+The inside target is not reduced. At full correction nominal targets change
+from97/23 to115/23mm/s (mirrored for left turns); at zero curvature both remain
+60mm/s. This increases the chassis speed during turns as well as the wheel
+speed difference. Nominal full-turn radius changes from91 to84mm.
+
+Finite distance/pivot goals and Buddy5 obstacle/search requests do not receive
+this boost. Existing acceleration,120mm/s maximum wheel target,30% effort,
+watchdog, command lifetime, physical STOP and15s run limit remain in force.
+A requested boost may not be reached under load at the unchanged effort cap.
+The known post-junction resume-authority and line-recovery issues remain open.
+
+Firmware compilation succeeded. Automated tests were skipped per user request;
+no hardware result, flashing or remote push was performed. First check raised-
+wheel START/STOP and correct turn direction, then retry the same floor curve
+with GP21 accessible. Retain target/measured wheel speeds and any stop messages.
