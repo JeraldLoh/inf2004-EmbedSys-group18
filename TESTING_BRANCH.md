@@ -1,5 +1,25 @@
 # `testing` branch: first whole-car build
 
+## Current Buddy 2 publication - 2 November 2026
+
+At the operator's request, testing now receives the Buddy 2 measured drivers,
+calibration, executor, diagnostic images and required shared integration work.
+The active firmware sources match the restored V5 baseline reported following
+the line in three of four attempts:50mm/s, HIGH=black, steer12..90/ramp6ms,
+200ms fading memory, junction-pause fix, and NO outside-wheel speed boost.
+Later V6-V9 tuning commits are retained in history but reverted in the active
+firmware. Generated UF2 files remain local; source and build recipes are tracked.
+
+Use CAR_RUN=1 CAR_B2_TRIAL=1 for the bounded offline B2/B3/B5 trial. Normal
+production qualification remains false. This publication does not resolve the
+known line-sensor interpretation/recovery concerns or post-junction line
+authority resumption bug. Cross-subsystem trial changes need owner review.
+See testing/subsystem2/B2_INTEGRATED_STATUS_2026-11-02.md for current limits.
+Automated suites were not rerun for this publication, per the user's request.
+Remote main is unchanged. The earlier sections below are chronological history;
+their local-only, prerequisite-gating and older test-count statements are not
+the current publication status.
+
 ## Local integrated B2 trial (2 November 2026)
 
 The fresh local testing clone includes published Buddy-2be5b250 (v6 hardware
@@ -9,8 +29,8 @@ manual START,15s cap and30% effort/100ms watchdog. Production-qualified remains
 false; default CAR_RUN remains blocked. This offline first trial covers B2,
 B3 and B5 plus controller, not live Buddy1 network or Buddy4 terrain.
 See [trial guide](testing/integration/B2_INTEGRATED_TRIAL_GUIDE.md).
-Integrated changes are local for hardware testing; remote testing/main were
-not pushed by this task. Earlier integration notes below retain their history.
+These integrated changes were initially local for hardware testing and are now
+published to testing at the operator's request. Main remains unchanged.
 
 
 **Base:** `main` at `ceab57b` (2026-10-28).

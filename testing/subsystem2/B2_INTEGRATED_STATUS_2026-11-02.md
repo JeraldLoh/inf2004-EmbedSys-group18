@@ -1,6 +1,21 @@
 # Buddy 2 integrated trial status - 2 November 2026
 
-## Publication scope
+## Testing publication update
+
+The operator subsequently requested publication to remote testing. Active
+firmware has been restored to the V5 baseline (d6bc6ad/a0190ea firmware sources),
+with50mm/s cruise, no outside-wheel boost and the original HIGH=black setting.
+V6 polarity and V7-V9 speed/boost experiments are not active. The source history
+retains those experiments and their reverts. Shared adapters and trial-only
+Buddy3 steering changes are included as dependencies of this integrated image.
+Remote main is outside this publication. No new automated suites were run.
+
+The later physical left/right/both-on-black check raised a possible polarity
+mismatch; the attempted LOW=black change was reverted at the operator's request
+after worse reported behavior. Physical mapping/polarity and line geometry are
+therefore still open, not resolved by restoring the baseline.
+
+## Earlier Buddy-2 publication scope (history)
 
 Publish the local integrated trial work through d6bc6ad to Buddy-2, alongside
 the previously published standalone v6 motor work. This includes explicitly
