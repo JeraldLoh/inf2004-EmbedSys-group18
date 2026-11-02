@@ -132,6 +132,7 @@ typedef struct {
     int bypass_min_turn_deg;
     int bypass_max_turn_deg;
     float turn_radius_cm;        // car turns are forward arcs of this radius; 0 = pivots
+    float path_half_width_cm;    // "gone" needs every coarse hit outside this corridor
 
     uint32_t motion_timeout_ms;
     uint32_t reacquire_timeout_ms; // per search attempt

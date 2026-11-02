@@ -348,6 +348,7 @@ static void default_config_is_valid(void) {
     CHECK_NEAR(c.pivot_clearance_cm, 20.0f, 1e-6);
     CHECK_INT(c.bypass_min_turn_deg, 60);
     CHECK_NEAR(c.turn_radius_cm, 9.0f, 1e-6);
+    CHECK_NEAR(c.path_half_width_cm, 10.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
     CHECK_INT(c.right_deg, 20);
     CHECK_INT(c.fine_half_range_deg, 70);
@@ -385,6 +386,7 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.max_rescans = -1);
     EXPECT_BAD(c.reverse_cm = 0.0f);
     EXPECT_BAD(c.turn_radius_cm = -1.0f);
+    EXPECT_BAD(c.path_half_width_cm = -1.0f);
     EXPECT_BAD(c.pivot_clearance_cm = -1.0f);
     EXPECT_BAD(c.bypass_side_margin_cm = -1.0f);
     EXPECT_BAD(c.bypass_pass_cm = 0.0f);
@@ -951,6 +953,33 @@ static void line_found_on_return_leg(void) {
 // On a curve the line can turn up before the return drive.
 // Car trial 2026-11-02: the straight leg out was 30-40 cm and the car
 // stalled on it. With arc turns it is planned short.
+// Car trial 2026-11-02: the centre echo missed a bottle in the car's path,
+// so each scan said "no longer ahead" and the car drove into it. A coarse
+// reading inside the path corridor keeps the encounter going.
+static void obstacle_in_path_but_missed_by_centre(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){120, 130, 14.0f, true}; // 35 deg left: x ~8 cm, in the path
+    s.spikes = 2;                                  // the centre saw it twice, then misses
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+    CHECK(run_until(&s, &av, AV_STATE_DECIDE, 20000));
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
+    CHECK_INT(s.resumes, 0);
+}
+
+static void obstacle_beside_the_path_is_cleared(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){15, 25, 23.0f, true}; // 70 deg right: x ~22 cm, beside the path
+    s.spikes = 2;
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 20000));
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 1);
+    CHECK_INT(s.resumes, 1);
+}
+
 static void out_leg_is_short_with_arc_turns(void) {
     sim_t s;
     av_t av;
@@ -1165,6 +1194,8 @@ void run_avoidance_tests(void) {
     RUN(refused_motion_fails_without_waiting);
     RUN(no_motion_failed_callback_still_works);
     RUN(line_found_on_return_leg);
+    RUN(obstacle_in_path_but_missed_by_centre);
+    RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
     RUN(line_found_while_passing);
     RUN(line_found_during_return_turn);

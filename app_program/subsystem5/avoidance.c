@@ -61,6 +61,10 @@ void av_config_default(av_config_t *cfg) {
     cfg->bypass_min_turn_deg = 60;
     cfg->bypass_max_turn_deg = 75;
     cfg->turn_radius_cm = 9.0f;
+    // Car trial 2026-11-02: a bottle was detected at 23, 14 and 12 cm, but
+    // each scan's single centre reading missed it (36-91 cm) and the car
+    // drove on. Half the car width (~7 cm) plus a margin.
+    cfg->path_half_width_cm = 10.0f;
 
     cfg->motion_timeout_ms = 8000;
     cfg->reacquire_timeout_ms = 3000;
@@ -107,6 +111,7 @@ const char *av_config_check(const av_config_t *c) {
         c->bypass_min_turn_deg > c->bypass_max_turn_deg)
         return "bypass turn limits must satisfy 1 <= min <= max <= 89";
     if (!(c->turn_radius_cm >= 0.0f)) return "turn_radius_cm must be >= 0";
+    if (!(c->path_half_width_cm >= 0.0f)) return "path_half_width_cm must be >= 0";
     if (c->motion_timeout_ms == 0 || c->reacquire_timeout_ms == 0) return "timeouts must be > 0";
     if (c->max_reacquire_attempts < 1) return "max_reacquire_attempts must be >= 1";
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
@@ -369,6 +374,20 @@ static void on_monitor(av_t *a, uint32_t now) {
     }
 }
 
+// Any coarse reading that puts something in the car's own path, closer than
+// the clear threshold. A round bottle can miss the centre echo entirely.
+static bool coarse_path_blocked(const av_t *a, float clear_cm) {
+    for (int i = 0; i < a->cfg.coarse_points; i++) {
+        range_reading_t r = a->coarse[i].reading;
+        float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
+        if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue;
+        point2_t pt = obstacle_polar_to_xy(direction_of(a, a->coarse[i].angle_deg), cm);
+        float x = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
+        if (x <= a->cfg.path_half_width_cm && pt.y_cm < clear_cm) return true;
+    }
+    return false;
+}
+
 static void on_coarse(av_t *a, uint32_t now) {
     int angle = coarse_angle(a, a->coarse_idx);
     range_reading_t r;
@@ -382,7 +401,8 @@ static void on_coarse(av_t *a, uint32_t now) {
     a->ahead_cm = range_effective_cm(center, a->cfg.max_range_cm);
 
     bool gone = center.status != RANGE_TOO_CLOSE && center.status != RANGE_FAULT &&
-                a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
+                a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm &&
+                !coarse_path_blocked(a, a->cfg.detect_cm + a->cfg.clear_hysteresis_cm);
     if (!gone) {
         float ahead = hit_cm(a, center);
         a->nearest_cm = center.status == RANGE_TOO_CLOSE ? 0.0f : ahead;
