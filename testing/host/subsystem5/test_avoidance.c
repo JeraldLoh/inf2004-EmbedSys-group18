@@ -394,7 +394,8 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.turn_radius_cm = -1.0f);
     EXPECT_BAD(c.path_half_width_cm = -1.0f);
     EXPECT_BAD(c.pivot_clearance_cm = -1.0f);
-    EXPECT_BAD(c.bypass_side_margin_cm = -1.0f);
+    EXPECT_BAD(c.car_half_width_cm = -1.0f);
+    EXPECT_BAD(c.bypass_clearance_cm = -1.0f);
     EXPECT_BAD(c.bypass_pass_cm = 0.0f);
     EXPECT_BAD(c.bypass_min_turn_deg = 0);
     EXPECT_BAD(c.bypass_max_turn_deg = 90);
@@ -1088,8 +1089,39 @@ static void pivot_plan_passes_the_obstacle(void) {
     CHECK_NEAR(pl.out_cm, pl.lateral_cm / sinf((float)pl.turn_deg * 3.14159265f / 180.0f), 0.1);
     float edge_y = pl.side == SIDE_RIGHT ? pr->right.pt.y_cm : pr->left.pt.y_cm;
     float reach = pl.out_cm * cosf((float)pl.turn_deg * 3.14159265f / 180.0f) + pl.pass_cm;
-    CHECK(reach >= edge_y + s.cfg.bypass_pass_cm - 0.1f);
-    CHECK(pl.pass_cm > s.cfg.bypass_pass_cm);
+    float beyond = pr->width_cm + s.cfg.bypass_clearance_cm; // under the cap here
+    CHECK(beyond < s.cfg.bypass_pass_cm);
+    CHECK_NEAR(reach, edge_y + beyond, 0.1);
+}
+
+// Car trial 2026-11-02: the bypass went far wider than the obstacle needed.
+// The car's side clears the edge by bypass_clearance_cm, and the pass is
+// sized from the obstacle's width.
+static void bypass_is_sized_from_the_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 15.0f, true}; // ~5 cm wide at 15 cm
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    const obstacle_profile_t *pr = av_profile(&av);
+    bypass_plan_t pl = s.last_plan;
+    const obstacle_edge_t *e = pl.side == SIDE_RIGHT ? &pr->right : &pr->left;
+    float edge_x = e->pt.x_cm < 0.0f ? -e->pt.x_cm : e->pt.x_cm;
+    CHECK_NEAR(pl.lateral_cm, edge_x + s.cfg.car_half_width_cm + s.cfg.bypass_clearance_cm, 0.01);
+    CHECK(pl.lateral_cm < 17.0f);
+    CHECK(pl.out_cm < 20.0f);
+    float reach = pl.out_cm * cosf((float)pl.turn_deg * 3.14159265f / 180.0f) + pl.pass_cm;
+    CHECK_NEAR(reach, e->pt.y_cm + pr->width_cm + s.cfg.bypass_clearance_cm, 0.1);
+
+    // A wide one is capped at bypass_pass_cm past its front.
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){50, 130, 15.0f, true}; // ~19 cm wide
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    pr = av_profile(&av);
+    pl = s.last_plan;
+    e = pl.side == SIDE_RIGHT ? &pr->right : &pr->left;
+    reach = pl.out_cm * cosf((float)pl.turn_deg * 3.14159265f / 180.0f) + pl.pass_cm;
+    CHECK_NEAR(reach, e->pt.y_cm + s.cfg.bypass_pass_cm, 0.1);
 }
 
 static void line_found_while_passing(void) {
@@ -1305,6 +1337,7 @@ void run_avoidance_tests(void) {
     RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
     RUN(pivot_plan_passes_the_obstacle);
+    RUN(bypass_is_sized_from_the_obstacle);
     RUN(line_found_while_passing);
     RUN(line_during_return_turn_lets_the_turn_finish);
     RUN(line_ignored_beside_obstacle);

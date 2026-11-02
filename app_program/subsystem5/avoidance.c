@@ -52,10 +52,16 @@ void av_config_default(av_config_t *cfg) {
     // forward while turning.
     cfg->pivot_clearance_cm = 15.0f;
 
-    cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
+    // Car trial 2026-11-02: the bypass went much further out than the
+    // obstacle needed. The car's side passes bypass_clearance_cm outside the
+    // obstacle's edge, and the pass is the obstacle's measured width (as its
+    // depth) plus the clearance. Placeholder: measure the car's width.
+    cfg->car_half_width_cm = 7.0f;
+    cfg->bypass_clearance_cm = 5.0f;
     // Car trial 2026-11-02: on a curve, 30 cm took the car past where the
-    // line had already turned. Past the obstacle's front; the plan adds the
-    // distance to reach it when the turn out is steep (obstacle_plan_bypass).
+    // line had already turned. Cap on the pass past the obstacle's front,
+    // and the pass when its width is unknown; the plan adds the distance to
+    // reach the front when the turn out is steep (obstacle_plan_bypass).
     cfg->bypass_pass_cm = 20.0f;
     // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
     // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
@@ -113,7 +119,8 @@ const char *av_config_check(const av_config_t *c) {
     if (c->max_reverses > 0 && !(c->reverse_cm > 0.0f)) return "reverse_cm must be > 0";
     if (!(c->pivot_clearance_cm >= 0.0f)) return "pivot_clearance_cm must be >= 0";
     if (!(c->sensor_ahead_cm >= 0.0f)) return "sensor_ahead_cm must be >= 0";
-    if (!(c->bypass_side_margin_cm >= 0.0f)) return "bypass_side_margin_cm must be >= 0";
+    if (!(c->car_half_width_cm >= 0.0f)) return "car_half_width_cm must be >= 0";
+    if (!(c->bypass_clearance_cm >= 0.0f)) return "bypass_clearance_cm must be >= 0";
     if (!(c->bypass_pass_cm > 0.0f)) return "bypass_pass_cm must be > 0";
     if (c->bypass_min_turn_deg < 1 || c->bypass_max_turn_deg > 89 ||
         c->bypass_min_turn_deg > c->bypass_max_turn_deg)
@@ -611,6 +618,21 @@ static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
     emit(a, now, &e);
 }
 
+// Car centre to the obstacle's edge while passing it.
+static float bypass_margin_cm(const av_t *a) {
+    return a->cfg.car_half_width_cm + a->cfg.bypass_clearance_cm;
+}
+
+// How far past the obstacle's front before turning back: its width (the
+// sonar sees no depth, so a round obstacle's width stands in for it) plus
+// the clearance, capped at bypass_pass_cm, which is also used when one edge
+// was not found.
+static float pass_beyond_cm(const av_t *a) {
+    if (!a->profile.left.found || !a->profile.right.found) return a->cfg.bypass_pass_cm;
+    float cm = a->profile.width_cm + a->cfg.bypass_clearance_cm;
+    return cm < a->cfg.bypass_pass_cm ? cm : a->cfg.bypass_pass_cm;
+}
+
 static void on_decide(av_t *a, uint32_t now) {
     // A bypass starts with a pivot. Too close and the front corner sweeps into
     // the obstacle (or a stalled wheel turns the pivot into a forward arc), so
@@ -661,8 +683,8 @@ static void on_decide(av_t *a, uint32_t now) {
             a->metrics.bypass_right++;
         }
         a->off_line = true;
-        a->plan = obstacle_plan_bypass(&a->profile, a->choice.side, a->cfg.bypass_side_margin_cm,
-                                       a->cfg.bypass_pass_cm, a->cfg.bypass_min_turn_deg,
+        a->plan = obstacle_plan_bypass(&a->profile, a->choice.side, bypass_margin_cm(a),
+                                       pass_beyond_cm(a), a->cfg.bypass_min_turn_deg,
                                        a->cfg.bypass_max_turn_deg);
         if (a->cfg.turn_radius_cm > 0.0f) {
             a->plan.out_cm = obstacle_arc_out_cm(&a->plan, a->cfg.turn_radius_cm);

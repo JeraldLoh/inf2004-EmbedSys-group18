@@ -229,7 +229,7 @@ static void cb_on_event(void *ctx, const av_event_t *e) {
             printf("[bypass] going %s: turn %d, forward %.1f, straighten, forward %.1f, "
                    "turn back %d, forward %.1f, straighten (clears edge by %.0f cm)\n",
                    side_name(b->side), b->turn_deg, (double)b->out_cm, (double)b->pass_cm,
-                   b->turn_deg, (double)b->out_cm, (double)g_av.cfg.bypass_side_margin_cm);
+                   b->turn_deg, (double)b->out_cm, (double)(g_av.cfg.car_half_width_cm + g_av.cfg.bypass_clearance_cm));
             break;
         }
         case AV_EVT_BYPASS_RETURN:
@@ -531,7 +531,7 @@ static void print_config(const av_config_t *c, bool from_flash) {
            (double)c->min_clearance_cm);
     printf("bypass  pass the edge by %.0f cm, %.0f cm alongside, turn %d..%d deg; "
            "emergency stop < %.0f cm\n",
-           (double)c->bypass_side_margin_cm, (double)c->bypass_pass_cm, c->bypass_min_turn_deg,
+           (double)(c->car_half_width_cm + c->bypass_clearance_cm), (double)c->bypass_pass_cm, c->bypass_min_turn_deg,
            c->bypass_max_turn_deg, (double)c->emergency_stop_cm);
     printf("retry   %d rescans, %d reverses of %.0f cm\n", c->max_rescans, c->max_reverses,
            (double)c->reverse_cm);
