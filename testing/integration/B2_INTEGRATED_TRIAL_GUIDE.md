@@ -218,3 +218,13 @@ Firmware compilation succeeded. Automated tests were skipped per user request;
 no hardware result, flashing or remote push was performed. First check raised-
 wheel START/STOP and correct turn direction, then retry the same floor curve
 with GP21 accessible. Retain target/measured wheel speeds and any stop messages.
+
+## V9: return base line speed to50mm/s, retain turn boost
+
+At the operator's request, V9 changes V8 base line cruise/slow speed from60
+back to50mm/s. The outside-wheel boost remains50% of the original turn offset;
+nominal full-turn wheel targets are96/19mm/s, mirrored for left turns, while
+straight targets are50/50. All other V8 tuning, HIGH=black polarity, motion
+limits and known integration limitations remain. Firmware compiled successfully.
+Automated tests were skipped per user request; the matching source expectation
+was updated but not executed. No physical testing, flashing or push performed.

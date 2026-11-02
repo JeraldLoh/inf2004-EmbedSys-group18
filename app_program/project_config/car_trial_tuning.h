@@ -3,12 +3,12 @@
 
 /* Local floor-tuning candidate only; production and standalone B2 unchanged.
  * With 112 mm track and whole-1/m curvature rounding, full correction at
- * 60 mm/s base plus an outside-wheel boost requests about23/115mm/s at
- * sustained full correction (84mm nominal radius). Straight remains60/60.
+ * 50 mm/s base plus an outside-wheel boost requests about19/96mm/s at
+ * sustained full correction (84mm nominal radius). Straight remains50/50.
  * The inner wheel is below the previous 60 mm/s rolling candidate.
  * Two digital sensors still need physical track validation. */
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-#define CONTROLLER_LINE_CRUISE_MM_S 60U
+#define CONTROLLER_LINE_CRUISE_MM_S 50U
 #define CONTROLLER_LINE_CURVATURE_PER_STEER 120000
 /* Add half the original turn speed offset to the outside wheel only.
  * Applied after base cap scaling, clipped to the existing wheel-speed cap. */

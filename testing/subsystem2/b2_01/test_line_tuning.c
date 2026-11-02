@@ -29,7 +29,7 @@ static bool read_line(void *p, controller_line_input_t *out) {
 }
 static bool drive(void *p, const motion_continuous_request_t *r) {
     fixture_t *f=p;
-    assert(r->speed_mm_s==60); ++f->drives;
+    assert(r->speed_mm_s==50); ++f->drives;
     return car_motion_continuous(&f->car,r,f->ms,f->ms*1000U);
 }
 static void sample(fixture_t *f, bool l, bool r, uint32_t ms) {
@@ -87,6 +87,6 @@ int main(void) {
     controller_service_tick(&f.controller,2680); assert(f.drives==before);
     line_follow_reset(&f.line); assert(line_follow_steer(&f.line,2680)==0);
     assert(!f.car.executor.config.qualified); fake_assert_safe(&f.fake);
-    puts("60mm/s line candidate: filtering, ramp, cap, fading gap memory, same/opposite side, reset, slow mode and STOP passed");
+    puts("50mm/s line candidate: filtering, ramp, cap, fading gap memory, same/opposite side, reset, slow mode and STOP passed");
     return 0;
 }
