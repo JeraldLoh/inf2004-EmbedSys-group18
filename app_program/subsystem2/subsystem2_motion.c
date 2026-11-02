@@ -80,11 +80,13 @@ static void diagnostic_worker(INT code, void *exinf)
     (void)code; (void)exinf;
     for (;;) {
         if (started && !announced) {
-            tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u%% min_line_wheel=%umm/s UNQUALIFIED; this configuration supersedes older CAR banner speed text.\n",
+            tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u.%u%% min_line_wheel=%umm/s UNQUALIFIED; this configuration supersedes older CAR banner speed text.\n",
                 B2_FIRMWARE_TAG, (unsigned)CONTROLLER_LINE_CRUISE_MM_S,
                 (unsigned long)CONTROLLER_LINE_CURVATURE_PER_STEER,
                 (unsigned)CAR_TRIAL_LINE_INNER_SPEED_PERCENT,
-                (unsigned)B2_LINE_WIDE_TURN_INNER_PERCENT, (unsigned)B2_LINE_MIN_ROLLING_MM_S);
+                (unsigned)(B2_LINE_WIDE_TURN_INNER_PERMILLE / 10U),
+                (unsigned)(B2_LINE_WIDE_TURN_INNER_PERMILLE % 10U),
+                (unsigned)B2_LINE_MIN_ROLLING_MM_S);
             announced = true;
         }
         if (started && lock()) {

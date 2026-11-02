@@ -9,13 +9,13 @@
 #define B2_LINE_HOLD_DEADBAND_U1_M 2800000LL
 #define B2_LINE_FULL_CURVATURE_U1_M 14000000LL
 #define B2_LINE_FULL_CURVATURE_1_M 14U
-/* V16 wide-turn candidate: extra inside reduction after the paired target
- * calculation/cap. No extra outside boost; straight requests are untouched. */
-#define B2_LINE_WIDE_TURN_INNER_PERCENT 85U
+/* V19: another 10% off V18's inside target: 0.85 * 0.90 = 0.765.
+ * Applied after paired target/cap; outside and straight targets unchanged. */
+#define B2_LINE_WIDE_TURN_INNER_PERMILLE 765U
 /* V17's20mm/s floor widened the operator's curve. Disable it to restore
  * the V16 target geometry while retaining V17's diagnostic reporting. */
 #define B2_LINE_MIN_ROLLING_MM_S 0U
-#define B2_FIRMWARE_TAG "v18-tight-turn-diag"
+#define B2_FIRMWARE_TAG "v19-inner-minus10"
 
 static inline int32_t b2_line_shape_curvature(int64_t curvature)
 {

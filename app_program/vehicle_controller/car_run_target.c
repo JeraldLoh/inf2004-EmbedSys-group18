@@ -426,7 +426,7 @@ static void supervise(void)
                     if (!subsystem3_barcode_calibrated())
                     {
                         tm_printf((UB*)"[CAR] barcode NOT calibrated: barcodes ignored, "
-                            "every junction uses the probe. Reset to recalibrate.\n");
+                            "junction fallback policy applies. Reset to recalibrate.\n");
                     }
                 }
             }
@@ -491,7 +491,11 @@ static void supervisor_task(INT code, void *exinf)
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
     tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");
     subsystem3_calibrate_barcode();
+#if APP_CAR_B2_TRIAL
+    tm_printf((UB*)"[CAR] Junctions: barcode route; otherwise STRAIGHT THROUGH, no stop/probe (including T).\n");
+#else
     tm_printf((UB*)"[CAR] Junctions: barcode route, else Buddy 3's probe. Turn geometry is a placeholder.\n");
+#endif
     tm_printf((UB*)"[CAR] No-black timeout=%lu ms; whole-run limit=%lu s (0=disabled for each).\n",
         (unsigned long)CAR_LINE_LOST_MS, (unsigned long)(CAR_RUN_LIMIT_MS / 1000U));
     supervise();

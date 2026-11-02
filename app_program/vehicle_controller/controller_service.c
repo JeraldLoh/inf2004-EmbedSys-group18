@@ -491,6 +491,28 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
         {
             service->holdoff = false;
             service->status.junctions_seen++;
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+            /* Explicit trial policy: no live barcode route means pass through.
+             * Keep the continuous LINE lease alive; do not pause, probe or
+             * submit a finite approach goal that must stop to complete. */
+            if (junction.candidate && following_line(controller->mission) &&
+                safety_motion_allowed(&controller->safety) &&
+                vehicle_controller_hardware_faults(controller) == 0U &&
+                ((controller->route_lifecycle != ROUTE_LIFECYCLE_PENDING) ||
+                 (now_ms > controller->route.expires_ms)))
+            {
+                if (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING)
+                {
+                    controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
+                }
+                controller->mission = MISSION_TRACK_LINE;
+                service->status.last_route = ROUTE_COMMAND_STRAIGHT;
+                service->status.junctions_done++;
+                service->holdoff = true;
+                service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
+                return;
+            }
+#endif
             action = vehicle_controller_on_junction(controller, &junction, now_ms);
             execute(service, &action);
             if (action.type == CONTROLLER_ACTION_EXECUTE_ROUTE)
