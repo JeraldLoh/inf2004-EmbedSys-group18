@@ -1,7 +1,4 @@
 #include "measured_motion_executor.h"
-#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-#include "../project_config/car_trial_tuning.h"
-#endif
 #include <stddef.h>
 #include <string.h>
 
@@ -321,20 +318,6 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             desired[0] = (uint32_t)((uint64_t)desired[0]*cap/largest);
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
-#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-        /* Explicit line-only floor candidate: increase the outside target
-         * without lowering the inside target or changing finite-goal and
-         * obstacle profiles. PID/acceleration/effort/STOP protections follow.
-         * The controller's wheel-speed cap still bounds the boosted wheel. */
-        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
-        {
-            unsigned outside = correction > 0 ? 0U : 1U;
-            uint64_t boost = (uint64_t)(correction < 0 ? -correction : correction) *
-                CAR_TRIAL_LINE_OUTER_BOOST_PERCENT / 100U;
-            uint32_t room = cap - desired[outside];
-            desired[outside] += boost < room ? (uint32_t)boost : room;
-        }
-#endif
     }
     else
     {

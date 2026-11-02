@@ -228,3 +228,18 @@ straight targets are50/50. All other V8 tuning, HIGH=black polarity, motion
 limits and known integration limitations remain. Firmware compiled successfully.
 Automated tests were skipped per user request; the matching source expectation
 was updated but not executed. No physical testing, flashing or push performed.
+
+## Current settings restored to operator-reported V5 baseline
+
+At the operator's request, restore the firmware sources to a0190ea/d6bc6ad,
+matching the V5 image associated with the report of three successful line
+following attempts out of four. Base50mm/s; HIGH=black; steering12..90 with
+6ms ramp and200ms fading memory; junction-pause fix; no outside-wheel boost.
+Motor PID/calibration and stop protections match that baseline.
+
+Later V6-V9 notes above are historical and do not describe current firmware.
+Use the existing group18_b2_integrated_line50_v5_2026-11-02.uf2 artifact,
+SHA25603f15e680f92e2745e77f9979199feafca38e79dd102428807927e1307ce6111.
+Known line interpretation/recovery and post-junction resume issues remain.
+No new build or automated tests were run for this restoration; no flash,
+vehicle operation or remote push performed.
