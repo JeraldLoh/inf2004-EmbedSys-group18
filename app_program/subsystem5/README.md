@@ -111,21 +111,16 @@ lagging wheel used to finish the pivot alone and stall; Buddy 2 now stops both
 together when it is within 20 mm. Forward arcs (both wheels forward, R ~9 cm,
 timed) were tried but carried the car well off the line and their slow inner
 wheel stalled. Set `arc_turns = true`
-and `turn_radius_cm = 9` to use them again. Before turning, two scan hits
-closer than 10 cm (`pivot_clearance_cm`; one bad reading does not count) make
-the car reverse to get that room and plan from the scan it already has. The
-turn out is the geometric angle, 35..75 deg, and the pass beside the obstacle
-is lengthened to reach past its front when the turn is clamped steeper. The
-car's side clears the obstacle by 5 cm (`car_half_width_cm` 7, placeholder,
-plus `bypass_clearance_cm`), and the pass runs the obstacle's width plus 5 cm
-past its front, at most 20 cm.
+and `turn_radius_cm = 9` to use them again. Before turning, the nearest scan
+hit must be at least 15 cm (`pivot_clearance_cm`); if not, the car reverses to
+get that room and plans from the scan it already has. The turn out is at least
+60 deg so the drive out stays short, and the pass beside the obstacle is
+lengthened to reach past its front.
 
 Scan (`av_config_default()`): the servo mount was freed on 2026-11-02, so the
 scan covers 20..160 deg (+/-70) in 10 deg steps and the car stays still while
-scanning. A direction is open when its reading reaches 8 cm past the obstacle
-(straight-line distance), and the open side needs 25 cm of room. The car only
-turns to look further for an edge when the servo finds no open side (up to
-90 deg). Detection stays at 25 cm.
+scanning. The car only turns to look further for an edge beyond 70 deg (up to
+90). Detection stays at 25 cm.
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

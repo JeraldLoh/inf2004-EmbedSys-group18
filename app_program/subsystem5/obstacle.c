@@ -61,8 +61,10 @@ point2_t scan_polar_to_xy(const scan_geometry_t *g, float servo_deg, float cm) {
     return obstacle_polar_to_xy(scan_left_offset_deg(g, servo_deg), cm);
 }
 
-bool obstacle_is_clear(range_reading_t r, float obstacle_cm, float margin_cm, float max_cm) {
-    return range_effective_cm(r, max_cm) > obstacle_cm + margin_cm;
+bool obstacle_is_clear(range_reading_t r, float direction_deg, float obstacle_cm,
+                       float margin_cm, float max_cm) {
+    float forward = range_effective_cm(r, max_cm) * b5_cosf(direction_deg * DEG2RAD);
+    return forward > obstacle_cm + margin_cm;
 }
 
 obstacle_profile_t obstacle_build_profile(float distance_cm, obstacle_edge_t left,

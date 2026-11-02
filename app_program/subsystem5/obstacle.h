@@ -63,13 +63,12 @@ side_t scan_side_of(const scan_geometry_t *g, float servo_deg);
 point2_t scan_polar_to_xy(const scan_geometry_t *g, float servo_deg, float cm);
 point2_t obstacle_polar_to_xy(float direction_deg, float cm);
 
-// True when a reading reaches past the obstacle: its straight-line distance
-// must exceed obstacle_cm + margin_cm. Car trial 2026-11-02: the forward
-// component (range x cos) made anything beside a far obstacle count as part
-// of it (at 70 deg a reading needed ~97 cm), so no side looked open and the
-// car rescanned and reversed. The cost: a wide flat face seen at a steep
-// angle can look open.
-bool obstacle_is_clear(range_reading_t r, float obstacle_cm, float margin_cm, float max_cm);
+// True when a reading taken in direction_deg lands well behind the obstacle
+// face: its forward component must exceed obstacle_cm + margin_cm. Using the
+// forward component stops a flat face seen at a wide angle (which reads
+// further away) from being mistaken for open space.
+bool obstacle_is_clear(range_reading_t r, float direction_deg, float obstacle_cm,
+                       float margin_cm, float max_cm);
 
 obstacle_profile_t obstacle_build_profile(float distance_cm, obstacle_edge_t left,
                                           obstacle_edge_t right);

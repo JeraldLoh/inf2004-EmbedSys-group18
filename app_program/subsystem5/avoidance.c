@@ -35,7 +35,7 @@ void av_config_default(av_config_t *cfg) {
     cfg->clear_hysteresis_cm = 5.0f;
     cfg->detect_confirm_count = 2;
     cfg->edge_margin_cm = 8.0f;
-    cfg->min_clearance_cm = 25.0f; // car trial 2026-11-02: 35 left far obstacles with no side
+    cfg->min_clearance_cm = 35.0f;
     cfg->max_range_cm = 400.0f;
     cfg->emergency_stop_cm = 6.0f;
 
@@ -48,10 +48,9 @@ void av_config_default(av_config_t *cfg) {
     cfg->reverse_cm = 10.0f;
     // Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
     // bypass turn from there hit it. Back off to this range before turning.
-    // 10 cm for pivots (15 backed off from obstacles that were not close);
-    // use 20 with arc turns, which carry the car 6-9 cm forward while turning.
-    // Two hits must be under it, so a single bad reading does not count.
-    cfg->pivot_clearance_cm = 10.0f;
+    // 15 cm for pivots; use 20 with arc turns, which carry the car 6-9 cm
+    // forward while turning.
+    cfg->pivot_clearance_cm = 15.0f;
 
     // Car trial 2026-11-02: the bypass went much further out than the
     // obstacle needed. The car's side passes bypass_clearance_cm outside the
@@ -66,11 +65,8 @@ void av_config_default(av_config_t *cfg) {
     cfg->bypass_pass_cm = 20.0f;
     // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
     // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
-    // ever turned back, so turns were held to 60 deg or more. That turned far
-    // obstacles much further off the line than they needed; the wheels now
-    // stop together (Buddy 2 sync slack), so turn at the geometric angle
-    // down to 35 deg.
-    cfg->bypass_min_turn_deg = 35;
+    // ever turned back. Turning out steeply keeps it to lateral / sin 60.
+    cfg->bypass_min_turn_deg = 60;
     cfg->bypass_max_turn_deg = 75;
     // Turns are pivots (b5_motion arc_turns = false). Set 9 (cm) with arcs:
     // they then cover part of the sideways distance themselves.
@@ -282,20 +278,14 @@ static float hit_cm(const av_t *a, range_reading_t r) {
     return r.status == RANGE_OK ? r.cm : a->ahead_cm;
 }
 
-// Keep the two closest hits, for the pivot clearance check.
+// Keep the closest hit, for the pivot clearance check.
 static void note_hit(av_t *a, range_reading_t r) {
     float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : hit_cm(a, r);
-    if (cm < a->nearest_cm) {
-        a->nearest2_cm = a->nearest_cm;
-        a->nearest_cm = cm;
-    } else if (cm < a->nearest2_cm) {
-        a->nearest2_cm = cm;
-    }
+    if (cm < a->nearest_cm) a->nearest_cm = cm;
 }
 
 static bool is_clear(const av_t *a, range_reading_t r, float dir) {
-    (void)dir;
-    return obstacle_is_clear(r, a->ahead_cm, a->cfg.edge_margin_cm, a->cfg.max_range_cm);
+    return obstacle_is_clear(r, dir, a->ahead_cm, a->cfg.edge_margin_cm, a->cfg.max_range_cm);
 }
 
 static obstacle_edge_t make_edge(float dir, float cm, bool found) {
@@ -454,7 +444,6 @@ static void on_coarse(av_t *a, uint32_t now) {
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
     if (!gone) {
         a->nearest_cm = near_cm;
-        a->nearest2_cm = a->cfg.max_range_cm;
         for (int i = 0; i < 2; i++) {
             a->edge[i].done = false;
             a->edge[i].found = false;
@@ -640,14 +629,12 @@ static float pass_beyond_cm(const av_t *a) {
 static void on_decide(av_t *a, uint32_t now) {
     // A bypass starts with a pivot. Too close and the front corner sweeps into
     // the obstacle (or a stalled wheel turns the pivot into a forward arc), so
-    // back off to pivot_clearance_cm first and scan again from there. The
-    // second-closest hit decides, so one bad reading (a too-close glitch
-    // reads as 0 cm) cannot back the car off a far obstacle.
-    if (a->nearest2_cm < a->cfg.pivot_clearance_cm) {
+    // back off to pivot_clearance_cm first and scan again from there.
+    if (a->nearest_cm < a->cfg.pivot_clearance_cm) {
         if (a->backoffs < a->cfg.max_reverses) {
             a->backoffs++;
             a->backing_off = true;
-            start_reverse(a, now, a->cfg.pivot_clearance_cm - a->nearest2_cm + 5.0f, a->backoffs);
+            start_reverse(a, now, a->cfg.pivot_clearance_cm - a->nearest_cm + 5.0f, a->backoffs);
         } else {
             fail(a, now, "too close to turn");
         }
@@ -745,7 +732,6 @@ static void on_reverse(av_t *a, uint32_t now) {
             a->backing_off = false;
             a->shift_cm += a->reverse_by_cm;
             a->nearest_cm += a->reverse_by_cm;
-            a->nearest2_cm += a->reverse_by_cm;
             enter(a, AV_STATE_DECIDE);
         } else {
             start_coarse(a);
