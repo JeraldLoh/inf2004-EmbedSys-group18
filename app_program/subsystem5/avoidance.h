@@ -225,6 +225,8 @@ typedef struct {
     int rescans;
     int reverses;
     int backoffs;         // reverses to get pivot clearance, this encounter
+    bool backing_off;     // the reverse in progress is a back-off
+    float shift_cm;       // distance backed off since the last scan
     float reverse_by_cm;  // distance for the reverse in progress
     int reacquire_attempts;
     uint32_t deadline;

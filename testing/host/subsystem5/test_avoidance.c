@@ -60,6 +60,7 @@ typedef struct {
     bool open_on_reverse;      // boxed-in walls vanish when reversing
     bool reverse_moves_away;   // reversing adds its distance to the obstacle range
     float reverse_total_cm;
+    float visible_under_cm;    // obstacle echoes only when closer than this; 0 = always
     bool vanish_late_on_estop; // late obstacle vanishes on an emergency stop
     bool line_on_return_leg;   // line sensors see the line during the return drive
     int line_on_forward;       // ...during this bypass forward leg (1-based); 0 = off
@@ -118,7 +119,9 @@ static range_reading_t s_measure(void *ctx) {
     int rel = 90 + servo_left_offset(s);
     int world = rel + s->heading;
     if (in_blob(&s->late_obstacle, rel)) return (range_reading_t){RANGE_OK, s->late_obstacle.cm};
-    if (in_blob(&s->obstacle, world)) return (range_reading_t){RANGE_OK, s->obstacle.cm};
+    if (in_blob(&s->obstacle, world) &&
+        !(s->visible_under_cm > 0.0f && s->obstacle.cm >= s->visible_under_cm))
+        return (range_reading_t){RANGE_OK, s->obstacle.cm};
     if (in_blob(&s->wall, world)) return (range_reading_t){RANGE_OK, s->wall.cm};
     if (s->bg_cm <= 0.0f) return (range_reading_t){RANGE_NO_ECHO, 0.0f};
     return (range_reading_t){RANGE_OK, s->bg_cm};
@@ -726,19 +729,27 @@ static void close_obstacle_backs_off_before_turning(void) {
     check_hygiene(&s);
 }
 
-static void cannot_back_off_fails_without_turning(void) {
+// Car trial 2026-11-02: a narrow bottle echoed only under ~16 cm. After
+// backing off, a rescan lost it, the car resumed, met it again and backed
+// off again in a loop. Now the scan from before the back-off is reused.
+static void backoff_reuses_the_scan(void) {
     sim_t s;
     av_t av;
     sim_defaults(&s, 0);
-    s.cfg.pivot_clearance_cm = 15.0f;
+    s.cfg.pivot_clearance_cm = 20.0f;
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
-    s.obstacle = (blob_t){60, 110, 5.0f, true}; // stays 5 cm away (follows the car)
-    CHECK(run_until(&s, &av, AV_STATE_FAILED, 60000));
-    CHECK_INT(s.reverses, 2);
-    CHECK_INT(s.turns, 0);
-    CHECK_INT(s.bypasses, 0);
-    CHECK(s.last_reason && strcmp(s.last_reason, "too close to turn") == 0);
+    s.reverse_moves_away = true;
+    s.visible_under_cm = 16.0f;
+    s.obstacle = (blob_t){70, 110, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 1);
+    CHECK(s.obstacle.cm >= 20.0f);         // now invisible to the sonar
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
+    CHECK_INT(s.resumes, 0);
+    CHECK_INT(s.bypasses, 1);
+    // The plan is from the shifted scan: the edge is ~13 cm further ahead.
+    CHECK(av_profile(&av)->distance_cm >= 20.0f);
 }
 
 static void edge_beyond_turn_range_is_partial(void) {
@@ -1181,7 +1192,7 @@ void run_avoidance_tests(void) {
     RUN(wide_servo_scans_without_moving_the_car);
     RUN(wide_servo_turns_only_past_its_reach);
     RUN(close_obstacle_backs_off_before_turning);
-    RUN(cannot_back_off_fails_without_turning);
+    RUN(backoff_reuses_the_scan);
     RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);

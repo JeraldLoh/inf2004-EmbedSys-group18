@@ -53,7 +53,10 @@ void av_config_default(av_config_t *cfg) {
     cfg->pivot_clearance_cm = 20.0f;
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
-    cfg->bypass_pass_cm = 30.0f;        // obstacle depth plus car length (assumed)
+    // Car trial 2026-11-02: on a curve, 30 cm took the car past where the
+    // line had already turned. The arcs either side add ~8 cm each (R sin
+    // 60), so 20 cm still clears a bottle-sized obstacle plus the car.
+    cfg->bypass_pass_cm = 20.0f;
     // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
     // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
     // ever turned back. Turn out steeply and let the arcs (R ~9 cm, see
@@ -290,6 +293,7 @@ static void finish_edge(av_t *a, int idx, bool found, float edge_dir, float clea
 
 static void start_coarse(av_t *a) {
     a->coarse_idx = 0;
+    a->shift_cm = 0.0f; // a fresh scan measures from here
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
     enter(a, AV_STATE_COARSE_SCAN);
@@ -328,6 +332,8 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->rescans = 0;
     a->reverses = 0;
     a->backoffs = 0;
+    a->backing_off = false;
+    a->shift_cm = 0.0f;
     a->reacquire_attempts = 0;
     a->off_line = false;
     a->heading_deg = 0;
@@ -566,6 +572,7 @@ static void on_decide(av_t *a, uint32_t now) {
     if (a->nearest_cm < a->cfg.pivot_clearance_cm) {
         if (a->backoffs < a->cfg.max_reverses) {
             a->backoffs++;
+            a->backing_off = true;
             start_reverse(a, now, a->cfg.pivot_clearance_cm - a->nearest_cm + 5.0f, a->backoffs);
         } else {
             fail(a, now, "too close to turn");
@@ -577,7 +584,10 @@ static void on_decide(av_t *a, uint32_t now) {
                                      a->edge[EDGE_LEFT].found);
     obstacle_edge_t right = make_edge(a->edge[EDGE_RIGHT].edge_dir,
                                       a->edge[EDGE_RIGHT].last_hit_cm, a->edge[EDGE_RIGHT].found);
-    a->profile = obstacle_build_profile(a->ahead_cm, left, right);
+    // After a back-off the scan is reused: the car is shift_cm further back.
+    left.pt.y_cm += a->shift_cm;
+    right.pt.y_cm += a->shift_cm;
+    a->profile = obstacle_build_profile(a->ahead_cm + a->shift_cm, left, right);
     a->have_profile = true;
     if (left.found && right.found) {
         a->metrics.profiles_complete++;
@@ -653,7 +663,18 @@ static void on_reverse(av_t *a, uint32_t now) {
     if (motion_failed(a)) {
         fail_motion(a, now);
     } else if (a->hw.motion_done(a->hw.ctx)) {
-        start_coarse(a);
+        if (a->backing_off) {
+            // Plan from the scan already taken, moved back by the reverse.
+            // Car trial 2026-11-02: rescanning from further away lost a
+            // narrow bottle (seen only under ~16 cm), so the car resumed,
+            // met it again and backed off again in a loop.
+            a->backing_off = false;
+            a->shift_cm += a->reverse_by_cm;
+            a->nearest_cm += a->reverse_by_cm;
+            enter(a, AV_STATE_DECIDE);
+        } else {
+            start_coarse(a);
+        }
     } else if (time_reached(now, a->deadline)) {
         a->metrics.motion_timeouts++;
         fail(a, now, "reverse timed out");
@@ -860,6 +881,8 @@ void av_reset(av_t *a) {
     a->rescans = 0;
     a->reverses = 0;
     a->backoffs = 0;
+    a->backing_off = false;
+    a->shift_cm = 0.0f;
     a->reacquire_attempts = 0;
     a->heading_deg = 0; // assume the car was put back facing along the line
     a->origin_deg = 0;
