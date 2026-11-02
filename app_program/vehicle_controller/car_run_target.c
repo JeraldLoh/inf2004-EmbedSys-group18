@@ -472,7 +472,7 @@ static void supervisor_task(INT code, void *exinf)
         tk_ext_tsk();
     }
     if(subsystem2_motion_trial_enabled())
-    { tm_printf((UB*)"[CAR B2 TRIAL] v10 50mm/s stronger differential turns; curvature140000; line HIGH=black; junction-pause fix; steer12..90 ramp6ms memory200ms; v6 wheel PID. Production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
+    { tm_printf((UB*)"[CAR B2 TRIAL] v11 50mm/s; inner-wheel target -15%% during line turns; curvature140000; line HIGH=black; junction-pause fix; steer12..90 ramp6ms memory200ms; v6 wheel PID. Production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
     if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }

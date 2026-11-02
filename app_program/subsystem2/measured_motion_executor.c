@@ -1,4 +1,7 @@
 #include "measured_motion_executor.h"
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+#include "../project_config/car_trial_tuning.h"
+#endif
 #include <stddef.h>
 #include <string.h>
 
@@ -318,6 +321,17 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             desired[0] = (uint32_t)((uint64_t)desired[0]*cap/largest);
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        /* Explicit line trial: reduce only the inside wheel by15% while
+         * turning. Zero curvature, finite goals and obstacle moves retain
+         * their original targets. Acceleration/PID/STOP protections follow. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
+        {
+            unsigned inside = correction > 0 ? 1U : 0U;
+            desired[inside] = (uint32_t)((uint64_t)desired[inside] *
+                CAR_TRIAL_LINE_INNER_SPEED_PERCENT / 100U);
+        }
+#endif
     }
     else
     {

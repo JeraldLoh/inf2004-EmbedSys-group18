@@ -261,3 +261,18 @@ line recovery or the known post-junction resume-authority issue.
 Compilation succeeded; automated suites were not run per user request.
 Matching test expectations were updated but not executed. No flash, vehicle
 operation or remote push performed. Remote testing retains the V5 baseline.
+
+## V11 local candidate: reduce inner line-turn target by15%
+
+At the operator's request V11 multiplies the inside wheel speed target by0.85
+for nonzero-curvature continuous LINE requests in APP_CAR_B2_TRIAL only. The
+outside target stays as in V10. Straight50/50, finite goals and obstacle moves
+are unchanged. Full right-turn nominal targets are86.4/11.56mm/s, mirrored
+for left; integer status output truncates these to86/11mm/s. Base50mm/s,
+curvature140000, original HIGH=black, steering ramp/memory and effort/watchdog/
+run limits are retained. The smaller inner target can stall under floor load;
+retain the next log to compare target and measured speeds. This does not fix
+line-loss stops or post-junction resume-authority rejection.
+
+Compilation succeeded. Automated tests skipped per user request. No physical
+trial, flash or remote push performed. Remote testing retains the V5 baseline.
