@@ -33,6 +33,17 @@ typedef struct
 
 typedef enum { MOTION_EXEC_DISABLED = 0, MOTION_EXEC_IDLE,
     MOTION_EXEC_CONTINUOUS, MOTION_EXEC_GOAL } measured_motion_executor_state_t;
+
+typedef enum {
+    MOTION_DETAIL_NONE = 0, MOTION_DETAIL_ENCODER_CAPTURE,
+    MOTION_DETAIL_MEASUREMENT_QUALITY, MOTION_DETAIL_AUTHORITY_DEADLINE,
+    MOTION_DETAIL_DRIVER_INHIBIT, MOTION_DETAIL_COMMAND_EXPIRED,
+    MOTION_DETAIL_GOAL_TIMEOUT, MOTION_DETAIL_GOAL_ADMISSION,
+    MOTION_DETAIL_ZERO_OUTPUT_IO, MOTION_DETAIL_OVERSHOOT,
+    MOTION_DETAIL_PID_INPUT, MOTION_DETAIL_NO_PROGRESS,
+    MOTION_DETAIL_WATCHDOG_ARM, MOTION_DETAIL_OUTPUT_IO
+} motion_detail_reason_t;
+const char *measured_motion_detail_name(motion_detail_reason_t reason);
 typedef struct
 {
     measured_motion_executor_state_t state;
@@ -43,6 +54,14 @@ typedef struct
     motion_result_code_t last_stop;
     bool authorized;
     bool terminal_pending;
+    uint8_t low_speed_floor_mask; /* Trial requested floor: bit0=L, bit1=R. */
+    uint32_t detail_sequence, detail_generation, detail_command;
+    motion_detail_reason_t detail_reason;
+    motion_result_code_t detail_result;
+    uint8_t detail_wheel_mask;
+    int32_t detail_target_um_s[2];
+    uint32_t detail_speed_um_s[2];
+    bool detail_speed_valid;
 } measured_motion_executor_status_t;
 
 /* Single task/state owner, or externally serialized. All normal PWM commits

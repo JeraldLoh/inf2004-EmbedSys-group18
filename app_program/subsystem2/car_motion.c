@@ -9,6 +9,30 @@
 static bool newer(uint32_t id, uint32_t old)
 { return id != old && id-old < 0x80000000UL; }
 
+const char *car_motion_reject_name(car_motion_reject_t reason)
+{
+    switch (reason) {
+    case CAR_REJECT_NONE: return "NONE";
+    case CAR_REJECT_SOURCE: return "SOURCE_NOT_ALLOWED";
+    case CAR_REJECT_LIFETIME: return "REQUEST_TTL_INVALID_OR_EXPIRED";
+    case CAR_REJECT_LINE_PAUSED: return "LINE_PAUSED_NEEDS_NEW_GENERATION";
+    case CAR_REJECT_ID: return "DUPLICATE_ID_OR_ID_EXHAUSTED";
+    case CAR_REJECT_AUTHORITY: return "AUTHORITY_REFUSED";
+    case CAR_REJECT_EXECUTOR: return "EXECUTOR_REFUSED";
+    case CAR_REJECT_ENCODER_CAPTURE: return "ENCODER_CAPTURE_UNAVAILABLE";
+    default: return "UNKNOWN";
+    }
+}
+bool car_motion_record_rejection(car_motion_t *m, car_motion_reject_t reason,
+    motion_status_t status, motion_source_t source, uint32_t id, uint32_t generation)
+{
+    if (m != NULL) {
+        ++m->rejected; m->last_reject = reason; m->last_reject_status = status;
+        m->rejected_source = source; m->rejected_id = id; m->rejected_generation = generation;
+    }
+    return false;
+}
+
 void car_motion_candidate_config(measured_motion_executor_config_t *c)
 {
     if (c == NULL) { return; }
@@ -69,12 +93,16 @@ bool car_motion_continuous(car_motion_t *m,
     motion_continuous_request_t converted;
     int64_t curvature;
     uint32_t life;
+    motion_status_t status;
     if (m == NULL || r == NULL) { return false; }
     life = r->expires_ms-r->created_ms;
-    if ((r->source != MOTION_SOURCE_LINE && r->source != MOTION_SOURCE_OBSTACLE) ||
-        life == 0U || life > 1000U || ms-r->created_ms >= life ||
-        (m->line_floor_set && r->source == MOTION_SOURCE_LINE &&
-         !newer(r->authority_generation, m->line_floor))) { ++m->rejected; return false; }
+    if (r->source != MOTION_SOURCE_LINE && r->source != MOTION_SOURCE_OBSTACLE)
+    { return car_motion_record_rejection(m,CAR_REJECT_SOURCE,MOTION_INVALID,r->source,r->command_id,r->authority_generation); }
+    if (life == 0U || life > 1000U || ms-r->created_ms >= life)
+    { return car_motion_record_rejection(m,CAR_REJECT_LIFETIME,MOTION_STALE,r->source,r->command_id,r->authority_generation); }
+    if (m->line_floor_set && r->source == MOTION_SOURCE_LINE &&
+        !newer(r->authority_generation, m->line_floor))
+    { return car_motion_record_rejection(m,CAR_REJECT_LINE_PAUSED,MOTION_STALE,r->source,r->command_id,r->authority_generation); }
     converted = *r;
     curvature = -(int64_t)r->curvature_u1_m;
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
@@ -88,25 +116,34 @@ bool car_motion_continuous(car_motion_t *m,
         if (converted.curvature_u1_m > limit) { converted.curvature_u1_m = limit; }
         if (converted.curvature_u1_m < -limit) { converted.curvature_u1_m = -limit; }
     }
-    if (m->next_command == UINT32_MAX || !authority(m, r->authority_generation,us))
-    { ++m->rejected; return false; }
+    if (m->next_command == UINT32_MAX)
+    { return car_motion_record_rejection(m,CAR_REJECT_ID,MOTION_STATE,r->source,r->command_id,r->authority_generation); }
+    if (!authority(m, r->authority_generation,us))
+    { return car_motion_record_rejection(m,CAR_REJECT_AUTHORITY,MOTION_INHIBITED,r->source,r->command_id,r->authority_generation); }
     converted.command_id = ++m->next_command;
-    if (measured_motion_executor_continuous(&m->executor, &converted, us,
-        (r->expires_ms-ms)*1000U) != MOTION_OK) { ++m->rejected; return false; }
+    status = measured_motion_executor_continuous(&m->executor, &converted, us,
+        (r->expires_ms-ms)*1000U);
+    if (status != MOTION_OK)
+    { return car_motion_record_rejection(m,CAR_REJECT_EXECUTOR,status,r->source,r->command_id,r->authority_generation); }
     ++m->accepted; return true;
 }
 
 bool car_motion_goal(car_motion_t *m, const motion_goal_request_t *r, uint32_t us)
 {
     motion_goal_request_t converted;
+    motion_status_t status;
     if (m == NULL || r == NULL) { return false; }
-    if ((r->source != MOTION_SOURCE_JUNCTION && r->source != MOTION_SOURCE_OBSTACLE) ||
-        r->goal_id == 0U || m->next_goal == UINT32_MAX ||
-        (m->last_goal_id[r->source] != 0U && !newer(r->goal_id, m->last_goal_id[r->source])) ||
-        !authority(m, r->authority_generation,us)) { ++m->rejected; return false; }
+    if (r->source != MOTION_SOURCE_JUNCTION && r->source != MOTION_SOURCE_OBSTACLE)
+    { return car_motion_record_rejection(m,CAR_REJECT_SOURCE,MOTION_INVALID,r->source,r->goal_id,r->authority_generation); }
+    if (r->goal_id == 0U || m->next_goal == UINT32_MAX ||
+        (m->last_goal_id[r->source] != 0U && !newer(r->goal_id, m->last_goal_id[r->source])))
+    { return car_motion_record_rejection(m,CAR_REJECT_ID,MOTION_STALE,r->source,r->goal_id,r->authority_generation); }
+    if (!authority(m, r->authority_generation,us))
+    { return car_motion_record_rejection(m,CAR_REJECT_AUTHORITY,MOTION_INHIBITED,r->source,r->goal_id,r->authority_generation); }
     converted = *r; converted.goal_id = ++m->next_goal;
-    if (measured_motion_executor_goal(&m->executor, &converted, us, 1000000U) != MOTION_OK)
-    { ++m->rejected; return false; }
+    status = measured_motion_executor_goal(&m->executor, &converted, us, 1000000U);
+    if (status != MOTION_OK)
+    { return car_motion_record_rejection(m,CAR_REJECT_EXECUTOR,status,r->source,r->goal_id,r->authority_generation); }
     m->external_goal = *r; m->retained_valid = false;
     m->last_goal_id[r->source] = r->goal_id;
     ++m->accepted; return true;

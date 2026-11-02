@@ -5,6 +5,8 @@
 #include "car_motion.h"
 #if APP_CAR_B2_TRIAL
 #include "../diagnostics/b2_move_profile.h"
+#include "../project_config/car_trial_tuning.h"
+#include "b2_line_tuning.h"
 #endif
 #include "../vehicle_controller/controller_task.h"
 
@@ -16,6 +18,14 @@ static ID task, guard;
 static _Alignas(8) uint32_t stack[1024];
 static bool initialized, started;
 static uint32_t driver_errors;
+#if APP_CAR_B2_TRIAL
+static ID diagnostic_task;
+static _Alignas(8) uint32_t diagnostic_stack[1024];
+/* Atomic last-failure category for failures before the motion mutex. This
+ * is not a lossless event counter and never changes motor authority. */
+static volatile uint32_t ingress_diagnostic;
+enum { INGRESS_NONE, INGRESS_NOT_STARTED, INGRESS_NULL, INGRESS_LOCK };
+#endif
 
 static uint32_t now_ms(void)
 {
@@ -35,6 +45,91 @@ static void cancel_watchdog(void *context)
 static bool lock(void)
 { return initialized && tk_loc_mtx(guard, 10) == E_OK; }
 static void unlock(void) { (void)tk_unl_mtx(guard); }
+
+#if APP_CAR_B2_TRIAL
+static const char *engine_status_name(motion_status_t status)
+{
+    switch (status) {
+    case MOTION_OK: return "OK";
+    case MOTION_INVALID: return "INVALID_PARAMETERS";
+    case MOTION_STATE: return "GOAL_ACTIVE_OR_RESULT_PENDING";
+    case MOTION_INHIBITED: return "INHIBITED_OR_UNAUTHORIZED";
+    case MOTION_STALE: return "STALE_ID_OR_AUTHORITY";
+    case MOTION_IO_ERROR: return "IO_ERROR";
+    case MOTION_UNAVAILABLE: return "UNAVAILABLE";
+    case MOTION_REVERSAL_REQUIRED: return "REVERSAL_REQUIRED";
+    default: return "UNKNOWN";
+    }
+}
+static const char *ingress_name(uint32_t reason)
+{
+    switch (reason) {
+    case INGRESS_NONE: return "NONE";
+    case INGRESS_NOT_STARTED: return "NOT_STARTED";
+    case INGRESS_NULL: return "NULL_REQUEST";
+    case INGRESS_LOCK: return "MOTION_MUTEX_BUSY";
+    default: return "UNKNOWN";
+    }
+}
+/* Dedicated low-priority logger: never print in the20ms motor task or while
+ * holding its mutex. Periodic snapshots may coalesce repeated events. */
+static void diagnostic_worker(INT code, void *exinf)
+{
+    uint32_t last_detail = 0U, last_rejected = 0U, last_ingress = 0U;
+    bool announced = false;
+    (void)code; (void)exinf;
+    for (;;) {
+        if (started && !announced) {
+            tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u%% min_line_wheel=%umm/s UNQUALIFIED; this configuration supersedes older CAR banner speed text.\n",
+                B2_FIRMWARE_TAG, (unsigned)CONTROLLER_LINE_CRUISE_MM_S,
+                (unsigned long)CONTROLLER_LINE_CURVATURE_PER_STEER,
+                (unsigned)CAR_TRIAL_LINE_INNER_SPEED_PERCENT,
+                (unsigned)B2_LINE_WIDE_TURN_INNER_PERCENT, (unsigned)B2_LINE_MIN_ROLLING_MM_S);
+            announced = true;
+        }
+        if (started && lock()) {
+            measured_motion_executor_status_t s = motion.executor.status;
+            car_motion_reject_t rejected_reason = motion.last_reject;
+            motion_status_t rejected_status = motion.last_reject_status;
+            motion_motor_state_t outputs = {0};
+            bool have_outputs = drv_motor_read(motor,&outputs) == MOTION_OK;
+            uint32_t count = motion.rejected, id = motion.rejected_id;
+            uint32_t generation = motion.rejected_generation, floor = motion.line_floor;
+            unsigned source = (unsigned)motion.rejected_source;
+            uint32_t ingress = ingress_diagnostic;
+            unlock();
+            tm_printf((UB*)"[B2 TRACK] fw=%s target=%ld/%ld measured=%lu/%lu mm/s speed_valid=%d effort=%d/%d output_valid=%d floor_mask=0x%x state=%d gen=%lu rejected=%lu\n",
+                B2_FIRMWARE_TAG,(long)(s.target_um_s[0]/1000),(long)(s.target_um_s[1]/1000),
+                (unsigned long)(s.wheels.speed_um_s[0]/1000U),(unsigned long)(s.wheels.speed_um_s[1]/1000U),
+                (int)s.wheels.speed_valid,(int)outputs.left_effort,(int)outputs.right_effort,
+                (int)have_outputs,(unsigned)s.low_speed_floor_mask,(int)s.state,
+                (unsigned long)s.generation,(unsigned long)count);
+            if (s.detail_sequence != last_detail) {
+                tm_printf((UB*)"[B2 STOP DETAIL] seq=%lu reason=%s result=%d gen=%lu command=%lu wheel_mask=0x%x before_target=%ld/%ld before_speed=%lu/%lu mm/s speed_valid=%d\n",
+                    (unsigned long)s.detail_sequence,measured_motion_detail_name(s.detail_reason),
+                    (int)s.detail_result,(unsigned long)s.detail_generation,(unsigned long)s.detail_command,
+                    (unsigned)s.detail_wheel_mask,(long)(s.detail_target_um_s[0]/1000),
+                    (long)(s.detail_target_um_s[1]/1000),
+                    (unsigned long)(s.detail_speed_um_s[0]/1000U),
+                    (unsigned long)(s.detail_speed_um_s[1]/1000U),(int)s.detail_speed_valid);
+                last_detail = s.detail_sequence;
+            }
+            if (count != last_rejected) {
+                tm_printf((UB*)"[B2 REJECT] total=%lu reason=%s engine=%s source=%u id=%lu request_gen=%lu executor_gen=%lu paused_line_gen=%lu state=%d authorized=%d\n",
+                    (unsigned long)count,car_motion_reject_name(rejected_reason),engine_status_name(rejected_status),
+                    source,(unsigned long)id,(unsigned long)generation,(unsigned long)s.generation,
+                    (unsigned long)floor,(int)s.state,(int)s.authorized);
+                last_rejected = count;
+            }
+            if (ingress != last_ingress) {
+                tm_printf((UB*)"[B2 INGRESS] last_failure=%s\n",ingress_name(ingress));
+                last_ingress = ingress;
+            }
+        }
+        (void)tk_dly_tsk(1000U);
+    }
+}
+#endif
 
 static void executor_task(INT code, void *exinf)
 {
@@ -108,6 +203,16 @@ ER subsystem2_motion_init(const b2_trial_io_t *trial_io)
     ct.stksz = sizeof(stack); ct.bufptr = stack;
     task = tk_cre_tsk(&ct);
     if (task < E_OK) { (void)tk_del_mtx(guard); guard = 0; return task; }
+#if APP_CAR_B2_TRIAL
+    ct.task = (FP)diagnostic_worker; ct.itskpri = 18;
+    ct.stksz = sizeof(diagnostic_stack); ct.bufptr = diagnostic_stack;
+    diagnostic_task = tk_cre_tsk(&ct);
+    if (diagnostic_task < E_OK) {
+        ER failure = diagnostic_task;
+        (void)tk_del_tsk(task); (void)tk_del_mtx(guard);
+        task = guard = 0; return failure;
+    }
+#endif
     initialized = true; return E_OK;
 }
 ER subsystem2_motion_start(void)
@@ -115,6 +220,12 @@ ER subsystem2_motion_start(void)
     ER result;
     if (!initialized || started) { return E_OBJ; }
     result = tk_sta_tsk(task, 0);
+#if APP_CAR_B2_TRIAL
+    if (result == E_OK) {
+        result = tk_sta_tsk(diagnostic_task, 0);
+        if (result != E_OK) { (void)drv_motor_stop(motor); }
+    }
+#endif
     if (result == E_OK) { started = true; }
     return result;
 }
@@ -128,18 +239,32 @@ bool subsystem2_motion_continuous(const motion_continuous_request_t *request)
 {
     motion_encoder_snapshot_t sample;
     bool ok;
-    if (!started || request == NULL || !lock()) { return false; }
-    ok = drv_encoder_capture(encoder, motor, &sample) == MOTION_OK &&
-        car_motion_continuous(&motion, request, now_ms(), sample.acquired_us);
+    if (!started || request == NULL || !lock()) {
+#if APP_CAR_B2_TRIAL
+        ingress_diagnostic = !started ? INGRESS_NOT_STARTED : request == NULL ? INGRESS_NULL : INGRESS_LOCK;
+#endif
+        return false;
+    }
+    if (drv_encoder_capture(encoder, motor, &sample) != MOTION_OK)
+    { ok = car_motion_record_rejection(&motion,CAR_REJECT_ENCODER_CAPTURE,MOTION_UNAVAILABLE,
+        request->source,request->command_id,request->authority_generation); }
+    else { ok = car_motion_continuous(&motion, request, now_ms(), sample.acquired_us); }
     unlock(); return ok;
 }
 bool subsystem2_motion_goal(const motion_goal_request_t *request)
 {
     motion_encoder_snapshot_t sample;
     bool ok;
-    if (!started || request == NULL || !lock()) { return false; }
-    ok = drv_encoder_capture(encoder, motor, &sample) == MOTION_OK &&
-        car_motion_goal(&motion, request, sample.acquired_us);
+    if (!started || request == NULL || !lock()) {
+#if APP_CAR_B2_TRIAL
+        ingress_diagnostic = !started ? INGRESS_NOT_STARTED : request == NULL ? INGRESS_NULL : INGRESS_LOCK;
+#endif
+        return false;
+    }
+    if (drv_encoder_capture(encoder, motor, &sample) != MOTION_OK)
+    { ok = car_motion_record_rejection(&motion,CAR_REJECT_ENCODER_CAPTURE,MOTION_UNAVAILABLE,
+        request->source,request->goal_id,request->authority_generation); }
+    else { ok = car_motion_goal(&motion, request, sample.acquired_us); }
     unlock(); return ok;
 }
 void subsystem2_motion_halt(void)
