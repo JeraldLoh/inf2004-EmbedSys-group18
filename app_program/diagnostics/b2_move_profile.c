@@ -1,5 +1,5 @@
 #include "b2_move_profile.h"
-#if defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST
+#if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
 #include "../subsystem2/car_motion.h"
 void b2_move_candidate_profile(measured_motion_executor_config_t *c)
 {

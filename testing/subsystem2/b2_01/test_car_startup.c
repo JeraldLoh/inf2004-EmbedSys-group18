@@ -16,7 +16,7 @@
 static FP supervisor;
 static jmp_buf boundary;
 static const char *scenario;
-static unsigned inits,starts,urgent,auto_posts,stop_posts,acks,loops;
+static unsigned inits,starts,urgent,auto_posts,stop_posts,idle_posts,acks,loops;
 static bool qualified,stop_latched;
 static controller_status_t status;
 static char log_text[4096];
@@ -39,7 +39,7 @@ ER tk_dly_tsk(UINT ms) {
     if(++loops==2U) { longjmp(boundary,1); }
     return E_OK;
 }
-ER tk_get_otm(SYSTIM *t) { t->hi=0U; t->lo=loops*5U; return E_OK; }
+ER tk_get_otm(SYSTIM *t) { t->hi=0U; t->lo=loops*(strcmp(scenario,"trial_limit")==0?15000U:5U); return E_OK; }
 void tm_printf(UB *format,...) {
     size_t length=strlen(log_text);
     va_list args; va_start(args,format);
@@ -62,7 +62,7 @@ bool b2_platform_ack_events(uint32_t id) {
 }
 b2_ui_event_t b2_gesture_update(b2_gesture_t *g,uint32_t us,bool start,bool stop,bool busy) {
     (void)g; (void)us; (void)start; (void)stop; (void)busy;
-    return strcmp(scenario,"stop_ack")==0 ? B2_UI_NONE : B2_UI_RUN;
+    return (strcmp(scenario,"stop_ack")==0 || strcmp(scenario,"trial_idle")==0) ? B2_UI_NONE : B2_UI_RUN;
 }
 ER subsystem2_bind_hal(const motion_hal_t *h) { (void)h; return E_OK; }
 ER subsystem2_init(void) { assert(inits++==0U); return E_OK; }
@@ -71,6 +71,7 @@ motion_status_t subsystem2_urgent_stop(void) { ++urgent; return MOTION_OK; }
 motion_status_t subsystem2_read_motor(motion_motor_state_t *s) { *s=(motion_motor_state_t){0}; return MOTION_OK; }
 ER subsystem2_motion_init(const b2_trial_io_t *io) { (void)io; assert(inits++==1U); return E_OK; }
 ER subsystem2_motion_start(void) { assert(inits==7U && starts++==1U); return E_OK; }
+bool subsystem2_motion_trial_enabled(void) { return strncmp(scenario,"trial",5U)==0; }
 bool subsystem2_motion_qualified(void) { return qualified; }
 void subsystem2_motion_halt(void) { }
 bool subsystem2_motion_continuous(const motion_continuous_request_t *r) { (void)r; return true; }
@@ -93,6 +94,7 @@ bool controller_post(const controller_event_t *e) {
     if(e->type==CONTROLLER_EVENT_SET_MODE && e->mode==SYSTEM_MODE_AUTO) {
         ++auto_posts; status.mode=SYSTEM_MODE_AUTO;
     }
+    if(e->type==CONTROLLER_EVENT_SET_MODE && e->mode==SYSTEM_MODE_IDLE) { ++idle_posts; }
     if(e->type==CONTROLLER_EVENT_LATCH_STOP) { ++stop_posts; }
     return true;
 }
@@ -121,15 +123,18 @@ int main(int argc,char **argv) {
     assert(argc==2); scenario=argv[1];
     qualified=strcmp(scenario,"qualified")==0;
     status.mode=SYSTEM_MODE_IDLE;
+    if(strcmp(scenario,"trial_fault")==0) { status.stop_reasons=STOP_REASON_MOTION_FAULT; }
     assert(car_run_start()==E_OK);
     if(setjmp(boundary)==0) { ((void (*)(INT,void *))supervisor)(0,NULL); }
     if(strcmp(scenario,"init_failure")==0) { assert(starts==0U && urgent>0U); }
     else {
         assert(inits==7U && starts==5U);
-        if(qualified) { assert(auto_posts==1U); }
+        if(qualified || strcmp(scenario,"trial")==0 || strcmp(scenario,"trial_limit")==0) { assert(auto_posts==1U); }
         else { assert(auto_posts==0U); }
         if(strcmp(scenario,"stop_ack")==0) { assert(acks==1U && stop_posts==1U); }
-        else if(!qualified) { assert(strstr(log_text,"START refused")!=NULL); }
+        else if(!qualified && !subsystem2_motion_trial_enabled()) { assert(strstr(log_text,"START refused")!=NULL); }
     }
+    if(strcmp(scenario,"trial_limit")==0) { assert(idle_posts==1U && strstr(log_text,"run time limit")!=NULL); }
+    if(strcmp(scenario,"trial_fault")==0) { assert(auto_posts==0U && strstr(log_text,"fault latched")!=NULL); }
     printf("PASS actual CAR_RUN startup %s\n",scenario); return 0;
 }

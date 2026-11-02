@@ -3,6 +3,9 @@
 #if APP_CAR_RUN
 #include "subsystem2_internal.h"
 #include "car_motion.h"
+#if APP_CAR_B2_TRIAL
+#include "../diagnostics/b2_move_profile.h"
+#endif
 #include "../vehicle_controller/controller_task.h"
 
 static car_motion_t motion;
@@ -88,8 +91,15 @@ ER subsystem2_motion_init(const b2_trial_io_t *trial_io)
     motor = subsystem2_executor_motor(); encoder = subsystem2_executor_encoder();
     if (motor == NULL || encoder == NULL) { return E_OBJ; }
     io = *trial_io;
+#if APP_CAR_B2_TRIAL
+    b2_move_candidate_profile(&config); /* Exact standalone v6 parameter builder. */
+#else
     car_motion_candidate_config(&config);
+#endif
     if (!car_motion_init(&motion, motor, encoder, &config, &measured_io)) { return E_PAR; }
+#if APP_CAR_B2_TRIAL
+    if(!car_motion_enable_trial(&motion,15000000U)) { return E_PAR; }
+#endif
     mtx.mtxatr = TA_INHERIT;
     guard = tk_cre_mtx(&mtx);
     if (guard < E_OK) { return guard; }
@@ -110,6 +120,9 @@ ER subsystem2_motion_start(void)
 }
 bool subsystem2_motion_qualified(void)
 { return initialized && motion.executor.config.qualified; }
+
+bool subsystem2_motion_trial_enabled(void)
+{ return initialized && motion.trial_limit_us!=0U; }
 
 bool subsystem2_motion_continuous(const motion_continuous_request_t *request)
 {

@@ -155,6 +155,21 @@ endif
 TEST_SUFFIX := _carrun
 endif
 
+# Explicit supervised integration trial; normal CAR_RUN remains qualification-gated.
+CAR_B2_TRIAL ?= 0
+ifneq ($(filter $(CAR_B2_TRIAL),0 1),$(CAR_B2_TRIAL))
+$(error CAR_B2_TRIAL must be 0 or 1)
+endif
+ifeq ($(CAR_B2_TRIAL),1)
+ifneq ($(CAR_RUN)$(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),11usb_cdcnonenone00)
+$(error CAR_B2_TRIAL=1 requires CAR_RUN=1 SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
+endif
+ifneq ($(CRASH_REPORT),0)
+$(error CAR_B2_TRIAL=1 requires CRASH_REPORT=0)
+endif
+TEST_SUFFIX := _carrun_b2trial
+endif
+
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
 CIRCUIT_TEST ?= 0
 ifneq ($(filter $(CIRCUIT_TEST),0 1),$(CIRCUIT_TEST))
@@ -320,7 +335,7 @@ CFLAGS  += -DAPP_B2_BENCH=$(B2_DRIVERS)
 CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
-CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST)
+CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 ifeq ($(B2_MOVE_TEST),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 endif
@@ -338,7 +353,11 @@ CFLAGS  += -DLINE_STEER_RAMP_MS=6U
 # Slower floor cruise (150 -> 110 mm/s command, effort ~146 L / ~190 R) so
 # the corrections keep up on the curves. At 115 both wheels kept turning;
 # 100 was too slow on the floor.
+ifeq ($(CAR_B2_TRIAL),1)
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=100U -DCAR_RUN_LIMIT_MS=15000U
+else
 CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
+endif
 # Junction-probe and avoidance pivots stalled at 15% and latched a motion
 # fault, and still stalled at 20% on the foam mat; goals now ask for 30%.
 CFLAGS  += -DMOTION_GOAL_MIN_EFFORT=300
@@ -379,7 +398,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

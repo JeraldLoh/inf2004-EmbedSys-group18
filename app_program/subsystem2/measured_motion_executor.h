@@ -79,8 +79,8 @@ bool measured_motion_executor_init(measured_motion_executor_t *executor, drv_mot
     drv_encoder_t *encoder, const measured_motion_executor_config_t *config,
     const measured_motion_executor_io_t *io);
 motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *executor, uint32_t generation);
-#if defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST
-/* Dedicated movement-test build ONLY. Explicit bounded calibration authority,
+#if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
+/* Movement-test or explicit integrated-trial build ONLY. Explicit bounded calibration authority,
  * not production qualification. Hard limits: <=120mm/s, <=30% effort,
  * <=1m goals, watchdog <=100ms and total run <=20s. No config flags changed. */
 motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *executor,

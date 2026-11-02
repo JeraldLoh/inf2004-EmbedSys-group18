@@ -125,3 +125,14 @@ ctest --test-dir build/shared-host --output-on-failure
 Firmware uses the existing course Make profiles: normal, B2_BENCH, B5_RUN and
 CAR_RUN, with SMP=1, USB CDC, CRASH_REPORT=0 and networking disabled. No generated
 image is committed or flashed as part of software verification.
+
+
+## Explicit local integrated trial (2 November 2026)
+
+CAR_B2_TRIAL=1 reuses the standalone v6 profile and allows a separate bounded
+calibration authority while qualified staysfalse. Whole-run15s supervisor cap,
+<=15s authority,100ms watchdog,30% effort,120mm/s maximum wheel target and1m
+goal cap apply. Normal CAR_RUN still uses its unqualified zero-gain candidate
+and does not expose this authority API. See B2_INTEGRATED_TRIAL_GUIDE.md for
+source provenance, scope, tests and operator procedure. This is a local first
+hardware integration trial, not full motor/network/terrain qualification.

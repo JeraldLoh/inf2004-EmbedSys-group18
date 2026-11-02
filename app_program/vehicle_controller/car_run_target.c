@@ -37,7 +37,14 @@ static void wifi_telemetry(uint32_t now)
 #define STATUS_PERIOD_MS 1000U
 #define CONSOLE_WAIT_MS 5000U
 #ifndef CAR_RUN_LIMIT_MS
+#if APP_CAR_B2_TRIAL
+#define CAR_RUN_LIMIT_MS 15000U
+#else
 #define CAR_RUN_LIMIT_MS 60000U   /* whole run, then stop; override with -D */
+#endif
+#endif
+#if APP_CAR_B2_TRIAL && CAR_RUN_LIMIT_MS>15000U
+#error "Integrated B2 trial cannot exceed15 seconds"
 #endif
 #ifndef CAR_LINE_LOST_MS
 #define CAR_LINE_LOST_MS 3000U    /* no black while following, then stop */
@@ -384,7 +391,7 @@ static void supervise(void)
             }
             else if ((ui == B2_UI_RUN) && controller_get_status(&status))
             {
-                if (!subsystem2_motion_qualified())
+                if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
                 {
                     tm_printf((UB*)"[CAR] START refused: measured PID/load/STOP/pivot calibration unqualified.\n");
                 }
@@ -461,8 +468,10 @@ static void supervisor_task(INT code, void *exinf)
             failure, (int)er);
         tk_ext_tsk();
     }
+    if(subsystem2_motion_trial_enabled())
+    { tm_printf((UB*)"[CAR B2 TRIAL] v6 operator-tested motor settings; production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
-    if (!subsystem2_motion_qualified())
+    if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }
 #if APP_CAR_MQTT
     tm_printf((UB*)"[CAR] Buddy 1 LIVE MQTT enabled: B2/B3/B5 telemetry and controller START/STOP.\n");

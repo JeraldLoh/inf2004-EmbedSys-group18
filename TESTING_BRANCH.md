@@ -1,5 +1,18 @@
 # `testing` branch: first whole-car build
 
+## Local integrated B2 trial (2 November 2026)
+
+The fresh local testing clone includes published Buddy-2be5b250 (v6 hardware
+reports and fixes), restoring the measured path over testing revert641ad74.
+The explicit CAR_RUN=1 CAR_B2_TRIAL=1 image uses the same v6 motor settings,
+manual START,15s cap and30% effort/100ms watchdog. Production-qualified remains
+false; default CAR_RUN remains blocked. This offline first trial covers B2,
+B3 and B5 plus controller, not live Buddy1 network or Buddy4 terrain.
+See [trial guide](testing/integration/B2_INTEGRATED_TRIAL_GUIDE.md).
+Integrated changes are local for hardware testing; remote testing/main were
+not pushed by this task. Earlier integration notes below retain their history.
+
+
 **Base:** `main` at `ceab57b` (2026-10-28).
 **Author:** Buddy 5, as integration lead.
 **Status:**

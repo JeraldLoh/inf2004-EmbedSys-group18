@@ -42,6 +42,7 @@ typedef struct
 ER subsystem2_motion_init(const b2_trial_io_t *io);
 ER subsystem2_motion_start(void);
 bool subsystem2_motion_qualified(void);
+bool subsystem2_motion_trial_enabled(void); /* Explicit opt-in, not a qualification claim. */
 
 /* Any task. Never block for long; false if rejected (invalid, stale, or the
  * executor is not running). */

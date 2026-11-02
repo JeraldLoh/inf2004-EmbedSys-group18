@@ -34,13 +34,29 @@ bool car_motion_init(car_motion_t *m, drv_motor_t *motor,
     return measured_motion_executor_init(&m->executor, motor, encoder, c, io);
 }
 
-static bool authority(car_motion_t *m, uint32_t generation)
+#if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
+bool car_motion_enable_trial(car_motion_t *m,uint32_t limit)
+{
+    if(m==NULL || m->executor.config.qualified || m->executor.status.authorized ||
+        limit==0U || limit>15000000U) { return false; }
+    m->trial_limit_us=limit;
+    return true;
+}
+#endif
+
+static bool authority(car_motion_t *m, uint32_t generation, uint32_t now)
 {
     measured_motion_executor_t *e = &m->executor;
     if (generation == 0U) { return false; }
     if (generation == e->status.generation) { return e->status.authorized; }
     if (!newer(generation, e->status.generation)) { return false; }
     car_motion_generation(m, generation);
+#if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
+    if(m->trial_limit_us!=0U)
+    { return measured_motion_executor_authorize_calibration(e,generation,now,m->trial_limit_us)==MOTION_OK; }
+#else
+    (void)now;
+#endif
     return measured_motion_executor_authorize(e, generation) == MOTION_OK;
 }
 
@@ -65,7 +81,7 @@ bool car_motion_continuous(car_motion_t *m,
         if (converted.curvature_u1_m > limit) { converted.curvature_u1_m = limit; }
         if (converted.curvature_u1_m < -limit) { converted.curvature_u1_m = -limit; }
     }
-    if (m->next_command == UINT32_MAX || !authority(m, r->authority_generation))
+    if (m->next_command == UINT32_MAX || !authority(m, r->authority_generation,us))
     { ++m->rejected; return false; }
     converted.command_id = ++m->next_command;
     if (measured_motion_executor_continuous(&m->executor, &converted, us,
@@ -80,7 +96,7 @@ bool car_motion_goal(car_motion_t *m, const motion_goal_request_t *r, uint32_t u
     if ((r->source != MOTION_SOURCE_JUNCTION && r->source != MOTION_SOURCE_OBSTACLE) ||
         r->goal_id == 0U || m->next_goal == UINT32_MAX ||
         (m->last_goal_id[r->source] != 0U && !newer(r->goal_id, m->last_goal_id[r->source])) ||
-        !authority(m, r->authority_generation)) { ++m->rejected; return false; }
+        !authority(m, r->authority_generation,us)) { ++m->rejected; return false; }
     converted = *r; converted.goal_id = ++m->next_goal;
     if (measured_motion_executor_goal(&m->executor, &converted, us, 1000000U) != MOTION_OK)
     { ++m->rejected; return false; }

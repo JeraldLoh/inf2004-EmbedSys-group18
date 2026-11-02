@@ -148,7 +148,7 @@ static motion_status_t authorize(measured_motion_executor_t *e, uint32_t generat
 motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *e, uint32_t generation)
 { return authorize(e,generation,false); }
 
-#if defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST
+#if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
 motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *e,
     uint32_t generation, uint32_t now, uint32_t limit)
 {
