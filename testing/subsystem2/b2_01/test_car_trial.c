@@ -45,13 +45,13 @@ int main(int argc,char **argv) {
         assert(!car_motion_enable_trial(&f.car,15000001U));
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"pivot_cap")==0 || strcmp(argv[1],"forward_cap")==0) {
-        /* Wheels held still: a pivot may push past 30% up to 45%; a straight
-         * goal stays at 30%. */
+        /* Wheels held still: pivots and straight goals both stay at 30%
+         * (pivot_max_effort is 0 in the trial profile). */
         bool pivot=strcmp(argv[1],"pivot_cap")==0;
         motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,
             pivot?MOTION_GOAL_PIVOT_LEFT:MOTION_GOAL_FORWARD,pivot?0:200,pivot?10000:0,100U,0U};
         int peak=0;
-        assert(f.car.executor.config.pivot_max_effort==450U);
+        assert(f.car.executor.config.pivot_max_effort==0U);
         assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
         for(i=0U;i<60U && !f.car.executor.status.terminal_pending;++i) {
             motion_motor_state_t state; int l,rr;
@@ -62,8 +62,7 @@ int main(int argc,char **argv) {
             if(l>peak) { peak=l; }
             if(rr>peak) { peak=rr; }
         }
-        assert(peak<=(pivot?450:300));
-        if(pivot) { assert(peak>300); } else { assert(peak==300); }
+        assert(peak==300);
         car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"sync")==0 || strcmp(argv[1],"sync_far")==0) {
         /* Straight 200 mm; the left wheel stops 20 mm (sync) or 50 mm
@@ -85,6 +84,27 @@ int main(int argc,char **argv) {
             assert(out.code==MOTION_RESULT_COMPLETED);
             assert(out.travelled_mm>=180 && out.travelled_mm<=200);  /* average of the two */
         } else {
+            assert(out.code==MOTION_RESULT_FAULT);
+            assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
+        }
+        fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"pivot_sync")==0 || strcmp(argv[1],"pivot_sync_far")==0) {
+        /* 60 deg pivot left (~59 mm per wheel); the left wheel stops 15 mm
+         * (pivot_sync) or 30 mm (pivot_sync_far) short of its share. Within
+         * the 20 mm pivot slack both stop and the turn completes. */
+        uint64_t short_um=strcmp(argv[1],"pivot_sync")==0?15000U:30000U;
+        motion_goal_request_t r={24U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_PIVOT_LEFT,0,60000,100U,0U};
+        motion_goal_result_t out;
+        assert(f.car.executor.config.pivot_sync_slack_um==20000U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<800U && !f.car.executor.status.terminal_pending;++i) {
+            uint64_t left=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+            tick(&f,(!f.car.executor.goal_started || left+short_um<f.car.executor.goal_target_um)?6U:0U,6U);
+        }
+        assert(f.car.executor.status.terminal_pending);
+        assert(car_motion_result(&f.car,r.source,24U,&out));
+        if(short_um==15000U) { assert(out.code==MOTION_RESULT_COMPLETED); }
+        else {
             assert(out.code==MOTION_RESULT_FAULT);
             assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
         }
