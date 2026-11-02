@@ -105,10 +105,11 @@ Moves and the line search run at 50 mm/s, the trial line cruise, so avoidance
 never drives faster than line following; Buddy 2's measured executor sets
 each move's time limit. Search arc ~33 cm radius (`b5_motion_default_config()`).
 
-Turns are pivots (`arc_turns = false`). Pivots first stalled at the 30%
-effort cap, so the integrated trial lets pivot goals use 45%; forward arcs
-(both wheels forward, R ~9 cm, timed) were tried in between but carried the car
-well off the line and their slow inner wheel stalled. Set `arc_turns = true`
+Turns are pivots (`arc_turns = false`) at the trial's 30% effort cap. A
+lagging wheel used to finish the pivot alone and stall; Buddy 2 now stops both
+together when it is within 20 mm. Forward arcs (both wheels forward, R ~9 cm,
+timed) were tried but carried the car well off the line and their slow inner
+wheel stalled. Set `arc_turns = true`
 and `turn_radius_cm = 9` to use them again. Before turning, the nearest scan
 hit must be at least 15 cm (`pivot_clearance_cm`); if not, the car reverses to
 get that room and plans from the scan it already has. The turn out is at least
