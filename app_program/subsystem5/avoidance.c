@@ -15,16 +15,19 @@
 
 void av_config_default(av_config_t *cfg) {
     memset(cfg, 0, sizeof *cfg);
-    // Servo range measured on the car: the mount only allows about +/-12 deg.
-    cfg->left_deg = 102;
+    // Servo mount freed (2026-11-02): it now turns almost 0..180, so the scan
+    // uses +/-70 deg and stays clear of the end stops. Edges within 70 deg
+    // are found with the servo alone, so the car stays still while scanning;
+    // the car only turns (turn scan) for an edge beyond that, up to 90 deg.
+    cfg->left_deg = 160;
     cfg->center_deg = 90;
-    cfg->right_deg = 78;
-    cfg->coarse_points = 5;
-    cfg->fine_step_deg = 5;
-    cfg->fine_half_range_deg = 10;
+    cfg->right_deg = 20;
+    cfg->coarse_points = 5;    // 160, 125, 90, 55, 20
+    cfg->fine_step_deg = 10;   // the sonar beam is ~15 deg wide; finer only adds time
+    cfg->fine_half_range_deg = 70;
 
     cfg->turn_step_deg = 10;
-    cfg->turn_scan_max_deg = 70;
+    cfg->turn_scan_max_deg = 90;
     cfg->turn_settle_ms = 150;
 
     cfg->detect_cm = 25.0f;

@@ -254,6 +254,25 @@ static void sim_setup(sim_t *s, av_t *av, uint32_t start_ms) {
     CHECK(ok);
 }
 
+// The old +/-12 deg servo mount. The turn-scan mechanism (car turns for an
+// edge beyond the servo) is still needed past 70 deg; these settings make it
+// run for ordinary obstacles so the tests below keep exercising it.
+static void narrow_servo(av_config_t *c) {
+    c->left_deg = 102;
+    c->right_deg = 78;
+    c->fine_step_deg = 5;
+    c->fine_half_range_deg = 10;
+    c->turn_scan_max_deg = 70;
+}
+
+static void sim_setup_narrow(sim_t *s, av_t *av, uint32_t start_ms) {
+    sim_defaults(s, start_ms);
+    narrow_servo(&s->cfg);
+    av_platform_t p = platform_for(s);
+    bool ok = av_init(av, &s->cfg, &p);
+    CHECK(ok);
+}
+
 static void run_ms(sim_t *s, av_t *av, uint32_t ms) {
     uint32_t end = s->t + ms;
     while ((int32_t)(s->t - end) < 0) {
@@ -311,8 +330,11 @@ static void default_config_is_valid(void) {
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
-    CHECK_INT(c.left_deg, 102);
-    CHECK_INT(c.right_deg, 78);
+    CHECK_INT(c.left_deg, 160);
+    CHECK_INT(c.right_deg, 20);
+    CHECK_INT(c.fine_half_range_deg, 70);
+    narrow_servo(&c);
+    CHECK(av_config_check(&c) == NULL);
 }
 
 static void invalid_configs_rejected(void) {
@@ -445,7 +467,7 @@ static void narrow_obstacle_needs_no_car_turns(void) {
     // Fits inside the +/-10 deg servo fine scan: edges found without turning.
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){87, 93, 12.0f, true};
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 10000));
     CHECK_INT(s.turns, 0);
@@ -461,7 +483,7 @@ static void narrow_obstacle_needs_no_car_turns(void) {
 static void turn_scan_finds_edges_beyond_servo(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){70, 110, 20.0f, true}; // +/-20 deg: outside the servo's reach
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     const obstacle_profile_t *p = av_profile(&av);
@@ -482,7 +504,7 @@ static void turn_scan_finds_edges_beyond_servo(void) {
 static void edge_refined_by_servo_looking_back(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){55, 95, 12.0f, true}; // right edge at -35
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     const obstacle_profile_t *p = av_profile(&av);
@@ -500,7 +522,7 @@ static void edge_refined_by_servo_looking_back(void) {
 static void centered_obstacle_full_encounter(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){80, 100, 12.0f, true};
     CHECK(run_encounter(&s, &av));
 
@@ -606,7 +628,7 @@ static void wall_on_one_side_forces_other(void) {
 static void wide_obstacle_found_by_turning(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){40, 140, 12.0f, true}; // +/-50 deg
     CHECK(run_encounter(&s, &av));
     const obstacle_profile_t *p = av_profile(&av);
@@ -618,6 +640,45 @@ static void wide_obstacle_found_by_turning(void) {
     }
     CHECK_INT(s.bypasses, 1);
     CHECK_INT(s.heading, 0);
+    check_hygiene(&s);
+}
+
+// Wide servo (default): edges within +/-70 deg are found without moving the
+// car, so it stays still while scanning.
+static void wide_servo_scans_without_moving_the_car(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){40, 140, 12.0f, true}; // +/-50 deg
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    CHECK_INT(s.turns, 0);
+    CHECK_INT(s.forwards, 0);
+    CHECK_INT(s.reverses, 0);
+    CHECK_INT(av_metrics(&av)->car_turns, 0);
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->left.found && p->right.found);
+    if (p) {
+        // Hit at 50, clear at 60 -> edge 55 (10 deg fine steps).
+        CHECK_NEAR(p->left.angle_deg, 55.0f, 1e-4);
+        CHECK_NEAR(p->right.angle_deg, -55.0f, 1e-4);
+    }
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(s.bypasses, 1);
+    CHECK_INT(s.heading, 0);
+    check_hygiene(&s);
+}
+
+static void wide_servo_turns_only_past_its_reach(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 175, 12.0f, true}; // left edge at +85: past the servo
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK(av_metrics(&av)->car_turns > 0);
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->right.found);
+    if (p) CHECK_NEAR(p->right.angle_deg, -15.0f, 1e-4); // hit at -10, clear at -20
+    CHECK_INT(s.last_bypass, SIDE_RIGHT);
     check_hygiene(&s);
 }
 
@@ -637,6 +698,7 @@ static void flipped_servo_mounting(void) {
     sim_t s;
     av_t av;
     sim_defaults(&s, 0);
+    narrow_servo(&s.cfg);
     s.cfg.left_deg = 78; // servo mounted the other way round
     s.cfg.right_deg = 102;
     av_platform_t p = platform_for(&s);
@@ -801,7 +863,7 @@ static void no_motion_failed_callback_still_works(void) {
 static void scan_turn_timeout_fails_safe(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){80, 100, 12.0f, true};
     s.turns_never_done = true;
     CHECK(run_until(&s, &av, AV_STATE_FAILED, 60000));
@@ -974,6 +1036,8 @@ void run_avoidance_tests(void) {
     RUN(offset_obstacle_goes_short_way);
     RUN(wall_on_one_side_forces_other);
     RUN(wide_obstacle_found_by_turning);
+    RUN(wide_servo_scans_without_moving_the_car);
+    RUN(wide_servo_turns_only_past_its_reach);
     RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);

@@ -165,7 +165,7 @@ GP20 hold + release = start    GP21 = STOP (Buddy 2 interrupt, at once)    60 s 
 | Power per 100 mm/s | 133 (150 mm/s gives 20% power), a guess | `motion_executor_default_config()` |
 | Lowest power for goals / power cap | 15% / 35% | same |
 | Line cruise / barcode speed | 150 / 100 mm/s | `controller_line_default_config()` |
-| Avoidance move speed / timeout | 100 mm/s / 4 s | `b5_motion_default_config()` |
+| Avoidance move / line-search speed | 50 / 50 mm/s (2026-11-02, matches trial cruise); time limit set by Buddy 2's executor | `b5_motion_default_config()` |
 
 ## 3. What each buddy needs to do
 

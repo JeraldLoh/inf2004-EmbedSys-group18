@@ -435,7 +435,7 @@ EXPORT ER subsystem5_init(void)
         return E_OBJ;
     }
 
-    av_config_default(&cfg); /* servo 78/90/102: measured on the car */
+    av_config_default(&cfg); /* servo 20/90/160: free mount, see avoidance.c */
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);
     if (er != E_OK)

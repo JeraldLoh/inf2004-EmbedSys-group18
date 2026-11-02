@@ -37,11 +37,13 @@ void b5_motion_default_config(b5_motion_config_t *config)
     {
         return;
     }
-    /* Placeholders until measured on the car. */
-    config->goal_speed_mm_s = 100U;
+    /* Same speed as the trial line cruise (50 mm/s), so avoidance never
+     * drives faster than line following. Buddy 2's measured executor holds
+     * this as a wheel speed and applies its own minimum pivot/drive speeds. */
+    config->goal_speed_mm_s = 50U;
     config->goal_timeout_ms = 0U; /* Measured B2 derives a finite path-dependent bound. */
     config->wait_ms = 300U;
-    config->search_speed_mm_s = 80;
+    config->search_speed_mm_s = 50;
     config->search_curvature_u1_m = 3000000;   /* ~33 cm radius */
     config->search_life_ms = 150U;
 }
