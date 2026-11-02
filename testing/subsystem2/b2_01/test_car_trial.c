@@ -44,6 +44,27 @@ int main(int argc,char **argv) {
         assert(!car_motion_enable_trial(&f.car,0U));
         assert(!car_motion_enable_trial(&f.car,15000001U));
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"pivot_cap")==0 || strcmp(argv[1],"forward_cap")==0) {
+        /* Wheels held still: a pivot may push past 30% up to 45%; a straight
+         * goal stays at 30%. */
+        bool pivot=strcmp(argv[1],"pivot_cap")==0;
+        motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,
+            pivot?MOTION_GOAL_PIVOT_LEFT:MOTION_GOAL_FORWARD,pivot?0:200,pivot?10000:0,100U,0U};
+        int peak=0;
+        assert(f.car.executor.config.pivot_max_effort==450U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<60U && !f.car.executor.status.terminal_pending;++i) {
+            motion_motor_state_t state; int l,rr;
+            tick(&f,0U,0U);
+            assert(drv_motor_read(&f.motor,&state)==MOTION_OK);
+            l=state.left_effort<0?-state.left_effort:state.left_effort;
+            rr=state.right_effort<0?-state.right_effort:state.right_effort;
+            if(l>peak) { peak=l; }
+            if(rr>peak) { peak=rr; }
+        }
+        assert(peak<=(pivot?450:300));
+        if(pivot) { assert(peak>300); } else { assert(peak==300); }
+        car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"unlimited")==0) {
         assert(car_motion_enable_trial(&f.car,MEASURED_MOTION_NO_RUN_LIMIT));
         for(i=0U;i<1250U;++i) { /* 25 s: past the old 15 s and the 20 s bound */

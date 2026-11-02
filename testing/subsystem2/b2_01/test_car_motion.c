@@ -143,6 +143,17 @@ static void b5_goal(void) {
     finish_goal(&f); b5_motion_service(&f.b5,f.ms);
     assert(b5_motion_done(&f.b5) && f.b5.last_result==MOTION_RESULT_COMPLETED);
     assert(!f.motion.executor.status.terminal_pending);
+    /* Default B5 turn: a forward arc on the continuous path (right = -11/m
+     * in B5 units; car_motion flips the sign for the executor). */
+    b5_motion_turn(&f.b5,-90000,f.ms); b5_motion_service(&f.b5,f.ms);
+    assert(f.b5.state==B5_MOVE_ARC && f.b5.arc_started);
+    assert(f.motion.executor.status.state==MOTION_EXEC_CONTINUOUS);
+    assert(f.motion.executor.continuous.source==MOTION_SOURCE_OBSTACLE);
+    assert(f.motion.executor.continuous.curvature_u1_m==11);
+    b5_motion_stop(&f.b5);
+    assert(b5_motion_done(&f.b5));
+    /* Pivot goals remain available. */
+    f.b5.config.arc_turns=false;
     b5_motion_turn(&f.b5,-90000,f.ms); b5_motion_service(&f.b5,f.ms);
     assert(f.b5.state==B5_MOVE_GOAL && f.motion.executor.goal.type==MOTION_GOAL_PIVOT_RIGHT);
     finish_goal(&f); b5_motion_service(&f.b5,f.ms);

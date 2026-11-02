@@ -15,6 +15,11 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
      * Stop/settle within5mm per wheel; retain10mm overshoot cutoff. */
     c->linear_goal_min_speed_mm_s=60U;
     c->pivot_goal_min_speed_mm_s=60U; /* V5 pivots stalled near40mm/s; needs physical retest. */
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    /* Integrated trial 2026-11-02: junction probe and avoidance pivots stalled
+     * at 300 (NO_WHEEL_PROGRESS). Pivot goals only may use 45%. */
+    c->pivot_max_effort=450U;
+#endif
     c->tolerance_um=5000U; c->overshoot_um=10000U;
     c->settle_us=200000U; c->settle_speed_um_s=3000U;
     c->progress_timeout_us=700000U; c->startup_grace_us=1500000U;

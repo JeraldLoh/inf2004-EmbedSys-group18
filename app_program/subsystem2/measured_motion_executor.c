@@ -57,7 +57,8 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
         (c->goal_margin_ms > 60000U) || (c->max_goal_mm == 0U) ||
         (c->max_goal_mm > 100000U) ||
         (c->linear_goal_min_speed_mm_s > c->max_speed_mm_s) ||
-        (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s)) { return false; }
+        (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s) ||
+        (c->pivot_max_effort > 1000U)) { return false; }
     (void)memset(e, 0, sizeof(*e));
     if (!wheel_measurement_init(&e->measurement, &c->measurement)) { return false; }
     for (i = 0U; i < 2U; ++i)
@@ -207,7 +208,7 @@ motion_status_t measured_motion_executor_authorize_calibration(measured_motion_e
     { return MOTION_INVALID; }
     for (i=0U;i<2U;++i)
     {
-        if (e->config.pid[i].max_effort > 300U ||
+        if (e->config.pid[i].max_effort > 300U || e->config.pivot_max_effort > 450U ||
             (e->config.pid[i].kp_milli==0U && e->config.pid[i].ki_milli==0U &&
              e->config.pid[i].feedforward_milli==0U)) { return MOTION_INVALID; }
     }
@@ -504,6 +505,16 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             else
 #endif
             { e->ramp_um_s[i] = desired[i]; }
+        }
+        /* Car trial 2026-11-02: pivots stalled at the 30% cap (one wheel
+         * stuck at effort 300, NO_WHEEL_PROGRESS). Pivot goals may use
+         * pivot_max_effort; everything else keeps the PID cap. */
+        {
+            bool pivot = e->status.state == MOTION_EXEC_GOAL &&
+                (e->goal.type == MOTION_GOAL_PIVOT_LEFT || e->goal.type == MOTION_GOAL_PIVOT_RIGHT);
+            e->pid[i].config.max_effort =
+                (pivot && e->config.pivot_max_effort > e->config.pid[i].max_effort)
+                ? e->config.pivot_max_effort : e->config.pid[i].max_effort;
         }
         if (!wheel_pid_step(&e->pid[i], e->ramp_um_s[i], e->measurement.sample.speed_um_s[i], dt, &duty))
         { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_PID_INPUT, (uint8_t)(1U << i)); return MOTION_UNAVAILABLE; }
