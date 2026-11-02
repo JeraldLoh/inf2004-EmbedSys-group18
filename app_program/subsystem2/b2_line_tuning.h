@@ -9,6 +9,9 @@
 #define B2_LINE_HOLD_DEADBAND_U1_M 2800000LL
 #define B2_LINE_FULL_CURVATURE_U1_M 14000000LL
 #define B2_LINE_FULL_CURVATURE_1_M 14U
+/* V16 wide-turn candidate: extra inside reduction after the paired target
+ * calculation/cap. No extra outside boost; straight requests are untouched. */
+#define B2_LINE_WIDE_TURN_INNER_PERCENT 85U
 
 static inline int32_t b2_line_shape_curvature(int64_t curvature)
 {

@@ -346,6 +346,18 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             desired[0] = (uint32_t)((uint64_t)desired[0]*cap/largest);
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        /* The operator reports running wide. Reduce the inner target a
+         * further15% without demanding more outside speed. This deliberately
+         * lowers mean speed in turns; the paired ramp below smooths entry/
+         * exit. Zero-curvature straight, goals and obstacle moves are unchanged. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
+        {
+            unsigned inside = correction > 0 ? 1U : 0U;
+            desired[inside] = (uint32_t)((uint64_t)desired[inside] *
+                B2_LINE_WIDE_TURN_INNER_PERCENT / 100U);
+        }
+#endif
     }
     else
     {
