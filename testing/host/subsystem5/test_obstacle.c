@@ -155,6 +155,16 @@ static void plan_clamps_turn(void) {
     CHECK_INT(obstacle_plan_bypass(&wide, SIDE_RIGHT, 15.0f, 30.0f, 20, 75).turn_deg, 75);
 }
 
+static void arc_out_leg_covers_the_rest(void) {
+    bypass_plan_t p = {.side = SIDE_LEFT, .turn_deg = 60, .lateral_cm = 20.0f, .pass_cm = 30.0f};
+    // Two R=9 arcs of 60 deg give 2 * 9 * (1 - cos 60) = 9 cm sideways;
+    // the straight leg covers the other 11 cm at 60 deg: 11 / sin 60.
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 9.0f), 11.0f / 0.86603f, 0.05);
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 0.0f), 20.0f / 0.86603f, 0.05); // pivots
+    p.lateral_cm = 5.0f;                                                // arcs alone are enough
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 9.0f), 0.0f, 1e-6);
+}
+
 static void plan_angle_matches_libm(void) {
     // The planner's own atan (no libm on target) against the host's atan2.
     int worst = 0;
@@ -188,5 +198,6 @@ void run_obstacle_tests(void) {
     RUN(choose_tie_breaks_on_clearance);
     RUN(plan_clears_the_edge);
     RUN(plan_clamps_turn);
+    RUN(arc_out_leg_covers_the_rest);
     RUN(plan_angle_matches_libm);
 }

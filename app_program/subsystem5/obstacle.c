@@ -127,6 +127,12 @@ bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t sid
     return p;
 }
 
+float obstacle_arc_out_cm(const bypass_plan_t *plan, float radius_cm) {
+    float rad = (float)plan->turn_deg * DEG2RAD;
+    float rest = plan->lateral_cm - 2.0f * radius_cm * (1.0f - b5_cosf(rad));
+    return rest > 0.0f ? rest / b5_sinf(rad) : 0.0f;
+}
+
 const char *side_name(side_t s) {
     switch (s) {
         case SIDE_LEFT: return "LEFT";

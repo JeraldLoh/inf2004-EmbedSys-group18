@@ -85,6 +85,11 @@ bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t sid
                                    float side_margin_cm, float pass_cm, int min_turn_deg,
                                    int max_turn_deg);
 
+// Straight out-leg when turns are forward arcs of radius_cm instead of
+// pivots: the turn out and the straighten-up each already move the car
+// radius*(1 - cos turn) sideways, so the leg only covers the rest (>= 0).
+float obstacle_arc_out_cm(const bypass_plan_t *plan, float radius_cm);
+
 const char *side_name(side_t s);
 
 #endif

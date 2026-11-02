@@ -54,8 +54,13 @@ void av_config_default(av_config_t *cfg) {
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
     cfg->bypass_pass_cm = 30.0f;        // obstacle depth plus car length (assumed)
-    cfg->bypass_min_turn_deg = 20;
+    // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
+    // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
+    // ever turned back. Turn out steeply and let the arcs (R ~9 cm, see
+    // b5_motion.c) cover part of the sideways distance: the leg is ~13 cm.
+    cfg->bypass_min_turn_deg = 60;
     cfg->bypass_max_turn_deg = 75;
+    cfg->turn_radius_cm = 9.0f;
 
     cfg->motion_timeout_ms = 8000;
     cfg->reacquire_timeout_ms = 3000;
@@ -101,6 +106,7 @@ const char *av_config_check(const av_config_t *c) {
     if (c->bypass_min_turn_deg < 1 || c->bypass_max_turn_deg > 89 ||
         c->bypass_min_turn_deg > c->bypass_max_turn_deg)
         return "bypass turn limits must satisfy 1 <= min <= max <= 89";
+    if (!(c->turn_radius_cm >= 0.0f)) return "turn_radius_cm must be >= 0";
     if (c->motion_timeout_ms == 0 || c->reacquire_timeout_ms == 0) return "timeouts must be > 0";
     if (c->max_reacquire_attempts < 1) return "max_reacquire_attempts must be >= 1";
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
@@ -582,6 +588,9 @@ static void on_decide(av_t *a, uint32_t now) {
         a->plan = obstacle_plan_bypass(&a->profile, a->choice.side, a->cfg.bypass_side_margin_cm,
                                        a->cfg.bypass_pass_cm, a->cfg.bypass_min_turn_deg,
                                        a->cfg.bypass_max_turn_deg);
+        if (a->cfg.turn_radius_cm > 0.0f) {
+            a->plan.out_cm = obstacle_arc_out_cm(&a->plan, a->cfg.turn_radius_cm);
+        }
         plan_legs(a);
         enter(a, AV_STATE_BYPASS);
         av_event_t be = event_of(AV_EVT_BYPASS_START);

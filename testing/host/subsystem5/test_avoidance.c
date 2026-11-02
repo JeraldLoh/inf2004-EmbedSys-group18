@@ -346,6 +346,8 @@ static void default_config_is_valid(void) {
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
     CHECK_NEAR(c.pivot_clearance_cm, 20.0f, 1e-6);
+    CHECK_INT(c.bypass_min_turn_deg, 60);
+    CHECK_NEAR(c.turn_radius_cm, 9.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
     CHECK_INT(c.right_deg, 20);
     CHECK_INT(c.fine_half_range_deg, 70);
@@ -382,6 +384,7 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.emergency_stop_cm = -1.0f);
     EXPECT_BAD(c.max_rescans = -1);
     EXPECT_BAD(c.reverse_cm = 0.0f);
+    EXPECT_BAD(c.turn_radius_cm = -1.0f);
     EXPECT_BAD(c.pivot_clearance_cm = -1.0f);
     EXPECT_BAD(c.bypass_side_margin_cm = -1.0f);
     EXPECT_BAD(c.bypass_pass_cm = 0.0f);
@@ -946,6 +949,19 @@ static void line_found_on_return_leg(void) {
 }
 
 // On a curve the line can turn up before the return drive.
+// Car trial 2026-11-02: the straight leg out was 30-40 cm and the car
+// stalled on it. With arc turns it is planned short.
+static void out_leg_is_short_with_arc_turns(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 22.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK(s.last_plan.turn_deg >= 60);
+    CHECK(s.last_plan.out_cm < 20.0f);
+    CHECK(s.last_plan.out_cm < s.last_plan.lateral_cm); // pivots would need more
+}
+
 static void line_found_while_passing(void) {
     sim_t s;
     av_t av;
@@ -1149,6 +1165,7 @@ void run_avoidance_tests(void) {
     RUN(refused_motion_fails_without_waiting);
     RUN(no_motion_failed_callback_still_works);
     RUN(line_found_on_return_leg);
+    RUN(out_leg_is_short_with_arc_turns);
     RUN(line_found_while_passing);
     RUN(line_found_during_return_turn);
     RUN(line_ignored_beside_obstacle);

@@ -131,6 +131,7 @@ typedef struct {
     float bypass_pass_cm;        // straight leg alongside the obstacle
     int bypass_min_turn_deg;
     int bypass_max_turn_deg;
+    float turn_radius_cm;        // car turns are forward arcs of this radius; 0 = pivots
 
     uint32_t motion_timeout_ms;
     uint32_t reacquire_timeout_ms; // per search attempt
