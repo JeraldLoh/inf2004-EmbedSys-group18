@@ -45,6 +45,9 @@ void av_config_default(av_config_t *cfg) {
     cfg->rescan_delay_ms = 500;
     cfg->max_reverses = 2;
     cfg->reverse_cm = 10.0f;
+    // Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
+    // bypass pivot from there hit it. Back off to this range before turning.
+    cfg->pivot_clearance_cm = 15.0f;
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
     cfg->bypass_pass_cm = 30.0f;        // obstacle depth plus car length (assumed)
@@ -89,6 +92,7 @@ const char *av_config_check(const av_config_t *c) {
     if (!(c->servo_ms_per_deg >= 0.0f)) return "servo_ms_per_deg must be >= 0";
     if (c->max_rescans < 0 || c->max_reverses < 0) return "retry limits must be >= 0";
     if (c->max_reverses > 0 && !(c->reverse_cm > 0.0f)) return "reverse_cm must be > 0";
+    if (!(c->pivot_clearance_cm >= 0.0f)) return "pivot_clearance_cm must be >= 0";
     if (!(c->bypass_side_margin_cm >= 0.0f)) return "bypass_side_margin_cm must be >= 0";
     if (!(c->bypass_pass_cm > 0.0f)) return "bypass_pass_cm must be > 0";
     if (c->bypass_min_turn_deg < 1 || c->bypass_max_turn_deg > 89 ||
@@ -245,6 +249,12 @@ static float hit_cm(const av_t *a, range_reading_t r) {
     return r.status == RANGE_OK ? r.cm : a->ahead_cm;
 }
 
+// Keep the closest hit, for the pivot clearance check.
+static void note_hit(av_t *a, range_reading_t r) {
+    float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : hit_cm(a, r);
+    if (cm < a->nearest_cm) a->nearest_cm = cm;
+}
+
 static bool is_clear(const av_t *a, range_reading_t r, float dir) {
     return obstacle_is_clear(r, dir, a->ahead_cm, a->cfg.edge_margin_cm, a->cfg.max_range_cm);
 }
@@ -303,6 +313,7 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->t_detect = now;
     a->rescans = 0;
     a->reverses = 0;
+    a->backoffs = 0;
     a->reacquire_attempts = 0;
     a->off_line = false;
     a->heading_deg = 0;
@@ -365,6 +376,7 @@ static void on_coarse(av_t *a, uint32_t now) {
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
     if (!gone) {
         float ahead = hit_cm(a, center);
+        a->nearest_cm = center.status == RANGE_TOO_CLOSE ? 0.0f : ahead;
         for (int i = 0; i < 2; i++) {
             a->edge[i].done = false;
             a->edge[i].found = false;
@@ -408,6 +420,7 @@ static void on_fine(av_t *a, uint32_t now) {
         } else {
             a->edge[idx].last_hit_dir = dir;
             a->edge[idx].last_hit_cm = hit_cm(a, r);
+            note_hit(a, r);
             a->fine_offset += a->cfg.fine_step_deg;
             return;
         }
@@ -454,6 +467,7 @@ static void on_turn_scan(av_t *a, uint32_t now) {
         } else {
             a->edge[idx].last_hit_dir = dir;
             a->edge[idx].last_hit_cm = hit_cm(a, r);
+            note_hit(a, r);
         }
         return;
     }
@@ -506,7 +520,30 @@ static void plan_legs(av_t *a) {
     a->leg_active = false;
 }
 
+static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
+    a->metrics.reverses++;
+    a->reverse_by_cm = cm;
+    a->reverse_issued = false;
+    enter(a, AV_STATE_REVERSE);
+    av_event_t e = event_of(AV_EVT_REVERSING);
+    e.attempt = attempt;
+    emit(a, now, &e);
+}
+
 static void on_decide(av_t *a, uint32_t now) {
+    // A bypass starts with a pivot. Too close and the front corner sweeps into
+    // the obstacle (or a stalled wheel turns the pivot into a forward arc), so
+    // back off to pivot_clearance_cm first and scan again from there.
+    if (a->nearest_cm < a->cfg.pivot_clearance_cm) {
+        if (a->backoffs < a->cfg.max_reverses) {
+            a->backoffs++;
+            start_reverse(a, now, a->cfg.pivot_clearance_cm - a->nearest_cm + 5.0f, a->backoffs);
+        } else {
+            fail(a, now, "too close to turn");
+        }
+        return;
+    }
+
     obstacle_edge_t left = make_edge(a->edge[EDGE_LEFT].edge_dir, a->edge[EDGE_LEFT].last_hit_cm,
                                      a->edge[EDGE_LEFT].found);
     obstacle_edge_t right = make_edge(a->edge[EDGE_RIGHT].edge_dir,
@@ -562,12 +599,7 @@ static void on_decide(av_t *a, uint32_t now) {
     } else if (a->reverses < a->cfg.max_reverses) {
         a->reverses++;
         a->rescans = 0;
-        a->metrics.reverses++;
-        a->reverse_issued = false;
-        enter(a, AV_STATE_REVERSE);
-        av_event_t e = event_of(AV_EVT_REVERSING);
-        e.attempt = a->reverses;
-        emit(a, now, &e);
+        start_reverse(a, now, a->cfg.reverse_cm, a->reverses);
     } else {
         fail(a, now, "no clear path after reversing");
     }
@@ -581,7 +613,7 @@ static void on_wait_rescan(av_t *a, uint32_t now) {
 static void on_reverse(av_t *a, uint32_t now) {
     if (!a->reverse_issued) {
         if (turn_to(a, now, a->origin_deg)) return; // back up the way we came
-        a->hw.motion_reverse(a->hw.ctx, a->cfg.reverse_cm);
+        a->hw.motion_reverse(a->hw.ctx, a->reverse_by_cm);
         a->deadline = now + a->cfg.motion_timeout_ms;
         a->reverse_issued = true;
         return;
@@ -776,6 +808,7 @@ void av_reset(av_t *a) {
     a->off_line = false;
     a->rescans = 0;
     a->reverses = 0;
+    a->backoffs = 0;
     a->reacquire_attempts = 0;
     a->heading_deg = 0; // assume the car was put back facing along the line
     a->origin_deg = 0;

@@ -125,6 +125,7 @@ typedef struct {
     uint32_t rescan_delay_ms;
     int max_reverses; // per encounter
     float reverse_cm;
+    float pivot_clearance_cm; // nearest hit must be this far before turning, else back off; 0 disables
 
     float bypass_side_margin_cm; // car center passes this far outside the edge
     float bypass_pass_cm;        // straight leg alongside the obstacle
@@ -189,6 +190,7 @@ typedef struct {
     scan_point_t coarse[AV_MAX_COARSE_POINTS];
     int coarse_idx;
     float ahead_cm;
+    float nearest_cm; // closest reading that hit the obstacle this scan
     int fine_offset;
     int turn_mag;     // |heading - origin| reached by the turn scan
     bool refining;    // turn scan found open space; servo looks back for the edge
@@ -220,6 +222,8 @@ typedef struct {
     bool off_line;
     int rescans;
     int reverses;
+    int backoffs;         // reverses to get pivot clearance, this encounter
+    float reverse_by_cm;  // distance for the reverse in progress
     int reacquire_attempts;
     uint32_t deadline;
     uint32_t t_detect;

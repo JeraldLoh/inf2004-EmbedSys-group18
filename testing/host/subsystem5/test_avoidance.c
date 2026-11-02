@@ -58,6 +58,8 @@ typedef struct {
     bool refused;              // motion_failed() result for the current command
     bool vanish_on_stop;       // obstacle disappears on the first stop
     bool open_on_reverse;      // boxed-in walls vanish when reversing
+    bool reverse_moves_away;   // reversing adds its distance to the obstacle range
+    float reverse_total_cm;
     bool vanish_late_on_estop; // late obstacle vanishes on an emergency stop
     bool line_on_return_leg;   // line sensors see the line during the return drive
     bool bypassing;
@@ -154,8 +156,9 @@ static void s_forward(void *ctx, float cm) {
 
 static void s_reverse(void *ctx, float cm) {
     sim_t *s = ctx;
-    (void)cm;
     s->reverses++;
+    s->reverse_total_cm += cm;
+    if (s->reverse_moves_away) s->obstacle.cm += cm;
     s->refused = s->refuse_kind == 3;
     start_motion(s, s->reverse_ms);
     if (s->open_on_reverse) {
@@ -245,6 +248,9 @@ static void sim_defaults(sim_t *s, uint32_t start_ms) {
     s->forward_ms = 800;
     s->reverse_ms = 600;
     s->line_after_ms = 300;
+    // Most scenarios put the obstacle at 12 cm to exercise the scan and
+    // bypass; the pivot clearance back-off has its own tests below.
+    s->cfg.pivot_clearance_cm = 0.0f;
 }
 
 static void sim_setup(sim_t *s, av_t *av, uint32_t start_ms) {
@@ -330,6 +336,7 @@ static void default_config_is_valid(void) {
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
+    CHECK_NEAR(c.pivot_clearance_cm, 15.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
     CHECK_INT(c.right_deg, 20);
     CHECK_INT(c.fine_half_range_deg, 70);
@@ -366,6 +373,7 @@ static void invalid_configs_rejected(void) {
     EXPECT_BAD(c.emergency_stop_cm = -1.0f);
     EXPECT_BAD(c.max_rescans = -1);
     EXPECT_BAD(c.reverse_cm = 0.0f);
+    EXPECT_BAD(c.pivot_clearance_cm = -1.0f);
     EXPECT_BAD(c.bypass_side_margin_cm = -1.0f);
     EXPECT_BAD(c.bypass_pass_cm = 0.0f);
     EXPECT_BAD(c.bypass_min_turn_deg = 0);
@@ -680,6 +688,43 @@ static void wide_servo_turns_only_past_its_reach(void) {
     if (p) CHECK_NEAR(p->right.angle_deg, -15.0f, 1e-4); // hit at -10, clear at -20
     CHECK_INT(s.last_bypass, SIDE_RIGHT);
     check_hygiene(&s);
+}
+
+// Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
+// bypass pivot hit it. Too close: back off to the pivot clearance, rescan,
+// then bypass from there.
+static void close_obstacle_backs_off_before_turning(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 15.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.reverse_moves_away = true;
+    s.obstacle = (blob_t){60, 110, 5.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 1);
+    CHECK_NEAR(s.reverse_total_cm, 15.0f, 1e-4); // 15 - 5 + 5 margin
+    CHECK(s.obstacle.cm >= 15.0f);
+    CHECK_INT(s.turns, 0); // nothing turned before the back-off finished
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(s.bypasses, 1);
+    check_hygiene(&s);
+}
+
+static void cannot_back_off_fails_without_turning(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 15.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){60, 110, 5.0f, true}; // stays 5 cm away (follows the car)
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 60000));
+    CHECK_INT(s.reverses, 2);
+    CHECK_INT(s.turns, 0);
+    CHECK_INT(s.bypasses, 0);
+    CHECK(s.last_reason && strcmp(s.last_reason, "too close to turn") == 0);
 }
 
 static void edge_beyond_turn_range_is_partial(void) {
@@ -1038,6 +1083,8 @@ void run_avoidance_tests(void) {
     RUN(wide_obstacle_found_by_turning);
     RUN(wide_servo_scans_without_moving_the_car);
     RUN(wide_servo_turns_only_past_its_reach);
+    RUN(close_obstacle_backs_off_before_turning);
+    RUN(cannot_back_off_fails_without_turning);
     RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);

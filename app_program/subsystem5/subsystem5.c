@@ -207,6 +207,9 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             tm_printf((UB*)"[B5] decision: side %d (0 none, 1 left, 2 right)\n",
                 (int)e->side);
             break;
+        case AV_EVT_REVERSING:
+            tm_printf((UB*)"[B5] reversing (attempt %d)\n", e->attempt);
+            break;
         case AV_EVT_EMERGENCY_STOP:
             tm_printf((UB*)"[B5] emergency stop\n");
             break;

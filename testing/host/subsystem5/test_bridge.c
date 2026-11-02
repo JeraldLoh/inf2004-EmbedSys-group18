@@ -211,6 +211,7 @@ static void w_stop(void *c)
 }
 static void w_turn(void *c, float deg) { world_t *w = c; w->heading += (int)deg; w_move(w); }
 static void w_fwd(void *c, float cm) { (void)cm; w_move(c); }
+static void w_rev(void *c, float cm) { ((world_t *)c)->obstacle_cm += cm; w_move(c); }
 static void w_search(void *c, side_t s)
 {
     world_t *w = c;
@@ -234,7 +235,7 @@ static void run_world(world_t *w, rig_t *r, av_state_t until, uint32_t max_ms)
 {
     av_t av;
     av_config_t cfg;
-    av_platform_t p = {w, w_now, w_servo, w_measure, w_stop, w_turn, w_fwd, w_fwd,
+    av_platform_t p = {w, w_now, w_servo, w_measure, w_stop, w_turn, w_fwd, w_rev,
         w_search, w_resume, w_done, NULL, w_line, NULL};
     bool left_monitor = false;
 
