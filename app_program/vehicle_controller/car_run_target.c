@@ -95,6 +95,7 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
     (void)context;
     line->steer = subsystem3_steer();
     line->barcode_active = status.barcode_active != 0U;
+    line->on_line = (status.left_black != 0U) || (status.right_black != 0U);
     return true;
 }
 
@@ -290,7 +291,7 @@ static void print_status(bool running)
         "line_black L=%d R=%d state=%d last_side=%d | "
         "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
-        "junc phase=%d seen=%lu done=%lu ign=%lu route=%d\n",
+        "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | search=%d n=%lu fail=%lu\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, (int)line.left_black, (int)line.right_black,
         (int)line.state, (int)line.last_side, (int)t.left_effort, (int)t.right_effort,
@@ -300,7 +301,9 @@ static void print_status(bool running)
         (long)t.right_target_mm_s, (int)t.speed_valid, (int)t.qualified,
         (int)c.junction_phase,
         (unsigned long)c.junctions_seen, (unsigned long)c.junctions_done,
-        (unsigned long)c.junctions_ignored, (int)c.last_route);
+        (unsigned long)c.junctions_ignored, (int)c.last_route,
+        (int)c.line_searching, (unsigned long)c.line_searches,
+        (unsigned long)c.line_search_fails);
 }
 
 static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)

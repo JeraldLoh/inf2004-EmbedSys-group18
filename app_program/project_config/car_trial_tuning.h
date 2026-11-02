@@ -8,6 +8,9 @@
 #define CONTROLLER_LINE_CRUISE_MM_S 60U  /* was 70 (operator, 2026-11-02) */
 #define CONTROLLER_LINE_CURVATURE_PER_STEER 140000
 #define CAR_TRIAL_LINE_INNER_SPEED_PERCENT 85U
+/* No black for 2 s (~12 cm at 60 mm/s): stop and pivot to find the line
+ * instead of driving on (operator, 2026-11-02). */
+#define CONTROLLER_LINE_LOST_MS 2000U
 #endif
 
 #endif

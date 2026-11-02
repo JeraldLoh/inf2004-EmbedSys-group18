@@ -857,8 +857,98 @@ static void test_events_dropped_outside_auto(void)
     assert(f.goal_count == 0 && service.controller.mode == SYSTEM_MODE_AUTO);
 }
 
+/* ---- Line search (car trial 2026-11-02) --------------------------------- */
+
+static void test_line_lost_pivots_until_a_sensor_sees_it(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    uint32_t t = 1000U;
+    int drives;
+
+    start_junctions(&service, &f);
+    service.line.lost_ms = 200U;
+    f.car.line.on_line = true;
+    f.car.line.steer = 20;                      /* last seen on the right */
+    controller_service_tick(&service, t);
+    f.car.line.on_line = false;                 /* both white: centred or lost */
+    controller_service_tick(&service, t + 100U);
+    assert(f.goal_count == 0);                  /* not yet: may just be centred */
+    drives = f.car.drives;
+    controller_service_tick(&service, t + 200U);
+    assert(service.status.line_searching && (service.status.line_searches == 1U));
+    assert((f.goal_count == 1) && (f.goals[0].type == MOTION_GOAL_PIVOT_RIGHT));
+    assert(f.goals[0].target_mdeg == 15000);
+    assert(f.car.drives == drives);             /* stopped driving forward */
+
+    f.goal_code = MOTION_RESULT_COMPLETED;      /* nothing seen: next step */
+    controller_service_tick(&service, t + 300U);
+    assert((f.goal_count == 2) && (f.goals[1].type == MOTION_GOAL_PIVOT_RIGHT));
+    f.car.line.on_line = true;                  /* a sensor passes over it */
+    controller_service_tick(&service, t + 350U);
+    f.car.line.on_line = false;
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, t + 400U);
+    assert(!service.status.line_searching && (f.goal_count == 2));
+    controller_service_tick(&service, t + 410U);
+    assert(f.car.drives == drives + 1);         /* following the line again */
+    assert(service.status.stop_reasons == STOP_REASON_NONE);
+}
+
+static void test_line_search_sweeps_both_ways_then_stops(void)
+{
+    static const motion_goal_type_t types[8] = {MOTION_GOAL_PIVOT_LEFT,
+        MOTION_GOAL_PIVOT_LEFT, MOTION_GOAL_PIVOT_LEFT, MOTION_GOAL_PIVOT_LEFT,
+        MOTION_GOAL_PIVOT_RIGHT, MOTION_GOAL_PIVOT_RIGHT, MOTION_GOAL_PIVOT_RIGHT,
+        MOTION_GOAL_PIVOT_RIGHT};
+    static const int32_t mdeg[8] = {15000, 15000, 15000, 15000, 75000, 15000,
+        15000, 15000};
+    controller_service_t service;
+    fake_junction_t f;
+    uint32_t t = 1000U;
+    int i;
+
+    start_junctions(&service, &f);
+    service.line.lost_ms = 200U;
+    f.car.line.on_line = true;
+    f.car.line.steer = -20;                     /* last seen on the left */
+    controller_service_tick(&service, t);
+    f.car.line.on_line = false;
+    controller_service_tick(&service, t + 200U);
+    for (i = 1; i <= 8; ++i)
+    {
+        assert(f.goal_count == i);
+        f.goal_code = MOTION_RESULT_COMPLETED;
+        controller_service_tick(&service, t + 200U + (uint32_t)i * 100U);
+    }
+    for (i = 0; i < 8; ++i)
+    {
+        assert((f.goals[i].type == types[i]) && (f.goals[i].target_mdeg == mdeg[i]));
+    }
+    /* Left to 60, back across to 60 right, nothing: a clearable safe stop. */
+    assert(!service.status.line_searching && (service.status.line_search_fails == 1U));
+    assert(service.status.stop_reasons == STOP_REASON_RECOVERY_FAILED);
+    assert(service.status.mode == SYSTEM_MODE_STOPPED);
+}
+
+static void test_line_search_off_by_default(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+
+    start_junctions(&service, &f);
+    assert(service.line.lost_ms == 0U);
+    f.car.line.on_line = false;
+    controller_service_tick(&service, 1000U);
+    controller_service_tick(&service, 60000U);
+    assert((f.goal_count == 0) && !service.status.line_searching);
+}
+
 int main(void)
 {
+    test_line_lost_pivots_until_a_sensor_sees_it();
+    test_line_search_sweeps_both_ways_then_stops();
+    test_line_search_off_by_default();
     test_bind_junction_needs_every_output();
     test_barcode_left_turn();
     test_straight_and_right_and_uturn();
