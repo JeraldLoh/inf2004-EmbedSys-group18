@@ -83,9 +83,25 @@ static void goal(motion_goal_type_t type) {
     if(type==MOTION_GOAL_PIVOT_RIGHT) { assert(out.turned_mdeg<-89000); }
     measured_motion_executor_cancel(&f.e,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.fake);
 }
+static void batch_fault(void) {
+    fixture_t f; motion_goal_request_t r={1U,1U,MOTION_SOURCE_CALIBRATION,MOTION_GOAL_FORWARD,300,0,100U,0U};
+    motion_goal_result_t out; unsigned i; init(&f);
+    assert(measured_motion_executor_authorize_calibration(&f.e,1U,0U,10000000U)==MOTION_OK);
+    assert(measured_motion_executor_goal(&f.e,&r,0U,1000000U)==MOTION_OK);
+    for(i=0;i<10U;++i) { tick(&f,0U,0U); }
+    assert(f.e.goal_started);
+    for(i=0;i<3U;++i) { drv_encoder_on_edges(&f.encoder,1UL<<27,1UL<<27,f.fake.now_us); }
+    tick(&f,0U,0U);
+    assert(!f.e.status.authorized && !f.e.status.wheels.speed_valid);
+    assert(measured_motion_executor_result(&f.e,&out) && out.code==MOTION_RESULT_ABORTED && !out.odometry_valid);
+    fake_assert_safe(&f.fake);
+    for(i=0;i<10U;++i) { tick(&f,0U,0U); }
+    assert(!f.e.status.authorized); fake_assert_safe(&f.fake);
+}
 int main(int argc,char **argv) {
     assert(argc==2);
-    if(strcmp(argv[1],"bounds")==0) { bounds(); }
+    if(strcmp(argv[1],"batch_fault")==0) { batch_fault(); }
+    else if(strcmp(argv[1],"bounds")==0) { bounds(); }
     else if(strcmp(argv[1],"deadline")==0) { deadline(false,false); }
     else if(strcmp(argv[1],"wrap")==0) { deadline(true,false); }
     else if(strcmp(argv[1],"stop_race")==0) { deadline(false,true); }

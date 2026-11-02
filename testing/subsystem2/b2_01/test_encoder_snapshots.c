@@ -65,6 +65,7 @@ int main(void)
     assert(snapshot.left_count == 1U && snapshot.right_count == 0U);
     assert(snapshot.left_last_edge_us == 3U && snapshot.edge_times_valid);
     assert(snapshot.coalesced_edges_seen);
+    assert(snapshot.coalesced_batches[0]==0U && snapshot.coalesced_batches[1]==1U);
     fake_dispatch(&fake, LEFT_EDGE, 0U, 2U);
     assert(drv_encoder_capture(&encoder, &motor, &snapshot) == MOTION_OK);
     assert(!snapshot.edge_times_valid && snapshot.left_count == 2U);

@@ -139,8 +139,11 @@ void b2_trial_service(b2_trial_t *trial, stop_reason_mask_t stop_reasons,
         stop_reasons==STOP_REASON_NONE && !cutoff_fired &&
         !trial->io.stop_pressed(trial->io.context))
     {
+        motion_motor_state_t actual;
         uint32_t slice=remaining<trial->watchdog_slice_us?remaining:trial->watchdog_slice_us;
-        if (trial->io.stop_pending(trial->io.context) || slice==0U ||
+        if (drv_motor_read(trial->motor,&actual)!=MOTION_OK || !actual.armed ||
+            actual.inhibited || actual.authority_generation!=trial->result.generation ||
+            trial->io.stop_pending(trial->io.context) || slice==0U ||
             !trial->io.arm_cutoff(trial->io.context,slice))
         { stop_reasons|=STOP_REASON_CONTROLLER_FAULT; }
     }

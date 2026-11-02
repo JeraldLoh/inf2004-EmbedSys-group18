@@ -9,6 +9,10 @@ typedef struct
     uint32_t speed_window_us;
     uint32_t max_gap_us;
     uint32_t max_edge_rate;
+    /* Zero = strict. Test candidate permits <=5% batched observed edges and
+     * <=2 simultaneous R/F observations per100ms, independently per wheel. */
+    uint32_t max_batched_edge_permille;
+    uint32_t max_batches_per_100ms;
 } wheel_measurement_config_t;
 
 typedef struct
@@ -20,6 +24,7 @@ typedef struct
     bool speed_valid;
     bool signed_speed_valid;
     int8_t command_sign[2];
+    uint32_t window_batches[2]; /* Last completed speed window. */
 } wheel_measurement_sample_t;
 
 typedef struct
@@ -30,6 +35,7 @@ typedef struct
     uint64_t remainder[2];
     uint64_t window_um[2];
     uint32_t window_us;
+    uint32_t window_edges[2], window_batches[2];
     uint32_t window_direction_epoch;
     bool direction_changed;
     bool primed;
@@ -37,8 +43,9 @@ typedef struct
 
 bool wheel_measurement_init(wheel_measurement_t *measurement,
     const wheel_measurement_config_t *config);
-/* Epoch change, excessive gap/rate, coalescing or clock failure is explicit
- * unavailable, never a large valid jump/zero. No counter reset per goal. */
+/* Epoch/gap/rate/quality failure returns unavailable. A new clean window
+ * can recover after rebasing; an active executor still aborts on that failure.
+ * Cumulative coalescing counters never clear on capture; policy uses deltas. */
 motion_status_t wheel_measurement_update(wheel_measurement_t *measurement,
     const motion_encoder_snapshot_t *snapshot);
 #endif

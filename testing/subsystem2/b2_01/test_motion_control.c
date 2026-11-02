@@ -24,7 +24,7 @@ static bool watchdog(void *p, uint32_t duration) {
 static void cancel_watchdog(void *p) { ((fixture_t *)p)->armed = false; }
 static measured_motion_executor_config_t config(void) {
     measured_motion_executor_config_t c = {0};
-    c.measurement = (wheel_measurement_config_t){65U, {1271U,1264U}, 100000U,200000U,20000U};
+    c.measurement = (wheel_measurement_config_t){65U, {1271U,1264U}, 100000U,200000U,20000U,0U,0U};
     c.pid[0] = (wheel_pid_config_t){2000U,1000U,0U,4000U,300U,80U,0U,0U};
     c.pid[1] = c.pid[0];
     c.period_us=20000U; c.watchdog_us=100000U;
@@ -95,8 +95,10 @@ static void measurement(void) {
     ++s.reset_epoch; s.acquired_us+=20000U;
     assert(wheel_measurement_update(&m,&s)==MOTION_UNAVAILABLE && !m.sample.speed_valid);
     assert(wheel_measurement_init(&m,&c.measurement)); s.coalesced_edges_seen=true;
-    assert(wheel_measurement_update(&m,&s)==MOTION_UNAVAILABLE);
-    s.coalesced_edges_seen=false; assert(wheel_measurement_update(&m,&s)==MOTION_OK);
+    assert(wheel_measurement_update(&m,&s)==MOTION_OK); /* History alone is not a new error. */
+    s.acquired_us+=20000U; s.left_count+=2U; ++s.coalesced_batches[0];
+    assert(wheel_measurement_update(&m,&s)==MOTION_UNAVAILABLE); /* Strict default. */
+    s.acquired_us+=20000U; s.coalesced_edges_seen=false; assert(wheel_measurement_update(&m,&s)==MOTION_OK);
     s.acquired_us+=200001U; assert(wheel_measurement_update(&m,&s)==MOTION_UNAVAILABLE);
 }
 static void pid(void) {

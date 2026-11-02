@@ -56,6 +56,15 @@ int main(void) {
     assert(b2_trial_take_result(&t,&result) && result.state==B2_TRIAL_STOPPED);
     assert((c.safety.active_reasons&STOP_REASON_CONTROLLER_FAULT)!=0U);
     fake_assert_safe(&f);
+    generation=c.authority_generation;
+    vehicle_controller_init(&c); c.authority_generation=generation;
+    assert(b2_trial_init_movement(&t,&m,&e,&c,&io));
+    assert(b2_trial_begin(&t,300,0,5000000U)==MOTION_OK);
+    assert(drv_motor_stop(&m)==MOTION_OK); /* Unexpected other-owner stop. */
+    b2_trial_service(&t,0U,false);
+    assert(b2_trial_take_result(&t,&result) && result.state==B2_TRIAL_STOPPED);
+    assert((c.safety.active_reasons&STOP_REASON_CONTROLLER_FAULT)!=0U);
+    fake_assert_safe(&f);
 #endif
     puts("PASS original bench cap, diagnostic cap/duration, STOP and finite cutoff"); return 0;
 }

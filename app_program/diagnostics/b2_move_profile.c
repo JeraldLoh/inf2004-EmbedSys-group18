@@ -11,9 +11,16 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
     c->pid[1]=(wheel_pid_config_t){1500U,1500U,0U,2689U,300U,100U,300U,500000U};
     c->max_speed_mm_s=120U; c->max_goal_mm=1000U;
     c->acceleration_um_s2=200000U;
-    c->tolerance_um=2000U; c->overshoot_um=10000U;
+    /* Candidate from v4's stall at287/300mm: avoid20-30mm/s crawl.
+     * Stop/settle within5mm per wheel; retain10mm overshoot cutoff. */
+    c->linear_goal_min_speed_mm_s=60U;
+    c->pivot_goal_min_speed_mm_s=60U; /* V5 pivots stalled near40mm/s; needs physical retest. */
+    c->tolerance_um=5000U; c->overshoot_um=10000U;
     c->settle_us=200000U; c->settle_speed_um_s=3000U;
     c->progress_timeout_us=700000U; c->startup_grace_us=1500000U;
+    /* Experimental test-only batching envelope; production remains strict. */
+    c->measurement.max_batched_edge_permille=50U;
+    c->measurement.max_batches_per_100ms=2U;
     c->qualified=false;
 }
 #endif

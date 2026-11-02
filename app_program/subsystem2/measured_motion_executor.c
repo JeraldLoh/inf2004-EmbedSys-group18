@@ -30,7 +30,9 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
         (c->progress_timeout_us > 5000000U) || (c->startup_grace_us > 5000000U) ||
         (c->goal_margin_ms < (c->settle_us+c->reversal_us)/1000U) ||
         (c->goal_margin_ms > 60000U) || (c->max_goal_mm == 0U) ||
-        (c->max_goal_mm > 100000U)) { return false; }
+        (c->max_goal_mm > 100000U) ||
+        (c->linear_goal_min_speed_mm_s > c->max_speed_mm_s) ||
+        (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s)) { return false; }
     (void)memset(e, 0, sizeof(*e));
     if (!wheel_measurement_init(&e->measurement, &c->measurement)) { return false; }
     for (i = 0U; i < 2U; ++i)
@@ -256,12 +258,15 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     unsigned i;
     if (e == NULL || e->motor == NULL) { return MOTION_INVALID; }
     if (drv_encoder_capture(e->encoder, e->motor, &raw) != MOTION_OK)
-    { finish(e, MOTION_RESULT_FAULT); return MOTION_UNAVAILABLE; }
+    { e->measurement.sample.speed_valid=false; e->measurement.sample.signed_speed_valid=false;
+      e->status.wheels=e->measurement.sample;
+      finish(e, MOTION_RESULT_FAULT); return MOTION_UNAVAILABLE; }
     now = raw.acquired_us;
     dt = e->primed ? now-e->last_step_us : e->config.period_us;
     if (e->primed && dt < e->config.period_us) { return MOTION_OK; }
     if (wheel_measurement_update(&e->measurement, &raw) != MOTION_OK)
-    { finish(e, MOTION_RESULT_ABORTED); return MOTION_UNAVAILABLE; }
+    { e->status.wheels=e->measurement.sample;
+      finish(e, MOTION_RESULT_ABORTED); return MOTION_UNAVAILABLE; }
     e->last_step_us = now; e->primed = true;
     e->status.wheels = e->measurement.sample;
     if (e->status.authorized && e->calibration_authorized && reached(now,e->calibration_until_us))
@@ -328,6 +333,16 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             if (p+e->config.tolerance_um < e->goal_target_um)
             {
                 uint64_t slowed = remain*1000000U/500000U;
+                /* Distance commands must keep rolling until the tolerance
+                 * band; continuously shrinking below breakaway speed can
+                 * strand a wheel short of target. Turns have a separate floor.
+                 * The request's own cap always wins over the candidate floor. */
+                {
+                    bool linear=e->goal.type==MOTION_GOAL_FORWARD || e->goal.type==MOTION_GOAL_REVERSE;
+                    uint32_t floor=(linear?e->config.linear_goal_min_speed_mm_s:
+                        e->config.pivot_goal_min_speed_mm_s)*1000U;
+                    if(slowed<floor) { slowed=floor; }
+                }
                 desired[i] = e->goal.max_speed_mm_s*1000U;
                 if (slowed < desired[i]) { desired[i] = (uint32_t)slowed; }
                 complete = false;

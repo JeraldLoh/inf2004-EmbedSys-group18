@@ -39,6 +39,7 @@ motion_status_t drv_encoder_init(drv_encoder_t *encoder,
     encoder->sample.right_edge_seen = false;
     encoder->sample.edge_times_valid = true;
     encoder->sample.coalesced_edges_seen = false;
+    encoder->sample.coalesced_batches[0]=0U; encoder->sample.coalesced_batches[1]=0U;
     ok = encoder->hal.gpio_input(encoder->hal.context, PIN_ENCODER_LEFT);
     if (!encoder->hal.gpio_input(encoder->hal.context, PIN_ENCODER_RIGHT))
     {
@@ -64,7 +65,7 @@ motion_status_t drv_encoder_deinit(drv_encoder_t *encoder)
 
 static void count_edges(uint32_t rising, uint32_t falling, uint8_t pin,
     uint32_t observed_us, uint32_t *count, uint32_t *last_edge, bool *seen,
-    motion_encoder_snapshot_t *sample)
+    motion_encoder_snapshot_t *sample, uint32_t *batches)
 {
     uint32_t mask = (uint32_t)1U << pin;
     uint32_t edges = ((rising & mask) != 0U) ? 1U : 0U;
@@ -81,6 +82,7 @@ static void count_edges(uint32_t rising, uint32_t falling, uint8_t pin,
         if (edges == 2U)
         {
             sample->coalesced_edges_seen = true;
+            ++*batches; /* U32 modulo, just like cumulative edge counts. */
         }
     }
 }
@@ -99,10 +101,10 @@ void drv_encoder_on_edges(void *user, uint32_t rising_pins,
     {
         count_edges(rising_pins, falling_pins, PIN_ENCODER_LEFT, observed_us,
             &encoder->sample.left_count, &encoder->sample.left_last_edge_us,
-            &encoder->sample.left_edge_seen, &encoder->sample);
+            &encoder->sample.left_edge_seen, &encoder->sample, &encoder->sample.coalesced_batches[0]);
         count_edges(rising_pins, falling_pins, PIN_ENCODER_RIGHT, observed_us,
             &encoder->sample.right_count, &encoder->sample.right_last_edge_us,
-            &encoder->sample.right_edge_seen, &encoder->sample);
+            &encoder->sample.right_edge_seen, &encoder->sample, &encoder->sample.coalesced_batches[1]);
     }
     encoder->hal.leave(encoder->hal.context, key);
 }

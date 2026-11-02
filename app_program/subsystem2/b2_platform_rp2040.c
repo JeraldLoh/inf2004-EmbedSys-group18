@@ -62,6 +62,7 @@ static uint32_t edge_fields(uint32_t pins, unsigned group, unsigned nibble)
 {
     unsigned bit;
     uint32_t fields = 0U;
+    if(((pins>>(8U*group))&0xffU)==0U) { return 0U; }
     for (bit = 0U; bit < 8U; ++bit)
     {
         unsigned pin = (8U * group) + bit;
@@ -169,6 +170,9 @@ static void gpio_irq(UINT intno)
     for (group = 0U; group < 4U; ++group)
     {
         uint32_t fields = (uint32_t)in_w(B2_GPIO_INTS(group));
+        /* Most IRQs touch one group. Avoid scanning24 unrelated GPIO nibbles
+         * before acknowledging fast encoder edges through the dispatcher. */
+        if(fields==0U) { continue; }
         for (bit = 0U; bit < 8U; ++bit)
         {
             unsigned pin = (8U * group) + bit;

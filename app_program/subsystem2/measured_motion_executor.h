@@ -14,6 +14,10 @@ typedef struct
     uint32_t tolerance_um, overshoot_um;
     uint32_t progress_timeout_us, startup_grace_us, goal_margin_ms;
     uint32_t max_goal_mm;
+    /* Optional calibrated rolling floor for forward/reverse final approach.
+     * Zero preserves the original profile; never exceeds the request cap. */
+    uint32_t linear_goal_min_speed_mm_s;
+    uint32_t pivot_goal_min_speed_mm_s; /* Independent turn candidate, zero by default. */
     /* Set only after real direction/load/STOP/speed/pivot qualification.
      * Test fixtures setting true are NOT physical qualification evidence. */
     bool qualified;

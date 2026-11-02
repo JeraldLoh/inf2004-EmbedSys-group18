@@ -14,7 +14,11 @@ static motion_hal_t hal;
 static FP entry;
 static jmp_buf boundary;
 static const char *scenario;
+static int direct_case=-1;
 static unsigned raw_arms,cal_arms,deleted;
+static uint32_t raw_power_us[3];
+static unsigned edge_ticks;
+static bool injected;
 static bool armed,pressed,did_raw_stop,did_cal_stop,saw_power,raw_mode;
 static uint32_t deadline,window,raw_since,release_stop;
 static b2_platform_events_t evidence;
@@ -30,7 +34,7 @@ static bool pending(void *p) { (void)p; return pressed || evidence.cutoff_fired 
 static bool arm(void *p,uint32_t us) {
     (void)p; assert(us>0U && us<=100000U);
     if(!armed) {
-        raw_mode=raw_arms<3U;
+        raw_mode=direct_case>=0?(direct_case<=2 || direct_case==9):raw_arms<3U;
         if(raw_mode) { ++raw_arms; raw_since=fake.now_us; }
     }
     if(!raw_mode) { ++cal_arms; }
@@ -53,6 +57,15 @@ static bool between(uint32_t a,uint32_t b) {
 }
 bool b2_platform_start_pressed(void) {
     if(is("boot")) { return false; }
+    if(direct_case>=0) {
+        unsigned i; uint32_t start=400000U+(unsigned)direct_case*180000U;
+        for(i=0U;i<(unsigned)direct_case;++i) {
+            uint32_t tap=200000U+i*180000U;
+            if(fake.now_us>=tap && fake.now_us<tap+50000U) { return true; }
+        }
+        if(fake.now_us>=start && fake.now_us<start+1100000U) { return true; }
+        return is("direct_fault_latch") && fake.now_us>=start+6000000U && fake.now_us<start+7100000U;
+    }
     if(is("locked")) {
         return between(300000U,350000U)||between(500000U,550000U)||between(700000U,750000U)||
             between(900000U,950000U)||between(1200000U,2300000U);
@@ -82,14 +95,34 @@ ER tk_get_otm(SYSTIM *t) { t->hi=0U; t->lo=fake.now_us/1000U; return E_OK; }
 ER tk_dly_tsk(UINT ms) {
     bool lm=fake.enabled[4]&&(fake.compare[8]!=0U||fake.compare[9]!=0U);
     bool rm=fake.enabled[5]&&(fake.compare[10]!=0U||fake.compare[11]!=0U);
-    assert(ms==5U || (is("watchdog") && ms==150U)); saw_power|=lm||rm; fake.trace_count=0U;
-    if(raw_mode || is("flow_time")) {
-        if(lm && !is("missing_feedback")) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<27,0U,fake.now_us); }
+    assert(ms==5U || ((is("watchdog") || direct_case==9) && ms==150U)); saw_power|=lm||rm; fake.trace_count=0U;
+    if(raw_mode && armed && raw_arms>=1U && raw_arms<=3U && (lm||rm))
+    { raw_power_us[raw_arms-1U]+=ms*1000U; }
+    if(raw_mode && lm && !injected && is("raw_coalesced")) {
+        uint32_t mask=1UL<<27; drv_encoder_on_edges(subsystem2_bench_encoder(),mask,mask,fake.now_us);
+        injected=true;
+    }
+    if(raw_mode && lm && !injected && is("raw_rate")) {
+        unsigned i; for(i=0;i<1000U;++i) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<27,0U,fake.now_us); }
+        injected=true;
+    }
+    if(raw_mode && lm && !injected && is("raw_sparse") && fake.now_us-raw_since>=1000000U) {
+        uint32_t mask=1UL<<27; drv_encoder_on_edges(subsystem2_bench_encoder(),mask,mask,fake.now_us);
+        injected=true;
+    }
+    if(raw_mode && is("raw_sparse")) {
+        unsigned i; for(i=0;i<2U;++i) {
+            if(lm) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<27,0U,fake.now_us); }
+            if(rm) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<5,0U,fake.now_us); }
+        }
+    }
+    if(raw_mode || is("flow_time") || direct_case==3) {
+        if(lm && !is("missing_feedback") && (!is("raw_tiny") || edge_ticks++<3U)) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<27,0U,fake.now_us); }
         if(rm) { drv_encoder_on_edges(subsystem2_bench_encoder(),1UL<<5,0U,fake.now_us); }
     }
     fake.now_us+=ms*1000U;
     if(pressed && fake.now_us>=release_stop) { pressed=false; }
-    if(raw_arms==3U && armed && raw_mode && fake.now_us-raw_since>=100000U && !did_raw_stop)
+    if((raw_arms==3U || direct_case==2) && armed && raw_mode && fake.now_us-raw_since>=100000U && !did_raw_stop)
     { did_raw_stop=true; stop_event(false); }
     if(is("flow_stop") && !raw_mode && (lm||rm) && !did_cal_stop)
     { did_cal_stop=true; stop_event(false); }
@@ -102,7 +135,13 @@ void tm_printf(UB *fmt,...) {
     va_start(args,fmt); (void)vsnprintf(output+n,sizeof(output)-n,(char*)fmt,args); va_end(args);
 }
 int main(int argc,char **argv) {
-    assert(argc==2); scenario=argv[1]; fake_motion_init(&fake); hal=fake_motion_hal(&fake);
+    assert(argc==2); scenario=argv[1];
+    if(strncmp(scenario,"direct_",7U)==0) {
+        if(is("direct_fault_latch") || is("direct_held_stop")) { direct_case=7; }
+        else { assert(sscanf(scenario+7,"%d",&direct_case)==1 && direct_case>=0 && direct_case<=9); }
+    }
+    fake_motion_init(&fake); hal=fake_motion_hal(&fake);
+    if(is("direct_held_stop")) { pressed=true; release_stop=UINT32_MAX; }
     if(is("create") || is("start")) {
         assert(b2_move_test_start()==E_SYS && deleted==(is("start")?1U:0U));
     } else {
@@ -111,15 +150,35 @@ int main(int argc,char **argv) {
         if(!is("critical")) { fake_assert_safe(&fake); }
         else { assert(!fake.enabled[4] && !fake.enabled[5]); }
         if(is("boot") || is("critical")) { assert(!saw_power && raw_arms==0U && cal_arms==0U); }
-        else if(is("locked")) { assert(!saw_power && strstr(output,"LOCKED")!=NULL); }
+        else if(direct_case>=0) {
+            assert(strstr(output,"INDEPENDENT")!=NULL && strstr(output,"LOCKED")==NULL);
+            if(is("direct_held_stop")) { assert(!saw_power && raw_arms==0U && cal_arms==0U); }
+            else {
+                assert(saw_power);
+                if(direct_case<=2) { assert(raw_arms==1U && cal_arms==0U); }
+                else if(direct_case==9) { assert(strstr(output,"WATCHDOG cutoff_observed=1")!=NULL); }
+                else { assert(raw_arms==0U && cal_arms>0U && strstr(output,"CALIBRATION request=0")!=NULL); }
+                if(is("direct_fault_latch")) { assert(strstr(output,"refused: STOP/fault latched")!=NULL); }
+            }
+        }
         else {
             assert(raw_arms==3U && did_raw_stop);
-            if(is("missing_feedback") || is("long_locked")) { assert(cal_arms==0U && strstr(output,"LOCKED")!=NULL); }
+            assert(raw_power_us[0]>=4995000U && raw_power_us[1]>=4995000U);
+            if(is("raw_coalesced")) {
+                assert(injected && strstr(output,"owner=RAW coalesced_ever=1 batches L=1 R=0")!=NULL);
+                assert(strstr(output,"measured L=0 R=0 mm/s valid=0")!=NULL);
+            }
+            if(is("raw_tiny")) { assert(strstr(output,"checks L=0 R=1 STOP=1")!=NULL); }
+            if(is("missing_feedback") || is("long_locked") || is("raw_coalesced") || is("raw_rate") || is("raw_tiny")) { assert(cal_arms>0U && strstr(output,"CALIBRATION request=0")!=NULL); }
             else if(is("watchdog")) { assert(cal_arms==1U && strstr(output,"WATCHDOG cutoff_observed=1")!=NULL); }
             else {
                 assert(cal_arms>0U && strstr(output,"production_qualified=0")!=NULL);
                 assert(strstr(output,"CALIBRATION request=0")!=NULL);
                 if(is("flow_stop")) { assert(did_cal_stop && strstr(output,"code=4")!=NULL); }
+                if(is("raw_sparse")) {
+                    assert(injected && strstr(output,"checks L=1 R=1 STOP=1")!=NULL);
+                    assert(strstr(output,"coalesced_ever=1 batches L=1 R=0 speed_status=0")!=NULL);
+                }
                 if(is("flow_stall")) { assert(strstr(output,"code=7")!=NULL); }
                 if(is("flow_time")) { assert(strstr(output,"timed straight test ended (5s / 500mm")!=NULL); }
             }

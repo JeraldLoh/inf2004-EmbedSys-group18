@@ -12,7 +12,7 @@ void car_motion_candidate_config(measured_motion_executor_config_t *c)
     (void)memset(c, 0, sizeof(*c));
     c->measurement = (wheel_measurement_config_t){MOTION_WHEEL_DIAMETER_MM_CANDIDATE,
         {MOTION_LEFT_BOTH_EDGE_COUNTS_PER_REV, MOTION_RIGHT_BOTH_EDGE_COUNTS_PER_REV},
-        100000U, 200000U, 20000U};
+        100000U, 200000U, 20000U, 0U, 0U};
     c->pid[0].max_effort = 350U; c->pid[0].integral_limit = 80U;
     c->pid[1] = c->pid[0];
     c->period_us = 20000U; c->watchdog_us = 100000U;

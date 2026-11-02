@@ -20,7 +20,8 @@ typedef struct
     bool acquisition_valid;
     /* Command metadata only, NOT measured direction or signed odometry. */
     bool command_basis_valid;
-    bool coalesced_edges_seen;
+    bool coalesced_edges_seen; /* Lifetime diagnostic, NOT current-window quality. */
+    uint32_t coalesced_batches[2]; /* Per-wheel U32 cumulative simultaneous R/F observations. */
 } motion_encoder_snapshot_t;
 
 /* Zero-initialize once; no copying/live rebinding or external mutation. */
