@@ -349,12 +349,12 @@ CFLAGS  += -DCNF_TIMER_PERIOD=1
 # These legacy effort macros do not tune the measured wheel PID.
 CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
 # Explicit measured trial tuning lives in project_config/car_trial_tuning.h.
-# Keep the earlier normal CAR_RUN steering flags outside that trial.
+# Restore Buddy 3's original testing-branch steering in every CAR_RUN image.
+CFLAGS  += -DLINE_STEER_RAMP_MS=6U -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 ifeq ($(CAR_B2_TRIAL),1)
 CFLAGS  += -DCAR_RUN_LIMIT_MS=15000U
 else
-CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U -DLINE_STEER_RAMP_MS=6U
-CFLAGS  += -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
 endif
 # Junction-probe and avoidance pivots stalled at 15% and latched a motion
 # fault, and still stalled at 20% on the foam mat; goals now ask for 30%.

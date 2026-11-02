@@ -120,7 +120,6 @@ void out_w(UW address,UW value) {
 ER subsystem3_init(void) { assert(subsystem2_bench_motor()==NULL); return is("sensor_failure")?E_SYS:E_OK; }
 ER subsystem3_start(void) { assert(subsystem2_bench_motor()!=NULL); ++s3_starts; return E_OK; }
 line_status_t subsystem3_line_status(void) { line_status_t s={0}; s.left_black=1U; return s; }
-bool subsystem3_barcode_raw(uint16_t *raw) { *raw=1234U; return true; }
 BOOL subsystem3_barcode_calibrated(void) { return barcode_cal!=0U; }
 void subsystem3_calibrate_barcode(void) { ++barcode_cal; }
 BOOL subsystem3_take_route(route_instruction_t *r) { (void)r; return FALSE; }
