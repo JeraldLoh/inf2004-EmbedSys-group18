@@ -101,8 +101,14 @@ motion bindings, and then:
   MONITOR when AUTO ends, so a failed encounter does not disable it for the
   next run.
 
-Placeholders: goal speed 100 mm/s, goal timeout 4 s, search 80 mm/s on a
-~33 cm radius (`b5_motion_default_config()`).
+Moves and the line search run at 50 mm/s, the trial line cruise, so avoidance
+never drives faster than line following; Buddy 2's measured executor sets
+each move's time limit. Search arc ~33 cm radius (`b5_motion_default_config()`).
+
+Scan (`av_config_default()`): the servo mount was freed on 2026-11-02, so the
+scan covers 20..160 deg (+/-70) in 10 deg steps and the car stays still while
+scanning. The car only turns to look further for an edge beyond 70 deg (up to
+90). Detection stays at 25 cm.
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.
