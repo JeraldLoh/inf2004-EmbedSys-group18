@@ -60,20 +60,19 @@ static void profile_geometry(void) {
 }
 
 static void clear_classification(void) {
-    CHECK(obstacle_is_clear(ok(30.0f), 0.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(!obstacle_is_clear(ok(23.0f), 0.0f, 15.0f, 8.0f, 400.0f)); // must strictly exceed
-    CHECK(!obstacle_is_clear(ok(16.0f), 0.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(obstacle_is_clear(st(RANGE_NO_ECHO), 0.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(!obstacle_is_clear(st(RANGE_TOO_CLOSE), 0.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(!obstacle_is_clear(st(RANGE_FAULT), 0.0f, 15.0f, 8.0f, 400.0f));
+    CHECK(obstacle_is_clear(ok(30.0f), 15.0f, 8.0f, 400.0f));
+    CHECK(!obstacle_is_clear(ok(23.0f), 15.0f, 8.0f, 400.0f)); // must strictly exceed
+    CHECK(!obstacle_is_clear(ok(16.0f), 15.0f, 8.0f, 400.0f));
+    CHECK(obstacle_is_clear(st(RANGE_NO_ECHO), 15.0f, 8.0f, 400.0f));
+    CHECK(!obstacle_is_clear(st(RANGE_TOO_CLOSE), 15.0f, 8.0f, 400.0f));
+    CHECK(!obstacle_is_clear(st(RANGE_FAULT), 15.0f, 8.0f, 400.0f));
 }
 
-static void clear_uses_forward_component(void) {
-    // A flat face 15 cm ahead reads 30 cm at 60 deg: same face, not open space.
-    CHECK(!obstacle_is_clear(ok(30.0f), 60.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(!obstacle_is_clear(ok(30.0f), -60.0f, 15.0f, 8.0f, 400.0f));
-    CHECK(obstacle_is_clear(ok(60.0f), 60.0f, 15.0f, 8.0f, 400.0f)); // 30 cm forward
-    CHECK(obstacle_is_clear(st(RANGE_NO_ECHO), 80.0f, 15.0f, 8.0f, 400.0f));
+static void clear_uses_straight_line_distance(void) {
+    // Anything reaching past the obstacle (15 + 8 cm) is open, at any angle:
+    // something 30 cm away at 60 deg is beside the obstacle, not part of it.
+    CHECK(obstacle_is_clear(ok(30.0f), 15.0f, 8.0f, 400.0f));
+    CHECK(!obstacle_is_clear(ok(20.0f), 15.0f, 8.0f, 400.0f));
 }
 
 static obstacle_profile_t symmetric_profile(bool lf, bool rf) {
@@ -201,7 +200,7 @@ void run_obstacle_tests(void) {
     RUN(polar_to_xy);
     RUN(profile_geometry);
     RUN(clear_classification);
-    RUN(clear_uses_forward_component);
+    RUN(clear_uses_straight_line_distance);
     RUN(choose_only_usable_side);
     RUN(choose_none_when_boxed_in);
     RUN(choose_requires_found_edge);

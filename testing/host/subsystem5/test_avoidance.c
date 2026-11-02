@@ -348,8 +348,9 @@ static void default_config_is_valid(void) {
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
-    CHECK_NEAR(c.pivot_clearance_cm, 15.0f, 1e-6);
-    CHECK_INT(c.bypass_min_turn_deg, 60);
+    CHECK_NEAR(c.pivot_clearance_cm, 10.0f, 1e-6);
+    CHECK_NEAR(c.min_clearance_cm, 25.0f, 1e-6);
+    CHECK_INT(c.bypass_min_turn_deg, 35);
     CHECK_NEAR(c.turn_radius_cm, 0.0f, 1e-6); // pivots
     CHECK_NEAR(c.path_half_width_cm, 10.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
@@ -532,7 +533,7 @@ static void edge_refined_by_servo_looking_back(void) {
     av_t av;
     sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){55, 95, 12.0f, true}; // right edge at -35
-    s.wall = (blob_t){98, 180, 30.0f, true};    // left edge, but no room past it
+    s.wall = (blob_t){98, 180, 22.0f, true};    // left edge, but no room past it
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     const obstacle_profile_t *p = av_profile(&av);
     CHECK(p != NULL);
@@ -757,6 +758,50 @@ static void backoff_reuses_the_scan(void) {
     CHECK(av_profile(&av)->distance_cm >= 20.0f);
 }
 
+// Car trial 2026-11-02: an obstacle further away than usual, with things
+// beside it, gave no open side (only readings well behind it in the forward
+// direction counted), so the car rescanned and reversed. Anything past the
+// obstacle now counts, and it turns out only as far as the geometry needs.
+static void far_obstacle_with_clutter_beside_it_is_bypassed(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){70, 110, 24.0f, true};
+    s.bg_cm = 34.0f; // clutter all round, 10 cm behind the obstacle
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 0);
+    CHECK_INT(av_metrics(&av)->rescans, 0);
+    CHECK_INT(av_metrics(&av)->car_turns, 0); // the servo found the edges
+    CHECK(s.last_plan.turn_deg < 60);
+    check_hygiene(&s);
+}
+
+// Pivot clearance: two hits under 10 cm back the car off; one bad reading
+// (a 5 cm spike while scanning a 20 cm obstacle) does not.
+static void single_close_reading_does_not_back_off(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 10.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 20.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_FINE_SCAN_RIGHT, 10000));
+    s.spikes = 1;
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 0);
+
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 10.0f;
+    p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.reverse_moves_away = true;
+    s.obstacle = (blob_t){60, 110, 8.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 1);
+    CHECK_NEAR(s.reverse_total_cm, 7.0f, 1e-4); // 10 - 8 + 5 margin
+}
+
 static void edge_beyond_turn_range_is_partial(void) {
     sim_t s;
     av_t av;
@@ -779,7 +824,7 @@ static void flipped_servo_mounting(void) {
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
     s.obstacle = (blob_t){55, 95, 12.0f, true}; // mostly on the right (world frame)
-    s.wall = (blob_t){98, 180, 30.0f, true};    // no room on the left: turn-scan the right
+    s.wall = (blob_t){98, 180, 22.0f, true};    // no room on the left: turn-scan the right
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.last_bypass, SIDE_RIGHT);
     CHECK_INT(s.search_sides[0], SIDE_LEFT);
@@ -1044,6 +1089,7 @@ static void out_leg_is_short_with_arc_turns(void) {
     av_t av;
     sim_defaults(&s, 0);
     s.cfg.turn_radius_cm = 9.0f; // arc turns
+    s.cfg.bypass_min_turn_deg = 60;
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
     s.obstacle = (blob_t){80, 100, 22.0f, true};
@@ -1053,12 +1099,16 @@ static void out_leg_is_short_with_arc_turns(void) {
     CHECK(s.last_plan.out_cm < s.last_plan.lateral_cm); // pivots would need more
 }
 
-// Pivot turns (default): the steep turn out ends short of the obstacle, so
-// the pass is lengthened to reach past its front before turning back.
+// Pivot turns (default): a turn out clamped steeper than the geometric angle
+// ends short of the obstacle, so the pass is lengthened to reach past its
+// front before turning back.
 static void pivot_plan_passes_the_obstacle(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_defaults(&s, 0);
+    s.cfg.bypass_min_turn_deg = 60;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
     s.obstacle = (blob_t){80, 100, 22.0f, true};
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
     const obstacle_profile_t *pr = av_profile(&av);
@@ -1087,7 +1137,8 @@ static void bypass_is_sized_from_the_obstacle(void) {
     float edge_x = e->pt.x_cm < 0.0f ? -e->pt.x_cm : e->pt.x_cm;
     CHECK_NEAR(pl.lateral_cm, edge_x + s.cfg.car_half_width_cm + s.cfg.bypass_clearance_cm, 0.01);
     CHECK(pl.lateral_cm < 17.0f);
-    CHECK(pl.out_cm < 20.0f);
+    CHECK(pl.turn_deg >= s.cfg.bypass_min_turn_deg && pl.turn_deg < 60);
+    CHECK(pl.out_cm < 25.0f);
     float reach = pl.out_cm * cosf((float)pl.turn_deg * 3.14159265f / 180.0f) + pl.pass_cm;
     CHECK_NEAR(reach, e->pt.y_cm + pr->width_cm + s.cfg.bypass_clearance_cm, 0.1);
 
@@ -1297,6 +1348,8 @@ void run_avoidance_tests(void) {
     RUN(wide_servo_does_not_turn_when_one_side_is_open);
     RUN(close_obstacle_backs_off_before_turning);
     RUN(backoff_reuses_the_scan);
+    RUN(far_obstacle_with_clutter_beside_it_is_bypassed);
+    RUN(single_close_reading_does_not_back_off);
     RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);
