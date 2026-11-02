@@ -38,13 +38,10 @@ static void wifi_telemetry(uint32_t now)
 #define CONSOLE_WAIT_MS 5000U
 #ifndef CAR_RUN_LIMIT_MS
 #if APP_CAR_B2_TRIAL
-#define CAR_RUN_LIMIT_MS 15000U
+#define CAR_RUN_LIMIT_MS 0U       /* no run limit: GP21 or line loss stops it */
 #else
 #define CAR_RUN_LIMIT_MS 60000U   /* whole run, then stop; override with -D */
 #endif
-#endif
-#if APP_CAR_B2_TRIAL && CAR_RUN_LIMIT_MS>15000U
-#error "Integrated B2 trial cannot exceed15 seconds"
 #endif
 #ifndef CAR_LINE_LOST_MS
 #define CAR_LINE_LOST_MS 3000U    /* no black while following, then stop */
@@ -411,8 +408,11 @@ static void supervise(void)
                     running = true;
                     started_ms = t;
                     last_line_ms = t;
-                    tm_printf((UB*)"[CAR] RUN: following the line (limit %lu s)\n",
-                        (unsigned long)(CAR_RUN_LIMIT_MS / 1000U));
+                    if (CAR_RUN_LIMIT_MS == 0U)
+                    { tm_printf((UB*)"[CAR] RUN: following the line (no time limit)\n"); }
+                    else
+                    { tm_printf((UB*)"[CAR] RUN: following the line (limit %lu s)\n",
+                        (unsigned long)(CAR_RUN_LIMIT_MS / 1000U)); }
                     if (!subsystem3_barcode_calibrated())
                     {
                         tm_printf((UB*)"[CAR] barcode NOT calibrated: barcodes ignored, "
@@ -421,7 +421,7 @@ static void supervise(void)
                 }
             }
         }
-        else if ((t - started_ms) >= CAR_RUN_LIMIT_MS)
+        else if ((CAR_RUN_LIMIT_MS != 0U) && ((t - started_ms) >= CAR_RUN_LIMIT_MS))
         {
             stop_run(&running, "run time limit", STOP_REASON_NONE);
         }
@@ -472,7 +472,7 @@ static void supervisor_task(INT code, void *exinf)
         tk_ext_tsk();
     }
     if(subsystem2_motion_trial_enabled())
-    { tm_printf((UB*)"[CAR B2 TRIAL] Buddy3 restored to prior testing source/steering; 50mm/s B2 trial; junction-pause fix; v6 wheel PID. Production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
+    { tm_printf((UB*)"[CAR B2 TRIAL] Buddy3 restored to prior testing source/steering; 50mm/s B2 trial; junction-pause fix; v6 wheel PID. Production qualification FALSE. Manual START,no run limit,30%% effort,100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
     if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }

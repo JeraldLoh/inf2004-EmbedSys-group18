@@ -39,7 +39,7 @@ ER tk_dly_tsk(UINT ms) {
     if(++loops==2U) { longjmp(boundary,1); }
     return E_OK;
 }
-ER tk_get_otm(SYSTIM *t) { t->hi=0U; t->lo=loops*(strcmp(scenario,"trial_limit")==0?15000U:5U); return E_OK; }
+ER tk_get_otm(SYSTIM *t) { t->hi=0U; t->lo=loops*((strcmp(scenario,"trial_limit")==0 || strcmp(scenario,"trial_unlimited")==0)?15000U:5U); return E_OK; }
 void tm_printf(UB *format,...) {
     size_t length=strlen(log_text);
     va_list args; va_start(args,format);
@@ -129,12 +129,15 @@ int main(int argc,char **argv) {
     if(strcmp(scenario,"init_failure")==0) { assert(starts==0U && urgent>0U); }
     else {
         assert(inits==7U && starts==5U);
-        if(qualified || strcmp(scenario,"trial")==0 || strcmp(scenario,"trial_limit")==0) { assert(auto_posts==1U); }
+        if(qualified || strcmp(scenario,"trial")==0 || strcmp(scenario,"trial_limit")==0 ||
+            strcmp(scenario,"trial_unlimited")==0) { assert(auto_posts==1U); }
         else { assert(auto_posts==0U); }
         if(strcmp(scenario,"stop_ack")==0) { assert(acks==1U && stop_posts==1U); }
         else if(!qualified && !subsystem2_motion_trial_enabled()) { assert(strstr(log_text,"START refused")!=NULL); }
     }
     if(strcmp(scenario,"trial_limit")==0) { assert(idle_posts==1U && strstr(log_text,"run time limit")!=NULL); }
+    if(strcmp(scenario,"trial_unlimited")==0)
+    { assert(strstr(log_text,"no time limit")!=NULL && strstr(log_text,"run time limit")==NULL); }
     if(strcmp(scenario,"trial_fault")==0) { assert(auto_posts==0U && strstr(log_text,"fault latched")!=NULL); }
     printf("PASS actual CAR_RUN startup %s\n",scenario); return 0;
 }

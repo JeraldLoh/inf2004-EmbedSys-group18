@@ -352,7 +352,8 @@ CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
 # Restore Buddy 3's original testing-branch steering in every CAR_RUN image.
 CFLAGS  += -DLINE_STEER_RAMP_MS=6U -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 ifeq ($(CAR_B2_TRIAL),1)
-CFLAGS  += -DCAR_RUN_LIMIT_MS=15000U
+# No run limit (2026-11-02): GP21, line loss or a fault ends the run.
+CFLAGS  += -DCAR_RUN_LIMIT_MS=0U
 else
 CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
 endif

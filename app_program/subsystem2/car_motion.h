@@ -42,7 +42,7 @@ bool car_motion_init(car_motion_t *motion, drv_motor_t *motor,
     drv_encoder_t *encoder, const measured_motion_executor_config_t *config,
     const measured_motion_executor_io_t *io);
 #if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
-/* Startup-only opt-in, <=15s per authority. Supervisor also limits whole run. */
+/* Startup-only opt-in, <=15s per authority or MEASURED_MOTION_NO_RUN_LIMIT. */
 bool car_motion_enable_trial(car_motion_t *motion, uint32_t limit_us);
 #endif
 bool car_motion_continuous(car_motion_t *motion,

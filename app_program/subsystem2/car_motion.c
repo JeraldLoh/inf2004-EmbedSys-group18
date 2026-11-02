@@ -65,7 +65,7 @@ bool car_motion_init(car_motion_t *m, drv_motor_t *motor,
 bool car_motion_enable_trial(car_motion_t *m,uint32_t limit)
 {
     if(m==NULL || m->executor.config.qualified || m->executor.status.authorized ||
-        limit==0U || limit>15000000U) { return false; }
+        limit==0U || (limit>15000000U && limit!=MEASURED_MOTION_NO_RUN_LIMIT)) { return false; }
     m->trial_limit_us=limit;
     return true;
 }

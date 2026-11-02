@@ -1,5 +1,16 @@
 # `testing` branch: first whole-car build
 
+## Trial run limit removed - 2 November 2026
+
+`CAR_RUN=1 CAR_B2_TRIAL=1` no longer stops after 15 s. The supervisor limit is
+`CAR_RUN_LIMIT_MS=0` (no limit) and Buddy 2's trial authority uses
+`MEASURED_MOTION_NO_RUN_LIMIT`, so it does not expire either. A run now ends on
+GP21 STOP, 3 s with no line, a controller stop (obstacle failure, fault) or
+reset. The 30% effort cap, 100 ms watchdog, command lifetimes and manual START
+are unchanged. Normal `CAR_RUN` keeps its 60 s limit and qualification gate.
+Older "15s" statements below are historical. Buddy 2 tests 158/158 and host
+suites 19/19 pass; CAR_RUN, B5_RUN and the trial image build without warnings.
+
 ## Current ownership correction - Buddy 3 restored
 
 Buddy3 source is restored exactly to pre-publication testing641ad74, including

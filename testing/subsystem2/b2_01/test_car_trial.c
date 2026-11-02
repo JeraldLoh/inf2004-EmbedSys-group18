@@ -44,6 +44,14 @@ int main(int argc,char **argv) {
         assert(!car_motion_enable_trial(&f.car,0U));
         assert(!car_motion_enable_trial(&f.car,15000001U));
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"unlimited")==0) {
+        assert(car_motion_enable_trial(&f.car,MEASURED_MOTION_NO_RUN_LIMIT));
+        for(i=0U;i<1250U;++i) { /* 25 s: past the old 15 s and the 20 s bound */
+            if(i%5U==0U) { assert(line(&f,1U+i)); }
+            tick(&f,2U,2U);
+        }
+        assert(f.car.executor.status.authorized && !f.car.executor.config.qualified);
+        car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"goal")==0 || strcmp(argv[1],"goal_obstacle")==0) {
         motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,MOTION_GOAL_PIVOT_LEFT,0,90000,100U,0U};
         motion_goal_result_t out; unsigned left=0U,right=0U; bool counted=false;

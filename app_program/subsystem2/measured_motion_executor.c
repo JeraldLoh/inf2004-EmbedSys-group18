@@ -200,7 +200,8 @@ motion_status_t measured_motion_executor_authorize_calibration(measured_motion_e
 {
     motion_status_t result;
     unsigned i;
-    if (e == NULL || e->motor == NULL || limit == 0U || limit > 20000000U ||
+    if (e == NULL || e->motor == NULL || limit == 0U ||
+        (limit > 20000000U && limit != MEASURED_MOTION_NO_RUN_LIMIT) ||
         e->config.max_speed_mm_s > 120U || e->config.max_goal_mm > 1000U ||
         e->config.watchdog_us > 100000U || e->config.period_us > 20000U)
     { return MOTION_INVALID; }
@@ -212,7 +213,9 @@ motion_status_t measured_motion_executor_authorize_calibration(measured_motion_e
     }
     result=authorize(e,generation,true);
     if (result==MOTION_OK)
-    { e->calibration_authorized=true; e->calibration_until_us=now+limit; }
+    { /* calibration_authorized only arms the run deadline below. */
+        e->calibration_authorized = limit != MEASURED_MOTION_NO_RUN_LIMIT;
+        e->calibration_until_us = now+limit; }
     return result;
 }
 #endif

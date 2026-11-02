@@ -101,7 +101,9 @@ motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *e
 #if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
 /* Movement-test or explicit integrated-trial build ONLY. Explicit bounded calibration authority,
  * not production qualification. Hard limits: <=120mm/s, <=30% effort,
- * <=1m goals, watchdog <=100ms and total run <=20s. No config flags changed. */
+ * <=1m goals, watchdog <=100ms and total run <=20s, or no run limit with
+ * MEASURED_MOTION_NO_RUN_LIMIT. No config flags changed. */
+#define MEASURED_MOTION_NO_RUN_LIMIT UINT32_MAX
 motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *executor,
     uint32_t generation, uint32_t now_us, uint32_t max_run_us);
 #endif
