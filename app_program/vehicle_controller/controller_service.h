@@ -109,7 +109,7 @@ typedef struct
 typedef enum
 {
     CONTROLLER_JUNCTION_IDLE = 0,
-    CONTROLLER_JUNCTION_PROBE_SETTLE,  /* line requests expire, car stops */
+    CONTROLLER_JUNCTION_PROBE_SETTLE,  /* explicitly pause line motion, then settle */
     CONTROLLER_JUNCTION_PROBE_OUT,     /* pivot left */
     CONTROLLER_JUNCTION_PROBE_BACK,    /* pivot right */
     CONTROLLER_JUNCTION_PROBE_RESULT,  /* waiting for Buddy 3's verdict */

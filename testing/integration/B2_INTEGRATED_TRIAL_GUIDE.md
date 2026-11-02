@@ -80,7 +80,7 @@ STOP response and whether the servo/sonar readings looked plausible. Do not
 claim physical STOP latency, exact floor position or complete integration from
 software timestamps. Measured physical STOP<=50ms is still outstanding.
 
-## Software verification
+## Software verification (V4 history; not rerun for V5)
 
 157/157 native tests and19/19 shared suites pass. The added real line/controller/
 motion-adapter test checks noise filtering, gradual correction, both turn signs,
@@ -154,3 +154,28 @@ raise base speed or remove STOP/watchdog/TTL/run-time/line-loss protections.
 No V4 floor result yet: check both turn directions, oscillation, curve tracking,
 and inner-wheel stall. In particular the new19mm/s inner target is unqualified
 on the floor; increasing speed alone does not change a requested curvature.
+
+## V5 junction-pause fix and current validation status
+
+V5 retains V4 steering and50mm/s base speed. The full operator log showed
+repeated MOTION_FAULT immediately alongside the first junction observation,
+then physical STOP adding0x1 to form0x9. Before that the wheel speeds were
+nonzero, including80/20 and83/17mm/s on80/19 targets; those samples do not
+establish an inner-wheel stall. The exact executor failure subtype was not
+printed. Barcode calibration failed, so junctions request the probe fallback.
+
+Code inspection identified a definite handoff issue: entering PROBE_SETTLE
+withholds line refresh for250ms but leaves a150ms continuous lease live.
+The measured executor interprets lease expiry as a timeout fault. V5 explicitly
+calls the controller's normal zero-output motion pause when entering settle.
+The existing output-failure latch, physical STOP, watchdog, goal limits and
+production qualification gate remain in place. This fixes that code path;
+physical confirmation that it resolves the reported stop is still needed.
+
+The user explicitly requested skipping internal testing. No automated test
+suites were run for V5; the157/19 results above belong to the previous V4
+revision. V5 compiled successfully into a UF2. No flashing or car operation
+was performed. Next hardware check: raised-wheel START/STOP, then a short
+curve run; preserve the log across junction detection, probe and final stop.
+Junction detection on a curve may itself need tuning if both sensors see black
+without a real intersection; this change does not remove junction detection.

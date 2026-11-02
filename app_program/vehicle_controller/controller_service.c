@@ -504,7 +504,14 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
         (controller->mission == MISSION_JUNCTION_APPROACH) &&
         out->probe_requested(out->context))
     {
+        /* A deliberate manoeuvre pause must retire the live line command.
+         * Merely withholding refresh leaves its 150ms lease running during
+         * the 250ms probe settle, which the measured executor treats as a
+         * timeout fault. Use the normal zero-output pause; never clear STOP. */
+        controller_action_t pause = {0};
+        pause.type = CONTROLLER_ACTION_STOP_MOTION;
         set_phase(service, CONTROLLER_JUNCTION_PROBE_SETTLE, now_ms);
+        execute(service, &pause);
     }
 }
 
