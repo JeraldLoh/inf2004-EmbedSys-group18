@@ -75,9 +75,6 @@ void av_config_default(av_config_t *cfg) {
     // each scan's single centre reading missed it (36-91 cm) and the car
     // drove on. Half the car width (~7 cm) plus a margin.
     cfg->path_half_width_cm = 10.0f;
-    // Same placeholder as the controller's junction approach_mm (50 mm):
-    // measure line sensors to wheel axle on the car.
-    cfg->sensor_ahead_cm = 5.0f;
 
     cfg->motion_timeout_ms = 8000;
     cfg->reacquire_timeout_ms = 3000;
@@ -118,7 +115,6 @@ const char *av_config_check(const av_config_t *c) {
     if (c->max_rescans < 0 || c->max_reverses < 0) return "retry limits must be >= 0";
     if (c->max_reverses > 0 && !(c->reverse_cm > 0.0f)) return "reverse_cm must be > 0";
     if (!(c->pivot_clearance_cm >= 0.0f)) return "pivot_clearance_cm must be >= 0";
-    if (!(c->sensor_ahead_cm >= 0.0f)) return "sensor_ahead_cm must be >= 0";
     if (!(c->car_half_width_cm >= 0.0f)) return "car_half_width_cm must be >= 0";
     if (!(c->bypass_clearance_cm >= 0.0f)) return "bypass_clearance_cm must be >= 0";
     if (!(c->bypass_pass_cm > 0.0f)) return "bypass_pass_cm must be > 0";
@@ -310,7 +306,6 @@ static void finish_edge(av_t *a, int idx, bool found, float edge_dir, float clea
 static void start_coarse(av_t *a) {
     a->coarse_idx = 0;
     a->shift_cm = 0.0f; // a fresh scan measures from here
-    a->aligning = false;
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
     enter(a, AV_STATE_COARSE_SCAN);
@@ -337,7 +332,6 @@ static void next_edge_stage(av_t *a, side_t just_done) {
 }
 
 static void start_reacquire(av_t *a) {
-    a->aligning = false;
     a->reacquire_attempts = 0;
     a->search_started = false;
     enter(a, AV_STATE_REACQUIRE);
@@ -354,7 +348,6 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->shift_cm = 0.0f;
     a->reacquire_attempts = 0;
     a->off_line = false;
-    a->aligning = false;
     a->heading_deg = 0;
     a->choice.side = SIDE_NONE;
     av_event_t e = event_of(AV_EVT_OBSTACLE_DETECTED);
@@ -765,36 +758,21 @@ static void rejoin_line(av_t *a, uint32_t now) {
     emit(a, now, &e);
 }
 
-#define REJOIN_MAX_ANGLE_DEG 30 // beyond this, line following drives across the line
-
-// Past the obstacle (pass leg onward, or the search) and a sensor sees the
-// line: stop. If the car is roughly along the line (the pass on a curve, the
-// search), rejoin at once. Crossing it at an angle (the return drive), line
-// following would drive straight over it (car trial 2026-11-02), so drive on
-// until the axle is over the line, then pivot back to the line direction:
-// the sensors swing round onto the line. Pivoting at once swung them ~4 cm
-// off it and the slow search arc had to curve back in (car trial
-// 2026-11-02). With arc turns, which carry the sensors away, rejoin at once.
+// Past the obstacle (the pass leg onward: drives and turns, or the search)
+// and a sensor sees the line: hand straight to line following, at whatever
+// angle. Car trial 2026-11-02: driving on to straighten up first carried the
+// car past the line it had just found.
 static bool rejoin_if_line(av_t *a, uint32_t now) {
     // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
     // is still the straighten-up beside the obstacle: only the drive counts.
     bool past = a->state == AV_STATE_REACQUIRE ||
                 (a->state == AV_STATE_BYPASS &&
                  (a->leg_idx > LEG_PASS || (a->leg_idx == LEG_PASS && a->leg_active)));
-    if (!past || a->aligning || !a->hw.line_detected(a->hw.ctx)) return false;
+    if (!past || !a->hw.line_detected(a->hw.ctx)) return false;
     a->hw.motion_stop(a->hw.ctx);
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
-    int off = a->heading_deg < 0 ? -a->heading_deg : a->heading_deg;
-    if (a->state == AV_STATE_BYPASS && off > REJOIN_MAX_ANGLE_DEG && !(a->cfg.turn_radius_cm > 0.0f)) {
-        // Axle over the line, straighten up, then rejoin (or search).
-        a->leg_idx = LEG_RETURN_DRIVE;
-        a->legs[LEG_RETURN_DRIVE].forward = true;
-        a->legs[LEG_RETURN_DRIVE].cm = a->cfg.sensor_ahead_cm;
-        a->aligning = true;
-        return true;
-    }
     rejoin_line(a, now);
     return true;
 }
@@ -916,9 +894,9 @@ void av_tick(av_t *a) {
     if (a->state == AV_STATE_FAILED) return; // also covers a failed av_init
     uint32_t now = a->hw.now_ms(a->hw.ctx);
 
-    // A car turn in progress blocks every state until it finishes and settles.
-    // Not interrupted for the line: a pivot does not travel, and stopping it
-    // part way would leave heading_deg wrong for the straighten-up.
+    // A car turn in progress blocks every state until it finishes and settles,
+    // except that a turn past the obstacle stops for the line.
+    if ((a->turn_pending || a->body_settling) && rejoin_if_line(a, now)) return;
     if (a->turn_pending) {
         if (motion_failed(a)) {
             a->turn_pending = false;
