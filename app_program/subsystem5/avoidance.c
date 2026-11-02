@@ -698,10 +698,15 @@ static void rejoin_line(av_t *a, uint32_t now) {
     emit(a, now, &e);
 }
 
+#define REJOIN_MAX_ANGLE_DEG 30 // beyond this, line following drives across the line
+
 // Past the obstacle (pass leg onward, or the search) and a sensor sees the
-// line: stop and rejoin at once. Car trial 2026-11-02: turns are forward
-// arcs, so straightening up after seeing the line carried the sensors off
-// it; on a curve the line can also turn up before the return drive.
+// line: stop. If the car is roughly along the line (the pass on a curve, the
+// search), rejoin at once. Crossing it at an angle (the return drive), line
+// following would drive straight over it (car trial 2026-11-02), so pivot
+// back to the line direction first and let the search find it: a pivot keeps
+// the sensors close. With arc turns, which carry the sensors away, rejoin at
+// once as before.
 static bool rejoin_if_line(av_t *a, uint32_t now) {
     // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
     // is still the straighten-up beside the obstacle: only the drive counts.
@@ -713,6 +718,11 @@ static bool rejoin_if_line(av_t *a, uint32_t now) {
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    int off = a->heading_deg < 0 ? -a->heading_deg : a->heading_deg;
+    if (a->state == AV_STATE_BYPASS && off > REJOIN_MAX_ANGLE_DEG && !(a->cfg.turn_radius_cm > 0.0f)) {
+        a->leg_idx = LEG_COUNT - 1; // the straighten-up turn, then the search
+        return true;
+    }
     rejoin_line(a, now);
     return true;
 }
@@ -831,8 +841,9 @@ void av_tick(av_t *a) {
     uint32_t now = a->hw.now_ms(a->hw.ctx);
 
     // A car turn in progress blocks every state until it finishes and settles.
+    // Not interrupted for the line: a pivot does not travel, and stopping it
+    // part way would leave heading_deg wrong for the straighten-up.
     if (a->turn_pending) {
-        if (rejoin_if_line(a, now)) return;
         if (motion_failed(a)) {
             a->turn_pending = false;
             fail_motion(a, now);

@@ -952,13 +952,30 @@ static void line_found_on_return_leg(void) {
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.forwards, 3);
     CHECK_INT(s.stops, 2);   // detection stop + early stop on the return leg
-    // Rejoins at once: no straighten-up arc (it would carry the sensors off
-    // the line) and no search.
-    CHECK(s.heading != 0);
-    CHECK_INT(s.searches, 0);
+    // Crossing at an angle: straighten up (pivot), then the search finds it.
+    // Handing over at the crossing drove straight over the line on the car.
+    CHECK_INT(s.heading, 0);
+    CHECK_INT(s.searches, 1);
     CHECK_INT(s.resumes, 1);
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
     CHECK_INT(av_metrics(&av)->failures, 0);
+}
+
+// Arc turns carry the sensors off the line while straightening, so with arcs
+// the car still rejoins at the crossing.
+static void line_on_return_leg_with_arcs_rejoins_at_once(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.turn_radius_cm = 9.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.line_on_return_leg = true;
+    CHECK(run_encounter(&s, &av));
+    CHECK(s.heading != 0);
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
 // On a curve the line can turn up before the return drive.
@@ -1036,16 +1053,19 @@ static void line_found_while_passing(void) {
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
-static void line_found_during_return_turn(void) {
+// A pivot is not interrupted for the line (it does not travel, and stopping
+// part way would spoil the heading); the bypass carries on and the search
+// finds the line.
+static void line_during_return_turn_lets_the_turn_finish(void) {
     sim_t s;
     av_t av;
     sim_setup(&s, &av, 0);
     s.obstacle = (blob_t){80, 100, 12.0f, true};
     s.line_on_bypass_turn = 3; // turning back toward the line
     CHECK(run_encounter(&s, &av));
-    CHECK_INT(s.forwards, 2);
-    CHECK_INT(s.bypass_turns, 3);
-    CHECK_INT(s.searches, 0);
+    CHECK_INT(s.forwards, 3);
+    CHECK_INT(s.bypass_turns, 4);
+    CHECK_INT(s.heading, 0);
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
@@ -1226,12 +1246,13 @@ void run_avoidance_tests(void) {
     RUN(refused_motion_fails_without_waiting);
     RUN(no_motion_failed_callback_still_works);
     RUN(line_found_on_return_leg);
+    RUN(line_on_return_leg_with_arcs_rejoins_at_once);
     RUN(obstacle_in_path_but_missed_by_centre);
     RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
     RUN(pivot_plan_passes_the_obstacle);
     RUN(line_found_while_passing);
-    RUN(line_found_during_return_turn);
+    RUN(line_during_return_turn_lets_the_turn_finish);
     RUN(line_ignored_beside_obstacle);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
