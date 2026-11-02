@@ -105,6 +105,13 @@ Moves and the line search run at 50 mm/s, the trial line cruise, so avoidance
 never drives faster than line following; Buddy 2's measured executor sets
 each move's time limit. Search arc ~33 cm radius (`b5_motion_default_config()`).
 
+Turns are forward arcs, not pivots (car trial 2026-11-02: pivots stalled at
+the 30% effort cap, the backward wheel never moved). Both wheels go forward at
+about 19/81 mm/s (R ~9 cm, ~31.5 deg/s), timed open loop: check the angle on
+the floor and adjust `turn_curvature_u1_m` / `turn_lag_ms`. Before turning, the
+nearest scan hit must be at least 20 cm (`pivot_clearance_cm`); if not, the
+car reverses to get that room and scans again (up to 2 times, then a safe stop).
+
 Scan (`av_config_default()`): the servo mount was freed on 2026-11-02, so the
 scan covers 20..160 deg (+/-70) in 10 deg steps and the car stays still while
 scanning. The car only turns to look further for an edge beyond 70 deg (up to

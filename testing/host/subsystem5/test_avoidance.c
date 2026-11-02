@@ -336,7 +336,7 @@ static void default_config_is_valid(void) {
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
-    CHECK_NEAR(c.pivot_clearance_cm, 15.0f, 1e-6);
+    CHECK_NEAR(c.pivot_clearance_cm, 20.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
     CHECK_INT(c.right_deg, 20);
     CHECK_INT(c.fine_half_range_deg, 70);

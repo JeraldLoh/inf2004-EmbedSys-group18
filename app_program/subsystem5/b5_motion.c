@@ -46,6 +46,30 @@ void b5_motion_default_config(b5_motion_config_t *config)
     config->search_speed_mm_s = 50;
     config->search_curvature_u1_m = 3000000;   /* ~33 cm radius */
     config->search_life_ms = 150U;
+    /* Car trial 2026-11-02: pivots stalled at the 30% effort cap (the wheel
+     * going backwards never moved; NO_WHEEL_PROGRESS twice). Arc instead at
+     * 11 /m (R ~9 cm): wheels ~19/81 mm/s, the same split line following
+     * uses at that cap. 50 mm/s x 11 /m = ~31.5 deg/s. */
+    config->arc_turns = true;
+    config->turn_speed_mm_s = 50;
+    config->turn_curvature_u1_m = 11000000;
+    config->turn_lag_ms = 200U;   /* 50 mm/s at 200 mm/s^2 ramps in 0.25 s */
+}
+
+/* Arc time for a turn: angle / (speed x curvature), plus the ramp lag. */
+static uint32_t arc_time_ms(const b5_motion_config_t *c, int32_t mdeg)
+{
+    uint64_t deg_per_s_x1e3;
+    uint32_t mag = (uint32_t)((mdeg < 0) ? -mdeg : mdeg);
+
+    /* rad/s = (mm/s / 1000) * (u1/m / 1e6); deg = rad * 57296 / 1000 */
+    deg_per_s_x1e3 = ((uint64_t)c->turn_speed_mm_s * (uint64_t)c->turn_curvature_u1_m
+        * 57296ULL) / 1000000000ULL;
+    if (deg_per_s_x1e3 == 0U)
+    {
+        return 0U;
+    }
+    return (uint32_t)(((uint64_t)mag * 1000ULL) / deg_per_s_x1e3) + c->turn_lag_ms;
 }
 
 void b5_motion_init(b5_motion_t *motion, const b5_motion_ops_t *ops,
@@ -98,6 +122,15 @@ void b5_motion_turn(b5_motion_t *motion, int32_t mdeg, uint32_t now_ms)
     if (mdeg == 0)
     {
         motion->state = B5_MOVE_DONE;
+        return;
+    }
+    if (motion->config.arc_turns)
+    {
+        motion->arc_left = mdeg > 0;
+        motion->arc_started = false;
+        motion->arc_ms = arc_time_ms(&motion->config, mdeg);
+        motion->deadline_ms = now_ms + motion->config.wait_ms;
+        motion->state = B5_MOVE_ARC;
         return;
     }
     start_goal(motion, (mdeg > 0) ? MOTION_GOAL_PIVOT_LEFT : MOTION_GOAL_PIVOT_RIGHT,
@@ -210,6 +243,60 @@ static void service_search(b5_motion_t *motion, uint32_t now_ms)
     (void)motion->ops.continuous(&request);
 }
 
+static bool send_arc(b5_motion_t *motion, uint32_t now_ms)
+{
+    motion_continuous_request_t request;
+    authority_generation_t generation;
+
+    if (!motion->ops.authority(MOTION_SOURCE_OBSTACLE, &generation))
+    {
+        return false;
+    }
+    (void)memset(&request, 0, sizeof(request));
+    request.authority_generation = generation;
+    request.source = MOTION_SOURCE_OBSTACLE;
+    request.speed_mm_s = motion->config.turn_speed_mm_s;
+    request.curvature_u1_m = motion->arc_left
+        ? motion->config.turn_curvature_u1_m
+        : -motion->config.turn_curvature_u1_m;
+    request.created_ms = now_ms;
+    request.expires_ms = now_ms + motion->config.search_life_ms;
+    return motion->ops.continuous(&request);
+}
+
+static void service_arc(b5_motion_t *motion, uint32_t now_ms)
+{
+    if (!motion->arc_started)
+    {
+        /* Same authority wait as a goal: see the header. */
+        if (send_arc(motion, now_ms))
+        {
+            motion->arc_started = true;
+            motion->deadline_ms = now_ms + motion->arc_ms;
+        }
+        else if (time_reached(now_ms, motion->deadline_ms))
+        {
+            motion->last_result = MOTION_RESULT_REJECTED;
+            motion->state = B5_MOVE_FAILED;
+        }
+        return;
+    }
+    if (time_reached(now_ms, motion->deadline_ms))
+    {
+        motion->ops.halt();
+        motion->last_result = MOTION_RESULT_COMPLETED;
+        motion->state = B5_MOVE_DONE;
+        return;
+    }
+    if (!send_arc(motion, now_ms))
+    {
+        /* Authority withdrawn or Buddy 2 refused mid-arc (STOP, fault). */
+        motion->ops.halt();
+        motion->last_result = MOTION_RESULT_CANCELLED;
+        motion->state = B5_MOVE_FAILED;
+    }
+}
+
 void b5_motion_service(b5_motion_t *motion, uint32_t now_ms)
 {
     if ((motion == NULL) || !b5_motion_ops_present(&motion->ops))
@@ -221,6 +308,7 @@ void b5_motion_service(b5_motion_t *motion, uint32_t now_ms)
         case B5_MOVE_PENDING: service_pending(motion, now_ms); break;
         case B5_MOVE_GOAL: service_goal(motion); break;
         case B5_MOVE_SEARCH: service_search(motion, now_ms); break;
+        case B5_MOVE_ARC: service_arc(motion, now_ms); break;
         default: break;
     }
 }

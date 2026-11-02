@@ -46,8 +46,10 @@ void av_config_default(av_config_t *cfg) {
     cfg->max_reverses = 2;
     cfg->reverse_cm = 10.0f;
     // Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
-    // bypass pivot from there hit it. Back off to this range before turning.
-    cfg->pivot_clearance_cm = 15.0f;
+    // bypass turn from there hit it. Back off to this range before turning.
+    // Turns are forward arcs (R ~9 cm, see b5_motion.c) that carry the car
+    // 6-9 cm forward, so this leaves room for that.
+    cfg->pivot_clearance_cm = 20.0f;
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
     cfg->bypass_pass_cm = 30.0f;        // obstacle depth plus car length (assumed)
