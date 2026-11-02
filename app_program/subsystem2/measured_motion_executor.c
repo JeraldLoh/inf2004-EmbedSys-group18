@@ -1,6 +1,7 @@
 #include "measured_motion_executor.h"
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
 #include "../project_config/car_trial_tuning.h"
+#include "b2_line_tuning.h"
 #endif
 #include <stddef.h>
 #include <string.h>
@@ -255,6 +256,9 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     motion_encoder_snapshot_t raw;
     uint32_t now, dt;
     uint32_t desired[2] = {0U, 0U};
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    uint32_t line_target_cap = 0U;
+#endif
     int8_t sign[2] = {1, 1};
     int16_t effort[2] = {0, 0};
     bool complete = true;
@@ -322,14 +326,20 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-        /* Explicit line trial: reduce only the inside wheel by15% while
-         * turning. Zero curvature, finite goals and obstacle moves retain
-         * their original targets. Acceleration/PID/STOP protections follow. */
+        line_target_cap = cap;
+        /* Grow the extra inside reduction with turn strength. Small turns
+         * no longer receive the full15% cut; full turns retain that limit. */
         if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
         {
             unsigned inside = correction > 0 ? 1U : 0U;
+            uint32_t strength = magnitude(e->continuous.curvature_u1_m);
+            uint32_t reduction;
+            if (strength > B2_LINE_FULL_CURVATURE_1_M)
+            { strength = B2_LINE_FULL_CURVATURE_1_M; }
+            reduction = (100U - CAR_TRIAL_LINE_INNER_SPEED_PERCENT) * strength /
+                B2_LINE_FULL_CURVATURE_1_M;
             desired[inside] = (uint32_t)((uint64_t)desired[inside] *
-                CAR_TRIAL_LINE_INNER_SPEED_PERCENT / 100U);
+                (100U - reduction) / 100U);
         }
 #endif
     }
@@ -374,7 +384,24 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         if (desired[i] == 0U) { e->ramp_um_s[i] = 0U; }
         else if (e->ramp_um_s[i] < desired[i])
         { e->ramp_um_s[i] += (desired[i]-e->ramp_um_s[i] < step) ? desired[i]-e->ramp_um_s[i] : step; }
-        else { e->ramp_um_s[i] = desired[i]; }
+        else
+        {
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+            /* Smooth ordinary line-speed decreases as well as increases.
+             * Zero targets remain immediate above. A newly reduced hard
+             * wheel cap also bypasses smoothing rather than exceeding it.
+             * STOP, expiry and faults use the direct zero-output path. */
+            if (e->status.state == MOTION_EXEC_CONTINUOUS &&
+                e->continuous.source == MOTION_SOURCE_LINE &&
+                e->ramp_um_s[i] <= line_target_cap)
+            {
+                uint32_t difference = e->ramp_um_s[i] - desired[i];
+                e->ramp_um_s[i] -= difference < step ? difference : step;
+            }
+            else
+#endif
+            { e->ramp_um_s[i] = desired[i]; }
+        }
         if (!wheel_pid_step(&e->pid[i], e->ramp_um_s[i], e->measurement.sample.speed_um_s[i], dt, &duty))
         { finish(e, MOTION_RESULT_FAULT); return MOTION_UNAVAILABLE; }
         effort[i] = (int16_t)(sign[i]*(int32_t)duty);

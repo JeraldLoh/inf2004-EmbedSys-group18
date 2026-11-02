@@ -1,5 +1,8 @@
 #include "car_motion.h"
 #include "motion_calibration.h"
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+#include "b2_line_tuning.h"
+#endif
 #include <stddef.h>
 #include <string.h>
 
@@ -74,6 +77,10 @@ bool car_motion_continuous(car_motion_t *m,
          !newer(r->authority_generation, m->line_floor))) { ++m->rejected; return false; }
     converted = *r;
     curvature = -(int64_t)r->curvature_u1_m;
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    if (r->source == MOTION_SOURCE_LINE)
+    { curvature = b2_line_shape_curvature(curvature); }
+#endif
     /* Nearest whole 1/m, symmetric rounding; INT32_MIN handled in int64. */
     converted.curvature_u1_m = (int32_t)((curvature + (curvature < 0 ? -500000 : 500000))/1000000);
     {
