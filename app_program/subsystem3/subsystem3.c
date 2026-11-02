@@ -102,15 +102,6 @@ LOCAL line_side_t s3_reacquire_hint = LINE_SIDE_NONE;
  * following. s3_barcode_ready is one word written only by s3_task. */
 LOCAL BOOL s3_calibrate_request = FALSE;
 LOCAL volatile BOOL s3_barcode_ready = FALSE;
-LOCAL volatile uint32_t s3_raw_sample; /* bit16 valid, bits11..0 ADC; one store */
-
-bool subsystem3_barcode_raw(uint16_t *raw)
-{
-    uint32_t sample = s3_raw_sample;
-    if (raw == NULL || (sample & 0x10000U) == 0U) { return false; }
-    *raw = (uint16_t)(sample & 0xFFFU);
-    return true;
-}
 
 #if S3_BARCODE_USE_EDGES
 LOCAL barcode_edges_t s3_edges;
@@ -371,7 +362,6 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #else
         {
             bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
-            s3_raw_sample = have_raw ? (0x10000U | raw) : 0U;
 #if APP_CAR_MQTT
             s3_wifi.adc_valid=have_raw;
             s3_wifi.adc=have_raw ? raw : 0U;

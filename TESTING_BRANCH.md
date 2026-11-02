@@ -1,5 +1,15 @@
 # `testing` branch: first whole-car build
 
+## Current ownership correction - Buddy 3 restored
+
+Buddy3 source is restored exactly to pre-publication testing641ad74, including
+its original steering build settings; the added trial curve memory and barcode
+raw-sample extension are removed. The user's scope is now Buddy2-only edits.
+Buddy5's latest testing67ae87a changes are preserved. See
+testing/subsystem2/B2_SCOPE_RESTORE_2026-11-02.md for the exact rollback scope.
+Older V5 steering/memory descriptions below are historical and superseded.
+No automated suites were run for this correction, per the user's request.
+
 ## Current Buddy 2 publication - 2 November 2026
 
 At the operator's request, testing now receives the Buddy 2 measured drivers,
