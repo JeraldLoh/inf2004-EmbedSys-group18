@@ -179,3 +179,19 @@ was performed. Next hardware check: raised-wheel START/STOP, then a short
 curve run; preserve the log across junction detection, probe and final stop.
 Junction detection on a curve may itself need tuning if both sensors see black
 without a real intersection; this change does not remove junction detection.
+
+## V7: 60mm/s candidate after polarity revert
+
+At the operator's request V6 polarity was reverted (d4184ad). V7 retains the
+previous HIGH=black line interpretation and changes only trial line cruise
+from50 to60mm/s (6cm/s), plus its banner and matching test expectation.
+The slow line/barcode/approach target is also60mm/s, capped at cruise.
+Steering remains12..90, ramp6ms, fading memory200ms, curvature scaling120000;
+nominal full-turn wheel targets are approximately97/23mm/s. Turning radius
+is unchanged; the new command traverses the same requested arc faster.
+Motor PID/calibration,30% effort,100ms watchdog,15s run limit, physical STOP,
+normal production gating and known post-junction resume issue are unchanged.
+
+Compiled successfully. Automated tests were not run, per user request. The
+updated test expectation is recorded but has not been executed. No hardware
+validation, flashing or remote push was performed for this version.
