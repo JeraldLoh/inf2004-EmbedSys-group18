@@ -193,7 +193,7 @@ ER subsystem2_motion_init(const b2_trial_io_t *trial_io)
 #endif
     if (!car_motion_init(&motion, motor, encoder, &config, &measured_io)) { return E_PAR; }
 #if APP_CAR_B2_TRIAL
-    /* No run limit (2026-11-02): GP21, line loss and the watchdog stop it. */
+    /* No overall run limit: physical STOP, command leases and faults remain. */
     if(!car_motion_enable_trial(&motion,MEASURED_MOTION_NO_RUN_LIMIT)) { return E_PAR; }
 #endif
     mtx.mtxatr = TA_INHERIT;
