@@ -147,7 +147,7 @@ endforeach()
 add_executable(test_car_trial test_car_trial.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c)
 target_compile_definitions(test_car_trial PRIVATE APP_CAR_B2_TRIAL=1)
 target_link_libraries(test_car_trial PRIVATE b2_fake)
-foreach(case IN ITEMS normal bounds line goal goal_obstacle deadline stop unlimited pivot_cap forward_cap)
+foreach(case IN ITEMS normal bounds line goal goal_obstacle deadline stop unlimited pivot_cap forward_cap sync sync_far)
     add_test(NAME b2_integrated_trial_${case} COMMAND test_car_trial ${case})
 endforeach()
 add_executable(test_integrated_trial_startup test_car_startup.c

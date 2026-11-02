@@ -65,6 +65,30 @@ int main(int argc,char **argv) {
         assert(peak<=(pivot?450:300));
         if(pivot) { assert(peak>300); } else { assert(peak==300); }
         car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"sync")==0 || strcmp(argv[1],"sync_far")==0) {
+        /* Straight 200 mm; the left wheel stops 20 mm (sync) or 50 mm
+         * (sync_far) short. Within the 30 mm slack both stop together and the
+         * goal completes; beyond it the old per-wheel rule (and its stall
+         * fault) still applies. */
+        uint64_t short_um=strcmp(argv[1],"sync")==0?20000U:50000U;
+        motion_goal_request_t r={23U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_FORWARD,200,0,100U,0U};
+        motion_goal_result_t out;
+        assert(f.car.executor.config.linear_sync_slack_um==30000U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<800U && !f.car.executor.status.terminal_pending;++i) {
+            uint64_t left=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+            tick(&f,left+short_um<f.car.executor.goal_target_um?6U:0U,6U);
+        }
+        assert(f.car.executor.status.terminal_pending);
+        assert(car_motion_result(&f.car,r.source,23U,&out));
+        if(short_um==20000U) {
+            assert(out.code==MOTION_RESULT_COMPLETED);
+            assert(out.travelled_mm>=180 && out.travelled_mm<=200);  /* average of the two */
+        } else {
+            assert(out.code==MOTION_RESULT_FAULT);
+            assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
+        }
+        fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"unlimited")==0) {
         assert(car_motion_enable_trial(&f.car,MEASURED_MOTION_NO_RUN_LIMIT));
         for(i=0U;i<1250U;++i) { /* 25 s: past the old 15 s and the 20 s bound */

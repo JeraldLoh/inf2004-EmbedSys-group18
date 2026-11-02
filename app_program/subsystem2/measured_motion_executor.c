@@ -58,7 +58,7 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
         (c->max_goal_mm > 100000U) ||
         (c->linear_goal_min_speed_mm_s > c->max_speed_mm_s) ||
         (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s) ||
-        (c->pivot_max_effort > 1000U)) { return false; }
+        (c->pivot_max_effort > 1000U) || (c->linear_sync_slack_um > 50000U)) { return false; }
     (void)memset(e, 0, sizeof(*e));
     if (!wheel_measurement_init(&e->measurement, &c->measurement)) { return false; }
     for (i = 0U; i < 2U; ++i)
@@ -422,13 +422,27 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         if (e->goal.type == MOTION_GOAL_REVERSE) { sign[0] = -1; sign[1] = -1; }
         if (e->goal.type == MOTION_GOAL_PIVOT_LEFT) { sign[0] = -1; }
         if (e->goal.type == MOTION_GOAL_PIVOT_RIGHT) { sign[1] = -1; }
+        /* Car trial 2026-11-02: one wheel finished a straight goal, the other
+         * drove on alone, swung the car round the stopped wheel and stalled
+         * (NO_WHEEL_PROGRESS, target 0/50 or -50/0). */
+        bool one_done = false;
+        if ((e->goal.type == MOTION_GOAL_FORWARD || e->goal.type == MOTION_GOAL_REVERSE) &&
+            e->config.linear_sync_slack_um != 0U)
+        {
+            for (i = 0U; i < 2U; ++i)
+            {
+                if (e->measurement.sample.travel_um[i]-e->goal_base_um[i]+e->config.tolerance_um >=
+                    e->goal_target_um) { one_done = true; }
+            }
+        }
         for (i = 0U; i < 2U; ++i)
         {
             uint64_t p = e->measurement.sample.travel_um[i]-e->goal_base_um[i];
             uint64_t remain = p < e->goal_target_um ? e->goal_target_um-p : 0U;
             if (p > e->goal_target_um+e->config.overshoot_um)
             { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_OVERSHOOT, (uint8_t)(1U << i)); return MOTION_OK; }
-            if (p+e->config.tolerance_um < e->goal_target_um)
+            if (p+e->config.tolerance_um < e->goal_target_um &&
+                !(one_done && remain <= e->config.linear_sync_slack_um))
             {
                 uint64_t slowed = remain*1000000U/500000U;
                 /* Distance commands must keep rolling until the tolerance

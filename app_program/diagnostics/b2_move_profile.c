@@ -19,6 +19,8 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
     /* Integrated trial 2026-11-02: junction probe and avoidance pivots stalled
      * at 300 (NO_WHEEL_PROGRESS). Pivot goals only may use 45%. */
     c->pivot_max_effort=450U;
+    /* Straight goals: the lagging wheel stops with the first within 30 mm. */
+    c->linear_sync_slack_um=30000U;
 #endif
     c->tolerance_um=5000U; c->overshoot_um=10000U;
     c->settle_us=200000U; c->settle_speed_um_s=3000U;

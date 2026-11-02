@@ -21,6 +21,10 @@ typedef struct
     /* Effort cap during pivot goals only, if above the PID cap; 0 = PID cap.
      * Pivots scrub both wheels sideways and need more than straight driving. */
     uint16_t pivot_max_effort;
+    /* Straight goals: once one wheel reaches its distance, the other counts
+     * as done within this much, so it never drives on alone (that swings the
+     * car round the stopped wheel and stalls it). 0 = each wheel exact. */
+    uint32_t linear_sync_slack_um;
     /* Set only after real direction/load/STOP/speed/pivot qualification.
      * Test fixtures setting true are NOT physical qualification evidence. */
     bool qualified;
