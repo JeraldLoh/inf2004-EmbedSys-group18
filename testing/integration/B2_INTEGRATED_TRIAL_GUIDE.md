@@ -20,12 +20,16 @@ linear/pivot60mm/s floors,5mm wheel tolerance,10mm overshoot,700ms progress,
 remains FALSE. Explicit CAR_B2_TRIAL permits bounded trial authority instead;
 normal CAR_RUN still refuses START with unqualified gains.
 
-V3 line candidate: cruise50mm/s (5cm/s), steering starts12, grows by1
-every10ms and caps70 after580ms; curvature per steering unit120000 micro-1/m. Centred
-steering returns to zero (no persistent last-side hold or counter-steer).
+V4 line candidate: cruise50mm/s (5cm/s), steering starts12, grows by1
+every6ms and caps90 after468ms; curvature per steering unit120000 micro-1/m.
+When both sensors return white, the previous correction fades to zero over200ms.
+Same-side black during that interval resumes the remaining correction and ramps;
+opposite-side black immediately starts correction in the newly observed direction.
+No fixed circle radius input is required; this adapts to the duration/side of
+digital sensor evidence, within the bounded steering authority available.
 Initial correction requests approximately47/53mm/s; sustained full correction
-requests approximately28/72mm/s after adapter rounding (nominal125mm radius,
-versus333mm for v2). Neither wheel is commanded to reverse during line tracking;
+requests approximately19/81mm/s after adapter rounding (nominal91mm radius,
+versus125mm for v3 and333mm for v2). Neither wheel is commanded to reverse during line tracking;
 50mm/s is the chassis cruise target, not a per-wheel cap during turning.
 Barcode/approach slow speed is also capped at50mm/s, so it cannot speed up.
 The slower wheel is below the previously used60mm/s rolling candidate: floor stalling
@@ -80,8 +84,9 @@ software timestamps. Measured physical STOP<=50ms is still outstanding.
 
 157/157 native tests and19/19 shared suites pass. The added real line/controller/
 motion-adapter test checks noise filtering, gradual correction, both turn signs,
-correction limits, zero centred hold, slow-mode speed and STOP suppression.
-V3 tests exercise intermediate corrections and sustained maximum in both directions.
+correction limits, bounded fading curve memory, slow-mode speed and STOP suppression.
+V4 tests exercise intermediate/max corrections in both directions, memory decay/
+expiry without renewal on white, same-side resume, opposite-side override and reset.
 Includes real profile values,
 normal unqualified refusal, explicit trial bounds, line requests, source/ID
 junction result mapping, deadline, STOP, no boot START, supervisor15s cutoff
@@ -116,13 +121,15 @@ samples; targets were58/41mm/s, then50/50 when steering returned0. The operator
 reported that it did not follow the curve. This supports increasing sustained
 turn authority while retaining the50mm/s cruise; v3 has no floor result yet.
 
-## V3 line diagnostics
+## Line diagnostics
 
 Each periodic CAR status includes `line_black L=... R=... state=... last_side=...`.
 These are Buddy3's filtered black/white inputs (1=black), not raw GPIO voltages.
 State0=centred/both-white interpretation,1=steer-left,2=steer-right,3=junction,
 4=reacquire. Last-side0=none,1=left,2=right. Both-white can also mean the tape
 has been lost; two digital sensors cannot distinguish those geometries alone.
+V4's200ms fading memory can bridge brief gaps; it cannot establish whether the
+line is centred or entirely lost, and is not a guaranteed reacquisition routine.
 The existing3s line-loss stop remains. These are periodic snapshots, copied
 separately from controller/motor status, not synchronized high-rate traces.
 
@@ -130,3 +137,20 @@ For the next run, check raised-wheel START/STOP, then the same clear straight
 and gentle curve without intersections or an obstacle. Check for initial gentle
 correction that grows when one sensor stays black, inner-wheel stalling and any
 wrong-way steering. Keep GP21 ready. Retain the complete log through the stop.
+
+## V3 operator run and V4 candidate
+
+The v3 log repeatedly showed right-black, steer70 and wheel targets72/27mm/s.
+Measured wheel speeds included73/26 and78/24, with drv_err=0: neither wheel
+was persistently stalled in those samples. Steering later returned0 on both-
+white readings; the first run ended with the3s line-loss stop. A later run
+showed Buddy5 detecting an obstacle at23cm, followed by physical STOP evidence.
+These observations do not establish physical STOP timing or an avoidance pass.
+
+The operator requested adaptation from sensor readings without a fixed circle
+radius. V4 retains50mm/s and strengthens sustained turns, ramps sooner, and
+bridges brief same-side detection gaps with bounded fading memory. It does not
+raise base speed or remove STOP/watchdog/TTL/run-time/line-loss protections.
+No V4 floor result yet: check both turn directions, oscillation, curve tracking,
+and inner-wheel stall. In particular the new19mm/s inner target is unqualified
+on the floor; increasing speed alone does not change a requested curvature.

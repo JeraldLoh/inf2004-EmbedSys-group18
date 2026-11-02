@@ -17,6 +17,19 @@ static void set_state(line_follow_t *lf, line_state_t state, uint32_t now_ms)
 {
     if (lf->status.state != (uint8_t)state)
     {
+#if LINE_CURVE_MEMORY_MS > 0U
+        int8_t previous_steer = line_follow_steer(lf, now_ms);
+        lf->centre_entry_steer = state == LINE_STATE_CENTRED ? previous_steer : 0;
+        lf->correction_start = LINE_STEER_BASE;
+        if (state == LINE_STATE_STEER_LEFT && previous_steer < -LINE_STEER_BASE)
+        {
+            lf->correction_start = (uint8_t)(-previous_steer);
+        }
+        else if (state == LINE_STATE_STEER_RIGHT && previous_steer > LINE_STEER_BASE)
+        {
+            lf->correction_start = (uint8_t)previous_steer;
+        }
+#endif
         lf->previous_state = lf->status.state;
         lf->status.state = (uint8_t)state;
         lf->state_since_ms = now_ms;
@@ -54,6 +67,8 @@ void line_follow_reset(line_follow_t *lf)
     lf->junction_reported = false;
     lf->probing = false;
     lf->probe_saw_line = false;
+    lf->centre_entry_steer = 0;
+    lf->correction_start = LINE_STEER_BASE;
 }
 
 line_status_t line_follow_update(
@@ -139,6 +154,9 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
     }
     age = now_ms - lf->state_since_ms;
     magnitude = LINE_STEER_BASE + (int32_t)(age / LINE_STEER_RAMP_MS);
+#if LINE_CURVE_MEMORY_MS > 0U
+    magnitude = lf->correction_start + (int32_t)(age / LINE_STEER_RAMP_MS);
+#endif
 
     switch ((line_state_t)lf->status.state)
     {
@@ -147,6 +165,13 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
         case LINE_STATE_STEER_RIGHT:
             return clamp_steer(magnitude);
         case LINE_STATE_CENTRED:
+#if LINE_CURVE_MEMORY_MS > 0U
+            if (age < LINE_CURVE_MEMORY_MS)
+            {
+                return (int8_t)((int32_t)lf->centre_entry_steer *
+                    (int32_t)(LINE_CURVE_MEMORY_MS - age) / (int32_t)LINE_CURVE_MEMORY_MS);
+            }
+#endif
             /* Damping after a correction: steer slightly the other way. */
             if ((age < LINE_DAMP_MS) && (LINE_DAMP_STEER != 0))
             {

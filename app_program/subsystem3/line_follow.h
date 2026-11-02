@@ -84,6 +84,8 @@ typedef struct
     bool junction_reported;
     bool probing;
     bool probe_saw_line;
+    int8_t centre_entry_steer;   /* Bounded curve memory, zero after expiry. */
+    uint8_t correction_start;   /* Resume same-side correction across brief gaps. */
 } line_follow_t;
 
 /* ---- Tuning (all overridable with -D, tune on the real track) ---------- */
@@ -123,6 +125,12 @@ typedef struct
  * on a straight the car weaves gently between the sensors. 0 = off. */
 #ifndef LINE_HOLD_STEER
 #define LINE_HOLD_STEER 0
+#endif
+
+/* Optional fading correction while both sensors are white. Zero preserves
+ * the original behaviour. Does not replace the supervisor line-loss stop. */
+#ifndef LINE_CURVE_MEMORY_MS
+#define LINE_CURVE_MEMORY_MS 0U
 #endif
 
 /* Steering used while searching for a lost line. */

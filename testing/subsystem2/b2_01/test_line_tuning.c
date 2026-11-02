@@ -57,23 +57,36 @@ int main(void) {
     sample(&f,false,false,0); assert(f.car.executor.continuous.curvature_u1_m==0);
     sample(&f,true,false,1); assert(f.controller.status.last_steer==0); /* reject one glitch */
     sample(&f,true,false,2); assert(f.controller.status.last_steer==-12);
-    sample(&f,true,false,102); assert(f.controller.status.last_steer==-22);
-    sample(&f,true,false,302); assert(f.controller.status.last_steer==-42);
-    sample(&f,true,false,582); assert(f.controller.status.last_steer==-70);
-    sample(&f,true,false,1002); assert(f.controller.status.last_steer==-70);
-    assert(f.car.executor.continuous.curvature_u1_m==-8); /* turn left, both forward */
+    sample(&f,true,false,102); assert(f.controller.status.last_steer==-28);
+    sample(&f,true,false,302); assert(f.controller.status.last_steer==-62);
+    sample(&f,true,false,470); assert(f.controller.status.last_steer==-90);
+    sample(&f,true,false,1002); assert(f.controller.status.last_steer==-90);
+    assert(f.car.executor.continuous.curvature_u1_m==-11); /* turn left, both forward */
     sample(&f,false,false,1003); sample(&f,false,false,1004);
-    assert(f.controller.status.last_steer==0); /* no persistent hold or opposite kick */
-    sample(&f,false,true,1005); sample(&f,false,true,1006);
+    assert(f.controller.status.last_steer==-90); /* no sudden straight command on a gap */
+    sample(&f,false,false,1104); assert(f.controller.status.last_steer==-45);
+    sample(&f,true,false,1105); sample(&f,true,false,1106);
+    assert(f.controller.status.last_steer==-44); /* same side resumes, not reset to12 */
+    sample(&f,true,false,1166); assert(f.controller.status.last_steer==-54);
+    sample(&f,false,false,1167); sample(&f,false,false,1168);
+    sample(&f,false,false,1268); assert(f.controller.status.last_steer==-27);
+    sample(&f,false,false,1368); assert(f.controller.status.last_steer==0);
+    sample(&f,false,false,1568); assert(f.controller.status.last_steer==0); /* never indefinite */
+    sample(&f,false,true,1569); sample(&f,false,true,1570);
     assert(f.controller.status.last_steer==12);
-    sample(&f,false,true,1106); assert(f.controller.status.last_steer==22);
-    sample(&f,false,true,1306); assert(f.controller.status.last_steer==42);
-    sample(&f,false,true,2006); assert(f.controller.status.last_steer==70);
-    assert(f.car.executor.continuous.curvature_u1_m==8);
-    f.barcode=true; sample(&f,false,true,2007); /* slow mode never increases speed */
+    sample(&f,false,true,1670); assert(f.controller.status.last_steer==28);
+    sample(&f,false,true,1870); assert(f.controller.status.last_steer==62);
+    sample(&f,false,true,2570); assert(f.controller.status.last_steer==90);
+    assert(f.car.executor.continuous.curvature_u1_m==11);
+    sample(&f,false,false,2571); sample(&f,false,false,2572);
+    sample(&f,false,false,2672); assert(f.controller.status.last_steer==45);
+    sample(&f,true,false,2673); sample(&f,true,false,2674);
+    assert(f.controller.status.last_steer==-12); /* opposite evidence overrides memory */
+    f.barcode=true; sample(&f,true,false,2675); /* slow mode never increases speed */
     before=f.drives; assert(controller_service_handle(&f.controller,&stop));
-    controller_service_tick(&f.controller,2020); assert(f.drives==before);
+    controller_service_tick(&f.controller,2680); assert(f.drives==before);
+    line_follow_reset(&f.line); assert(line_follow_steer(&f.line,2680)==0);
     assert(!f.car.executor.config.qualified); fake_assert_safe(&f.fake);
-    puts("50mm/s line candidate: filtering, ramp, cap, centred release, signs, slow mode and STOP passed");
+    puts("50mm/s line candidate: filtering, ramp, cap, fading gap memory, same/opposite side, reset, slow mode and STOP passed");
     return 0;
 }
