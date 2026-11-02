@@ -57,15 +57,19 @@ int main(void) {
     sample(&f,false,false,0); assert(f.car.executor.continuous.curvature_u1_m==0);
     sample(&f,true,false,1); assert(f.controller.status.last_steer==0); /* reject one glitch */
     sample(&f,true,false,2); assert(f.controller.status.last_steer==-12);
-    sample(&f,true,false,102); assert(f.controller.status.last_steer==-17);
-    sample(&f,true,false,1002); assert(f.controller.status.last_steer==-25);
-    assert(f.car.executor.continuous.curvature_u1_m==-3); /* turn left, both forward */
+    sample(&f,true,false,102); assert(f.controller.status.last_steer==-22);
+    sample(&f,true,false,302); assert(f.controller.status.last_steer==-42);
+    sample(&f,true,false,582); assert(f.controller.status.last_steer==-70);
+    sample(&f,true,false,1002); assert(f.controller.status.last_steer==-70);
+    assert(f.car.executor.continuous.curvature_u1_m==-8); /* turn left, both forward */
     sample(&f,false,false,1003); sample(&f,false,false,1004);
     assert(f.controller.status.last_steer==0); /* no persistent hold or opposite kick */
     sample(&f,false,true,1005); sample(&f,false,true,1006);
     assert(f.controller.status.last_steer==12);
-    sample(&f,false,true,2006); assert(f.controller.status.last_steer==25);
-    assert(f.car.executor.continuous.curvature_u1_m==3);
+    sample(&f,false,true,1106); assert(f.controller.status.last_steer==22);
+    sample(&f,false,true,1306); assert(f.controller.status.last_steer==42);
+    sample(&f,false,true,2006); assert(f.controller.status.last_steer==70);
+    assert(f.car.executor.continuous.curvature_u1_m==8);
     f.barcode=true; sample(&f,false,true,2007); /* slow mode never increases speed */
     before=f.drives; assert(controller_service_handle(&f.controller,&stop));
     controller_service_tick(&f.controller,2020); assert(f.drives==before);

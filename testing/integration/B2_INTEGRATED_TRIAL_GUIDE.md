@@ -20,13 +20,15 @@ linear/pivot60mm/s floors,5mm wheel tolerance,10mm overshoot,700ms progress,
 remains FALSE. Explicit CAR_B2_TRIAL permits bounded trial authority instead;
 normal CAR_RUN still refuses START with unqualified gains.
 
-Updated line candidate: cruise50mm/s (5cm/s), steering starts12, grows by1
-every20ms and caps25; curvature per steering unit120000 micro-1/m. Centred
+V3 line candidate: cruise50mm/s (5cm/s), steering starts12, grows by1
+every10ms and caps70 after580ms; curvature per steering unit120000 micro-1/m. Centred
 steering returns to zero (no persistent last-side hold or counter-steer).
-Full correction requests approximately42/58mm/s after adapter rounding;
+Initial correction requests approximately47/53mm/s; sustained full correction
+requests approximately28/72mm/s after adapter rounding (nominal125mm radius,
+versus333mm for v2). Neither wheel is commanded to reverse during line tracking;
 50mm/s is the chassis cruise target, not a per-wheel cap during turning.
 Barcode/approach slow speed is also capped at50mm/s, so it cannot speed up.
-This is below the previously used60mm/s rolling candidate: floor stalling
+The slower wheel is below the previously used60mm/s rolling candidate: floor stalling
 and curve tracking must be checked physically. Tight curves may need retuning.
 Wheel PID/calibration and finite distance/pivot settings are unchanged.
 
@@ -79,6 +81,7 @@ software timestamps. Measured physical STOP<=50ms is still outstanding.
 157/157 native tests and19/19 shared suites pass. The added real line/controller/
 motion-adapter test checks noise filtering, gradual correction, both turn signs,
 correction limits, zero centred hold, slow-mode speed and STOP suppression.
+V3 tests exercise intermediate corrections and sustained maximum in both directions.
 Includes real profile values,
 normal unqualified refusal, explicit trial bounds, line requests, source/ID
 junction result mapping, deadline, STOP, no boot START, supervisor15s cutoff
@@ -106,3 +109,24 @@ candidate addresses steering behavior, not a demonstrated fix for that fault.
 Barcode calibration was unsuccessful, so routes still use the probe fallback.
 Buddy5 detection remains25cm confirmed twice, with6cm emergency guard during
 avoidance/recovery. Its scanning/goal speeds are not reduced by line cruise.
+
+The subsequent v2 hardware log showed both encoder speeds, drv_err=0 throughout,
+and a final physical STOP (0x1). Steering stayed at the25 cap for several status
+samples; targets were58/41mm/s, then50/50 when steering returned0. The operator
+reported that it did not follow the curve. This supports increasing sustained
+turn authority while retaining the50mm/s cruise; v3 has no floor result yet.
+
+## V3 line diagnostics
+
+Each periodic CAR status includes `line_black L=... R=... state=... last_side=...`.
+These are Buddy3's filtered black/white inputs (1=black), not raw GPIO voltages.
+State0=centred/both-white interpretation,1=steer-left,2=steer-right,3=junction,
+4=reacquire. Last-side0=none,1=left,2=right. Both-white can also mean the tape
+has been lost; two digital sensors cannot distinguish those geometries alone.
+The existing3s line-loss stop remains. These are periodic snapshots, copied
+separately from controller/motor status, not synchronized high-rate traces.
+
+For the next run, check raised-wheel START/STOP, then the same clear straight
+and gentle curve without intersections or an obstacle. Check for initial gentle
+correction that grows when one sensor stays black, inner-wheel stalling and any
+wrong-way steering. Keep GP21 ready. Retain the complete log through the stop.

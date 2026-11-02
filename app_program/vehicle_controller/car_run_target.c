@@ -273,17 +273,20 @@ static void print_status(bool running)
 {
     subsystem2_motion_telemetry_t t;
     controller_status_t c;
+    line_status_t line = subsystem3_line_status();
 
     if (!subsystem2_motion_telemetry(&t) || !controller_get_status(&c))
     {
         return;
     }
     tm_printf((UB*)"[CAR] run=%d mode=%d mission=%d stops=0x%lx steer=%d | "
+        "line_black L=%d R=%d state=%d last_side=%d | "
         "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
         "junc phase=%d seen=%lu done=%lu ign=%lu route=%d\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
-        (int)c.last_steer, (int)t.left_effort, (int)t.right_effort,
+        (int)c.last_steer, (int)line.left_black, (int)line.right_black,
+        (int)line.state, (int)line.last_side, (int)t.left_effort, (int)t.right_effort,
         (long)t.left_mm_s, (long)t.right_mm_s, (unsigned long)c.drive_requests,
         (unsigned long)c.drive_rejected, (unsigned long)t.rejected,
         (unsigned long)t.driver_errors, (long)t.left_target_mm_s,
@@ -469,7 +472,7 @@ static void supervisor_task(INT code, void *exinf)
         tk_ext_tsk();
     }
     if(subsystem2_motion_trial_enabled())
-    { tm_printf((UB*)"[CAR B2 TRIAL] 50mm/s gentle-line candidate; v6 wheel PID. Production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
+    { tm_printf((UB*)"[CAR B2 TRIAL] v3 50mm/s progressive-curve candidate; steer12..70 ramp10ms; v6 wheel PID. Production qualification FALSE. Manual START,15s whole-run cap,30%% effort,100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
     if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }
