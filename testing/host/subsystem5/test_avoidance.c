@@ -348,9 +348,9 @@ static void default_config_is_valid(void) {
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
     CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
-    CHECK_NEAR(c.pivot_clearance_cm, 20.0f, 1e-6);
+    CHECK_NEAR(c.pivot_clearance_cm, 15.0f, 1e-6);
     CHECK_INT(c.bypass_min_turn_deg, 60);
-    CHECK_NEAR(c.turn_radius_cm, 9.0f, 1e-6);
+    CHECK_NEAR(c.turn_radius_cm, 0.0f, 1e-6); // pivots
     CHECK_NEAR(c.path_half_width_cm, 10.0f, 1e-6);
     CHECK_INT(c.left_deg, 160);
     CHECK_INT(c.right_deg, 20);
@@ -994,12 +994,33 @@ static void obstacle_beside_the_path_is_cleared(void) {
 static void out_leg_is_short_with_arc_turns(void) {
     sim_t s;
     av_t av;
-    sim_setup(&s, &av, 0);
+    sim_defaults(&s, 0);
+    s.cfg.turn_radius_cm = 9.0f; // arc turns
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
     s.obstacle = (blob_t){80, 100, 22.0f, true};
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
     CHECK(s.last_plan.turn_deg >= 60);
     CHECK(s.last_plan.out_cm < 20.0f);
     CHECK(s.last_plan.out_cm < s.last_plan.lateral_cm); // pivots would need more
+}
+
+// Pivot turns (default): the steep turn out ends short of the obstacle, so
+// the pass is lengthened to reach past its front before turning back.
+static void pivot_plan_passes_the_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 22.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    const obstacle_profile_t *pr = av_profile(&av);
+    bypass_plan_t pl = s.last_plan;
+    CHECK(pl.turn_deg >= 60);
+    CHECK_NEAR(pl.out_cm, pl.lateral_cm / sinf((float)pl.turn_deg * 3.14159265f / 180.0f), 0.1);
+    float edge_y = pl.side == SIDE_RIGHT ? pr->right.pt.y_cm : pr->left.pt.y_cm;
+    float reach = pl.out_cm * cosf((float)pl.turn_deg * 3.14159265f / 180.0f) + pl.pass_cm;
+    CHECK(reach >= edge_y + s.cfg.bypass_pass_cm - 0.1f);
+    CHECK(pl.pass_cm > s.cfg.bypass_pass_cm);
 }
 
 static void line_found_while_passing(void) {
@@ -1208,6 +1229,7 @@ void run_avoidance_tests(void) {
     RUN(obstacle_in_path_but_missed_by_centre);
     RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
+    RUN(pivot_plan_passes_the_obstacle);
     RUN(line_found_while_passing);
     RUN(line_found_during_return_turn);
     RUN(line_ignored_beside_obstacle);

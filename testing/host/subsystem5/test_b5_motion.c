@@ -108,7 +108,7 @@ static void test_without_ops_service_is_a_no_op(void)
 static void test_turn_becomes_authority_stamped_pivot(void)
 {
     setup();
-    m.config.arc_turns = false;
+    assert(!m.config.arc_turns);   /* pivots by default */
     b5_motion_turn(&m, 30000, 100U);
     assert(m.state == B5_MOVE_PENDING && !b5_motion_done(&m));
     b5_motion_service(&m, 110U);
@@ -132,7 +132,7 @@ static void test_turn_is_a_timed_forward_arc(void)
 {
     uint32_t t;
     setup();
-    assert(m.config.arc_turns);
+    m.config.arc_turns = true;
     b5_motion_turn(&m, 45000, 1000U);           /* 45 deg left */
     assert(m.state == B5_MOVE_ARC && !b5_motion_done(&m));
     b5_motion_service(&m, 1000U);
@@ -154,6 +154,7 @@ static void test_turn_is_a_timed_forward_arc(void)
     assert(b5_motion_done(&m) && f.halts == 1);
 
     setup();
+    m.config.arc_turns = true;
     b5_motion_turn(&m, -20000, 0U);             /* right */
     b5_motion_service(&m, 0U);
     assert(f.last_request.curvature_u1_m == -11000000);
@@ -162,6 +163,7 @@ static void test_turn_is_a_timed_forward_arc(void)
 static void test_arc_waits_for_authority_then_fails(void)
 {
     setup();
+    m.config.arc_turns = true;
     f.allowed = false;
     b5_motion_turn(&m, 30000, 0U);
     b5_motion_service(&m, 100U);
@@ -175,6 +177,7 @@ static void test_arc_waits_for_authority_then_fails(void)
     assert(b5_motion_failed(&m) && f.halts == 1);
 
     setup();
+    m.config.arc_turns = true;
     f.allowed = false;
     b5_motion_turn(&m, 30000, 0U);
     b5_motion_service(&m, m.config.wait_ms);

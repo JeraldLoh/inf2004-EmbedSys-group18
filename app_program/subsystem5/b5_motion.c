@@ -50,7 +50,11 @@ void b5_motion_default_config(b5_motion_config_t *config)
      * going backwards never moved; NO_WHEEL_PROGRESS twice). Arc instead at
      * 11 /m (R ~9 cm): wheels ~19/81 mm/s, the same split line following
      * uses at that cap. 50 mm/s x 11 /m = ~31.5 deg/s. */
-    config->arc_turns = true;
+    /* Back to pivots (2026-11-02, later): pivot goals may now use 45% effort
+     * (the junction probe pivoted fine with it), arcs carried the car well
+     * off the line, and the arc's slow inner wheel stalled at 19 mm/s. The
+     * arc settings stay for arc_turns = true. */
+    config->arc_turns = false;
     config->turn_speed_mm_s = 50;
     config->turn_curvature_u1_m = 11000000;
     config->turn_lag_ms = 200U;   /* 50 mm/s at 200 mm/s^2 ramps in 0.25 s */

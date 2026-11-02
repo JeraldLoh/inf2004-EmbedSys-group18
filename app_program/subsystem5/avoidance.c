@@ -48,22 +48,23 @@ void av_config_default(av_config_t *cfg) {
     cfg->reverse_cm = 10.0f;
     // Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
     // bypass turn from there hit it. Back off to this range before turning.
-    // Turns are forward arcs (R ~9 cm, see b5_motion.c) that carry the car
-    // 6-9 cm forward, so this leaves room for that.
-    cfg->pivot_clearance_cm = 20.0f;
+    // 15 cm for pivots; use 20 with arc turns, which carry the car 6-9 cm
+    // forward while turning.
+    cfg->pivot_clearance_cm = 15.0f;
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
     // Car trial 2026-11-02: on a curve, 30 cm took the car past where the
-    // line had already turned. The arcs either side add ~8 cm each (R sin
-    // 60), so 20 cm still clears a bottle-sized obstacle plus the car.
+    // line had already turned. Past the obstacle's front; the plan adds the
+    // distance to reach it when the turn out is steep (obstacle_plan_bypass).
     cfg->bypass_pass_cm = 20.0f;
     // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
     // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
-    // ever turned back. Turn out steeply and let the arcs (R ~9 cm, see
-    // b5_motion.c) cover part of the sideways distance: the leg is ~13 cm.
+    // ever turned back. Turning out steeply keeps it to lateral / sin 60.
     cfg->bypass_min_turn_deg = 60;
     cfg->bypass_max_turn_deg = 75;
-    cfg->turn_radius_cm = 9.0f;
+    // Turns are pivots (b5_motion arc_turns = false). Set 9 (cm) with arcs:
+    // they then cover part of the sideways distance themselves.
+    cfg->turn_radius_cm = 0.0f;
     // Car trial 2026-11-02: a bottle was detected at 23, 14 and 12 cm, but
     // each scan's single centre reading missed it (36-91 cm) and the car
     // drove on. Half the car width (~7 cm) plus a margin.

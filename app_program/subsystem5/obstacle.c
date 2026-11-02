@@ -123,7 +123,10 @@ bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t sid
     p.turn_deg = turn;
     p.lateral_cm = lateral;
     p.out_cm = lateral / b5_sinf((float)turn * DEG2RAD);
-    p.pass_cm = pass_cm;
+    // A turn clamped steeper than the geometric angle ends the out leg short
+    // of the obstacle's front: the pass covers that distance too.
+    float short_cm = forward - p.out_cm * b5_cosf((float)turn * DEG2RAD);
+    p.pass_cm = pass_cm + (short_cm > 0.0f ? short_cm : 0.0f);
     return p;
 }
 

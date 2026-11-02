@@ -80,7 +80,8 @@ side_choice_t obstacle_choose_side(const obstacle_profile_t *profile, float left
                                    float right_clear_cm, float min_clearance_cm);
 
 // Plans the detour so the car's center passes side_margin_cm outside the
-// chosen edge. The turn angle is clamped to min_turn_deg..max_turn_deg.
+// chosen edge. The turn angle is clamped to min_turn_deg..max_turn_deg; if
+// that leaves the out leg short of the edge, pass_cm is lengthened to match.
 bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t side,
                                    float side_margin_cm, float pass_cm, int min_turn_deg,
                                    int max_turn_deg);
