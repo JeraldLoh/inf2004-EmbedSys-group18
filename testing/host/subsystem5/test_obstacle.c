@@ -141,6 +141,17 @@ static void plan_clears_the_edge(void) {
     CHECK_NEAR(r.out_cm, l.out_cm, 1e-4);
 }
 
+static void plan_off_centre_edge_needs_less(void) {
+    // Obstacle left of the path: its right edge is 7 cm left of the car.
+    // Passing on the right only needs margin - 7.
+    obstacle_profile_t p = obstacle_build_profile(12.0f, edge_dir(40.0f, 14.0f, true),
+                                                  edge_dir(30.0f, 14.0f, true));
+    bypass_plan_t r = obstacle_plan_bypass(&p, SIDE_RIGHT, 15.0f, 20.0f, 60, 75);
+    CHECK_NEAR(r.lateral_cm, 15.0f - 7.0f, 0.01);
+    bypass_plan_t l = obstacle_plan_bypass(&p, SIDE_LEFT, 15.0f, 20.0f, 60, 75);
+    CHECK_NEAR(l.lateral_cm, 15.0f + 14.0f * 0.64279f, 0.01); // 14 sin 40 + margin
+}
+
 static void plan_clamps_turn(void) {
     // Far, narrow obstacle: geometric angle ~5 deg, clamped up to the minimum.
     obstacle_profile_t far = obstacle_build_profile(200.0f, edge_dir(1.0f, 200.0f, true),
@@ -197,6 +208,7 @@ void run_obstacle_tests(void) {
     RUN(choose_shorter_detour);
     RUN(choose_tie_breaks_on_clearance);
     RUN(plan_clears_the_edge);
+    RUN(plan_off_centre_edge_needs_less);
     RUN(plan_clamps_turn);
     RUN(arc_out_leg_covers_the_rest);
     RUN(plan_angle_matches_libm);

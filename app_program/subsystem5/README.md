@@ -21,10 +21,11 @@ with it):
 | `obstacle.c/.h` | Scan geometry: direction+distance to x/y, obstacle width, side choice, bypass plan |
 | `avoidance.c/.h` | Non-blocking detect, scan, decide, bypass, reacquire state machine (section 6.5) |
 
-Scanning: the servo checks a narrow arc first (coarse sweep, then fine steps).
-Edges outside the servo's reach are found by turning the whole car on the spot
-in steps (`TURN_SCAN_RIGHT/LEFT`); once a turn shows open space, the servo looks
-back to pin the edge down. The bypass is a mirrored three-leg detour (turn out,
+Scanning: the servo sweeps a coarse arc; the nearest reading in the car's path
+is the obstacle (the centre echo alone can miss a round bottle), and the fine
+steps fan out from it to find both edges. Only if the servo finds no open side
+does the car turn on the spot in steps (`TURN_SCAN_RIGHT/LEFT`) to look further;
+once a turn shows open space, the servo looks back to pin the edge down. The bypass is a mirrored three-leg detour (turn out,
 drive, straighten, drive alongside, turn back the same angle, drive, straighten)
 so the car ends near the line facing the line direction, then searches for it.
 Motion is requested through `motion_turn` / `motion_forward` / `motion_reverse`.

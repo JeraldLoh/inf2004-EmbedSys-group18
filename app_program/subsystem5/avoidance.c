@@ -256,10 +256,14 @@ static int coarse_angle(const av_t *a, int i) {
     return a->cfg.right_deg + i * (a->cfg.left_deg - a->cfg.right_deg) / (a->cfg.coarse_points - 1);
 }
 
-// Servo angle offset degrees from center toward side.
-static int servo_toward(const av_t *a, side_t side, int offset) {
+// Servo angle offset degrees from base toward side.
+static int servo_from(const av_t *a, int base, side_t side, int offset) {
     int toward_left = a->geom.left_is_higher ? 1 : -1;
-    return a->cfg.center_deg + offset * (side == SIDE_LEFT ? toward_left : -toward_left);
+    return base + offset * (side == SIDE_LEFT ? toward_left : -toward_left);
+}
+
+static int servo_toward(const av_t *a, side_t side, int offset) {
+    return servo_from(a, a->cfg.center_deg, side, offset);
 }
 
 // Distance to assume for a reading that hit the obstacle but has no usable cm.
@@ -381,18 +385,29 @@ static void on_monitor(av_t *a, uint32_t now) {
     }
 }
 
-// Any coarse reading that puts something in the car's own path, closer than
-// the clear threshold. A round bottle can miss the centre echo entirely.
-static bool coarse_path_blocked(const av_t *a, float clear_cm) {
-    for (int i = 0; i < a->cfg.coarse_points; i++) {
+// The closest coarse reading that puts something in the car's own path
+// (centre first on a tie), or -1. A round bottle can miss the centre echo
+// entirely, and a missed centre must not set the obstacle's depth: car trial
+// 2026-11-02, a centre miss at ~150 cm made every side reading count as
+// obstacle, so the car pivoted 90 deg each way looking for an edge.
+static int coarse_nearest_in_path(const av_t *a) {
+    int mid = a->cfg.coarse_points / 2;
+    int best = -1;
+    float best_cm = 0.0f;
+    for (int k = 0; k < a->cfg.coarse_points; k++) {
+        int i = mid + (k % 2 == 1 ? -(k + 1) / 2 : k / 2); // mid, mid-1, mid+1, ...
         range_reading_t r = a->coarse[i].reading;
-        float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
         if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue;
+        float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
         point2_t pt = obstacle_polar_to_xy(direction_of(a, a->coarse[i].angle_deg), cm);
         float x = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
-        if (x <= a->cfg.path_half_width_cm && pt.y_cm < clear_cm) return true;
+        if (x > a->cfg.path_half_width_cm) continue;
+        if (best < 0 || cm < best_cm) {
+            best = i;
+            best_cm = cm;
+        }
     }
-    return false;
+    return best;
 }
 
 static void on_coarse(av_t *a, uint32_t now) {
@@ -405,19 +420,28 @@ static void on_coarse(av_t *a, uint32_t now) {
     if (a->coarse_idx < a->cfg.coarse_points) return;
 
     range_reading_t center = a->coarse[a->cfg.coarse_points / 2].reading;
-    a->ahead_cm = range_effective_cm(center, a->cfg.max_range_cm);
+    int near = coarse_nearest_in_path(a);
+    float near_cm = 0.0f; // radial
+    if (near < 0) {
+        a->scan_base = a->cfg.center_deg;
+        a->ahead_cm = range_effective_cm(center, a->cfg.max_range_cm);
+        near_cm = a->ahead_cm;
+    } else {
+        range_reading_t r = a->coarse[near].reading;
+        a->scan_base = a->coarse[near].angle_deg;
+        near_cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
+        a->ahead_cm = obstacle_polar_to_xy(direction_of(a, a->scan_base), near_cm).y_cm;
+    }
 
-    bool gone = center.status != RANGE_TOO_CLOSE && center.status != RANGE_FAULT &&
-                a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm &&
-                !coarse_path_blocked(a, a->cfg.detect_cm + a->cfg.clear_hysteresis_cm);
+    bool gone = center.status != RANGE_FAULT &&
+                a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
     if (!gone) {
-        float ahead = hit_cm(a, center);
-        a->nearest_cm = center.status == RANGE_TOO_CLOSE ? 0.0f : ahead;
+        a->nearest_cm = near_cm;
         for (int i = 0; i < 2; i++) {
             a->edge[i].done = false;
             a->edge[i].found = false;
-            a->edge[i].last_hit_dir = 0.0f;
-            a->edge[i].last_hit_cm = ahead;
+            a->edge[i].last_hit_dir = direction_of(a, a->scan_base);
+            a->edge[i].last_hit_cm = near_cm;
             a->edge[i].edge_dir = 0.0f;
             a->edge[i].clear_cm = 0.0f;
         }
@@ -437,13 +461,20 @@ static void on_coarse(av_t *a, uint32_t now) {
     }
 }
 
-// Servo-only scan at the starting heading, center outward.
+// An edge on one side with room past it: enough to decide.
+static bool servo_found_a_way(const av_t *a) {
+    for (int i = 0; i < 2; i++)
+        if (a->edge[i].found && a->edge[i].clear_cm >= a->cfg.min_clearance_cm) return true;
+    return false;
+}
+
+// Servo-only scan at the starting heading, outward from the obstacle reading.
 static void on_fine(av_t *a, uint32_t now) {
     side_t side = a->state == AV_STATE_FINE_SCAN_RIGHT ? SIDE_RIGHT : SIDE_LEFT;
     int idx = side == SIDE_RIGHT ? EDGE_RIGHT : EDGE_LEFT;
+    int angle = servo_from(a, a->scan_base, side, a->fine_offset);
 
-    if (a->fine_offset <= a->cfg.fine_half_range_deg) {
-        int angle = servo_toward(a, side, a->fine_offset);
+    if (abs(angle - a->cfg.center_deg) <= a->cfg.fine_half_range_deg) {
         range_reading_t r;
         if (take(a, now, angle, &r) != TAKE_READY) return;
         emit_point(a, now, angle, r);
@@ -464,6 +495,13 @@ static void on_fine(av_t *a, uint32_t now) {
 
     if (side == SIDE_RIGHT) {
         start_fine(a, AV_STATE_FINE_SCAN_LEFT);
+    } else if (servo_found_a_way(a)) {
+        // Car trial 2026-11-02: with the left open, the car still pivoted
+        // 90 deg right looking for an edge it would not use, and each pivot
+        // took it further off the line. Take the open side as it is.
+        for (int i = 0; i < 2; i++)
+            if (!a->edge[i].done) finish_edge(a, i, false, a->edge[i].last_hit_dir, 0.0f);
+        enter(a, AV_STATE_DECIDE);
     } else if (!a->edge[EDGE_RIGHT].done) {
         start_turn_scan(a, AV_STATE_TURN_SCAN_RIGHT);
     } else if (!a->edge[EDGE_LEFT].done) {

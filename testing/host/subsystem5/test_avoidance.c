@@ -531,6 +531,7 @@ static void edge_refined_by_servo_looking_back(void) {
     av_t av;
     sim_setup_narrow(&s, &av, 0);
     s.obstacle = (blob_t){55, 95, 12.0f, true}; // right edge at -35
+    s.wall = (blob_t){98, 180, 30.0f, true};    // left edge, but no room past it
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     const obstacle_profile_t *p = av_profile(&av);
     CHECK(p != NULL);
@@ -639,7 +640,8 @@ static void wall_on_one_side_forces_other(void) {
     s.wall = (blob_t){108, 180, 15.0f, true}; // left side walled off, close
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.last_bypass, SIDE_RIGHT);
-    CHECK_INT(s.max_abs_heading, s.cfg.turn_scan_max_deg); // searched the whole left side
+    // The servo found the right open: no turning to search the left.
+    CHECK_INT(s.max_abs_heading, s.last_plan.turn_deg);
     check_hygiene(&s);
 
     // A wall further away leaves an edge, but not enough room past it.
@@ -693,13 +695,15 @@ static void wide_servo_scans_without_moving_the_car(void) {
     check_hygiene(&s);
 }
 
-static void wide_servo_turns_only_past_its_reach(void) {
+// Car trial 2026-11-02: the left edge was past the servo but the right was
+// open; the car still pivoted to look left. One open side is enough.
+static void wide_servo_does_not_turn_when_one_side_is_open(void) {
     sim_t s;
     av_t av;
     sim_setup(&s, &av, 0);
     s.obstacle = (blob_t){80, 175, 12.0f, true}; // left edge at +85: past the servo
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
-    CHECK(av_metrics(&av)->car_turns > 0);
+    CHECK_INT(av_metrics(&av)->car_turns, 0);
     const obstacle_profile_t *p = av_profile(&av);
     CHECK(p && p->right.found);
     if (p) CHECK_NEAR(p->right.angle_deg, -15.0f, 1e-4); // hit at -10, clear at -20
@@ -774,11 +778,12 @@ static void flipped_servo_mounting(void) {
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
     s.obstacle = (blob_t){55, 95, 12.0f, true}; // mostly on the right (world frame)
+    s.wall = (blob_t){98, 180, 30.0f, true};    // no room on the left: turn-scan the right
     CHECK(run_encounter(&s, &av));
-    CHECK_INT(s.last_bypass, SIDE_LEFT);
-    CHECK_INT(s.search_sides[0], SIDE_RIGHT);
+    CHECK_INT(s.last_bypass, SIDE_RIGHT);
+    CHECK_INT(s.search_sides[0], SIDE_LEFT);
     const obstacle_profile_t *pr = av_profile(&av);
-    CHECK(pr && pr->right.angle_deg < -30.0f);
+    CHECK(pr && pr->left.angle_deg > 0.0f && pr->right.angle_deg < -30.0f);
     check_hygiene(&s);
 }
 
@@ -994,6 +999,31 @@ static void obstacle_in_path_but_missed_by_centre(void) {
     CHECK(run_until(&s, &av, AV_STATE_DECIDE, 20000));
     CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
     CHECK_INT(s.resumes, 0);
+}
+
+// Car trial 2026-11-02: the centre echo missed the bottle (~150 cm) but a
+// side reading caught it. Its depth comes from that reading, the servo finds
+// both edges around it, and the car never pivots to scan.
+static void centre_miss_scans_around_the_side_reading(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){120, 130, 14.0f, true}; // 35 deg left, in the path
+    s.spikes = 2;
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    const obstacle_profile_t *p = av_profile(&av);
+    CHECK(p && p->left.found && p->right.found);
+    if (p) {
+        CHECK_NEAR(p->distance_cm, 14.0f * 0.81915f, 0.01f); // 14 cos 35
+        CHECK(p->right.angle_deg > 20.0f && p->left.angle_deg < 50.0f);
+    }
+    CHECK_INT(av_metrics(&av)->car_turns, 0);
+    CHECK_INT(s.last_bypass, SIDE_RIGHT); // its right edge is nearer the path
+    CHECK(s.last_plan.out_cm < 25.0f);
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(s.heading, 0);
+    check_hygiene(&s);
 }
 
 static void obstacle_beside_the_path_is_cleared(void) {
@@ -1231,7 +1261,7 @@ void run_avoidance_tests(void) {
     RUN(wall_on_one_side_forces_other);
     RUN(wide_obstacle_found_by_turning);
     RUN(wide_servo_scans_without_moving_the_car);
-    RUN(wide_servo_turns_only_past_its_reach);
+    RUN(wide_servo_does_not_turn_when_one_side_is_open);
     RUN(close_obstacle_backs_off_before_turning);
     RUN(backoff_reuses_the_scan);
     RUN(edge_beyond_turn_range_is_partial);
@@ -1248,6 +1278,7 @@ void run_avoidance_tests(void) {
     RUN(line_found_on_return_leg);
     RUN(line_on_return_leg_with_arcs_rejoins_at_once);
     RUN(obstacle_in_path_but_missed_by_centre);
+    RUN(centre_miss_scans_around_the_side_reading);
     RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
     RUN(pivot_plan_passes_the_obstacle);

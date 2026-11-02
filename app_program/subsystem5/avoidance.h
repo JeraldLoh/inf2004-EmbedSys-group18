@@ -191,7 +191,8 @@ typedef struct {
 
     scan_point_t coarse[AV_MAX_COARSE_POINTS];
     int coarse_idx;
-    float ahead_cm;
+    float ahead_cm;   // depth of the obstacle: the nearest in-path coarse reading
+    int scan_base;    // servo angle of that reading; the fine scans fan out from it
     float nearest_cm; // closest reading that hit the obstacle this scan
     int fine_offset;
     int turn_mag;     // |heading - origin| reached by the turn scan
