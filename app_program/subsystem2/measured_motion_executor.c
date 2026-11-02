@@ -258,6 +258,7 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     uint32_t desired[2] = {0U, 0U};
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
     uint32_t line_target_cap = 0U;
+    uint32_t line_ramp_span = 0U;
 #endif
     int8_t sign[2] = {1, 1};
     int16_t effort[2] = {0, 0};
@@ -319,29 +320,32 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         desired[1] = (uint32_t)(speed-correction);
         if (e->continuous.speed_cap_mm_s != 0U && e->continuous.speed_cap_mm_s < cap/1000U)
         { cap = e->continuous.speed_cap_mm_s*1000U; }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        line_target_cap = cap;
+        /* Transfer the progressive inside reduction to the outside wheel:
+         * preserve the requested mean speed until the wheel cap requires
+         * slowing both wheels proportionately for a tight turn. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
+        {
+            unsigned inside = correction > 0 ? 1U : 0U;
+            unsigned outside = 1U - inside;
+            uint32_t strength = magnitude(e->continuous.curvature_u1_m);
+            uint32_t reduction, transfer;
+            if (strength > B2_LINE_FULL_CURVATURE_1_M)
+            { strength = B2_LINE_FULL_CURVATURE_1_M; }
+            reduction = (100U - CAR_TRIAL_LINE_INNER_SPEED_PERCENT) * strength /
+                B2_LINE_FULL_CURVATURE_1_M;
+            transfer = (uint32_t)((uint64_t)desired[inside] * reduction / 100U);
+            desired[inside] -= transfer;
+            desired[outside] += transfer;
+        }
+#endif
         largest = desired[0] > desired[1] ? desired[0] : desired[1];
         if (largest > cap)
         {
             desired[0] = (uint32_t)((uint64_t)desired[0]*cap/largest);
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
-#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-        line_target_cap = cap;
-        /* Grow the extra inside reduction with turn strength. Small turns
-         * no longer receive the full15% cut; full turns retain that limit. */
-        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
-        {
-            unsigned inside = correction > 0 ? 1U : 0U;
-            uint32_t strength = magnitude(e->continuous.curvature_u1_m);
-            uint32_t reduction;
-            if (strength > B2_LINE_FULL_CURVATURE_1_M)
-            { strength = B2_LINE_FULL_CURVATURE_1_M; }
-            reduction = (100U - CAR_TRIAL_LINE_INNER_SPEED_PERCENT) * strength /
-                B2_LINE_FULL_CURVATURE_1_M;
-            desired[inside] = (uint32_t)((uint64_t)desired[inside] *
-                (100U - reduction) / 100U);
-        }
-#endif
     }
     else
     {
@@ -374,6 +378,24 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             if (p > e->goal_target_um+e->config.tolerance_um) { complete = false; }
         }
     }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    if (e->status.state == MOTION_EXEC_CONTINUOUS &&
+        e->continuous.source == MOTION_SOURCE_LINE &&
+        desired[0] != 0U && desired[1] != 0U &&
+        e->ramp_um_s[0] <= line_target_cap && e->ramp_um_s[1] <= line_target_cap)
+    {
+        /* Move both targets by the same fraction of their remaining change.
+         * At equal initial/final mean speed this changes the turn without
+         * an intervening acceleration/braking pulse. Hard caps and zero/STOP
+         * paths bypass this interpolation. */
+        for (i = 0U; i < 2U; ++i)
+        {
+            uint32_t difference = desired[i] > e->ramp_um_s[i] ?
+                desired[i] - e->ramp_um_s[i] : e->ramp_um_s[i] - desired[i];
+            if (difference > line_ramp_span) { line_ramp_span = difference; }
+        }
+    }
+#endif
     for (i = 0U; i < 2U; ++i)
     {
         uint64_t ramp_delta = (uint64_t)e->config.acceleration_um_s2*dt+e->ramp_remainder[i];
@@ -381,6 +403,18 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         uint16_t duty;
         uint64_t travel = e->measurement.sample.travel_um[i];
         e->ramp_remainder[i] = (uint32_t)(ramp_delta%1000000U);
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        if (line_ramp_span != 0U)
+        {
+            uint32_t difference = desired[i] > e->ramp_um_s[i] ?
+                desired[i] - e->ramp_um_s[i] : e->ramp_um_s[i] - desired[i];
+            uint32_t advance = step < line_ramp_span ? step : line_ramp_span;
+            uint32_t change = (uint32_t)((uint64_t)difference * advance / line_ramp_span);
+            if (desired[i] > e->ramp_um_s[i]) { e->ramp_um_s[i] += change; }
+            else { e->ramp_um_s[i] -= change; }
+        }
+        else
+#endif
         if (desired[i] == 0U) { e->ramp_um_s[i] = 0U; }
         else if (e->ramp_um_s[i] < desired[i])
         { e->ramp_um_s[i] += (desired[i]-e->ramp_um_s[i] < step) ? desired[i]-e->ramp_um_s[i] : step; }
