@@ -5,6 +5,7 @@
 
 #define EDGE_RIGHT 0
 #define EDGE_LEFT 1
+#define LEG_PASS 3        // straight leg alongside the obstacle
 #define LEG_RETURN_TURN 4 // first leg of the mirrored return
 #define LEG_RETURN_DRIVE 5
 #define LEG_COUNT 7
@@ -630,6 +631,41 @@ static void on_reverse(av_t *a, uint32_t now) {
     }
 }
 
+// Line found: hand back to line following and end the encounter.
+static void rejoin_line(av_t *a, uint32_t now) {
+    a->hw.motion_resume_line_follow(a->hw.ctx);
+    a->off_line = false;
+    uint32_t dur = now - a->t_detect;
+    a->metrics.reacquire_ok++;
+    a->metrics.last_encounter_ms = dur;
+    if (dur > a->metrics.max_encounter_ms) a->metrics.max_encounter_ms = dur;
+    a->metrics.total_encounter_ms += dur;
+    a->confirm_count = 0;
+    enter(a, AV_STATE_MONITOR);
+    av_event_t e = event_of(AV_EVT_LINE_REACQUIRED);
+    e.duration_ms = dur;
+    emit(a, now, &e);
+}
+
+// Past the obstacle (pass leg onward, or the search) and a sensor sees the
+// line: stop and rejoin at once. Car trial 2026-11-02: turns are forward
+// arcs, so straightening up after seeing the line carried the sensors off
+// it; on a curve the line can also turn up before the return drive.
+static bool rejoin_if_line(av_t *a, uint32_t now) {
+    // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
+    // is still the straighten-up beside the obstacle: only the drive counts.
+    bool past = a->state == AV_STATE_REACQUIRE ||
+                (a->state == AV_STATE_BYPASS &&
+                 (a->leg_idx > LEG_PASS || (a->leg_idx == LEG_PASS && a->leg_active)));
+    if (!past || !a->hw.line_detected(a->hw.ctx)) return false;
+    a->hw.motion_stop(a->hw.ctx);
+    a->turn_pending = false;
+    a->body_settling = false;
+    a->leg_active = false;
+    rejoin_line(a, now);
+    return true;
+}
+
 static void on_bypass(av_t *a, uint32_t now) {
     if (a->leg_idx >= LEG_COUNT) {
         start_reacquire(a);
@@ -667,13 +703,7 @@ static void on_bypass(av_t *a, uint32_t now) {
         fail(a, now, "bypass timed out");
         return;
     }
-    if (i == LEG_RETURN_DRIVE && a->hw.line_detected(a->hw.ctx)) {
-        // Back on the line early: stop here and straighten up.
-        a->hw.motion_stop(a->hw.ctx);
-        a->leg_active = false;
-        a->leg_idx++;
-        return;
-    }
+    if (rejoin_if_line(a, now)) return;
     guard_tripped(a, now);
 }
 
@@ -694,18 +724,7 @@ static void on_reacquire(av_t *a, uint32_t now) {
     }
 
     if (a->hw.line_detected(a->hw.ctx)) {
-        a->hw.motion_resume_line_follow(a->hw.ctx);
-        a->off_line = false;
-        uint32_t dur = now - a->t_detect;
-        a->metrics.reacquire_ok++;
-        a->metrics.last_encounter_ms = dur;
-        if (dur > a->metrics.max_encounter_ms) a->metrics.max_encounter_ms = dur;
-        a->metrics.total_encounter_ms += dur;
-        a->confirm_count = 0;
-        enter(a, AV_STATE_MONITOR);
-        av_event_t e = event_of(AV_EVT_LINE_REACQUIRED);
-        e.duration_ms = dur;
-        emit(a, now, &e);
+        rejoin_line(a, now);
         return;
     }
 
@@ -762,6 +781,7 @@ void av_tick(av_t *a) {
 
     // A car turn in progress blocks every state until it finishes and settles.
     if (a->turn_pending) {
+        if (rejoin_if_line(a, now)) return;
         if (motion_failed(a)) {
             a->turn_pending = false;
             fail_motion(a, now);

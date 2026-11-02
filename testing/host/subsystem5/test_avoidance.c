@@ -62,6 +62,9 @@ typedef struct {
     float reverse_total_cm;
     bool vanish_late_on_estop; // late obstacle vanishes on an emergency stop
     bool line_on_return_leg;   // line sensors see the line during the return drive
+    int line_on_forward;       // ...during this bypass forward leg (1-based); 0 = off
+    int line_on_bypass_turn;   // ...during this bypass turn (1-based); 0 = off
+    int bypass_turns;
     bool bypassing;
 
     int turns_since_return; // turns from the start of the return to the line search
@@ -139,6 +142,7 @@ static void s_turn(void *ctx, float deg) {
     sim_t *s = ctx;
     s->turns++;
     s->turns_since_return++;
+    if (s->bypassing) s->bypass_turns++;
     s->refused = s->refuse_kind == 1;
     s->heading += (int)(deg < 0.0f ? deg - 0.5f : deg + 0.5f);
     if (abs(s->heading) > s->max_abs_heading) s->max_abs_heading = abs(s->heading);
@@ -196,6 +200,10 @@ static bool s_done(void *ctx) {
 static bool s_line(void *ctx) {
     sim_t *s = ctx;
     if (s->line_on_return_leg && s->bypassing && s->forwards == 3 && s->motion_active) return true;
+    if (s->line_on_forward != 0 && s->bypassing && s->forwards == s->line_on_forward &&
+        s->motion_active && (int32_t)(s->t - s->turn_end) >= 0) return true;
+    if (s->line_on_bypass_turn != 0 && s->bypassing && s->bypass_turns == s->line_on_bypass_turn &&
+        s->motion_active && (int32_t)(s->t - s->turn_end) < 0) return true;
     if (s->line_never || !s->searching) return false;
     if (s->line_on_search != 0 && s->searches != s->line_on_search) return false;
     return s->t - s->search_start >= s->line_after_ms;
@@ -211,6 +219,7 @@ static void s_event(void *ctx, const av_event_t *e) {
         s->last_bypass = e->side;
         s->last_plan = *e->plan;
         s->forwards = 0;
+        s->bypass_turns = 0;
         if (s->late_obstacle.cm > 0.0f) s->late_obstacle.present = true;
     }
     if (e->type == AV_EVT_BYPASS_RETURN) s->turns_since_return = 0;
@@ -927,9 +936,52 @@ static void line_found_on_return_leg(void) {
     CHECK(run_encounter(&s, &av));
     CHECK_INT(s.forwards, 3);
     CHECK_INT(s.stops, 2);   // detection stop + early stop on the return leg
-    CHECK_INT(s.heading, 0); // still straightened up after stopping early
+    // Rejoins at once: no straighten-up arc (it would carry the sensors off
+    // the line) and no search.
+    CHECK(s.heading != 0);
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(s.resumes, 1);
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
     CHECK_INT(av_metrics(&av)->failures, 0);
+}
+
+// On a curve the line can turn up before the return drive.
+static void line_found_while_passing(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.line_on_forward = 2; // the pass leg
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 2);
+    CHECK_INT(s.bypass_turns, 2); // out and straighten; no return turns
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+static void line_found_during_return_turn(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.line_on_bypass_turn = 3; // turning back toward the line
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 2);
+    CHECK_INT(s.bypass_turns, 3);
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+// Straightening up beside the obstacle is not past it: keep going.
+static void line_ignored_beside_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.line_on_bypass_turn = 2;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 3); // the full bypass ran
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
 static void reacquire_retries_alternate_direction(void) {
@@ -1097,6 +1149,9 @@ void run_avoidance_tests(void) {
     RUN(refused_motion_fails_without_waiting);
     RUN(no_motion_failed_callback_still_works);
     RUN(line_found_on_return_leg);
+    RUN(line_found_while_passing);
+    RUN(line_found_during_return_turn);
+    RUN(line_ignored_beside_obstacle);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);
