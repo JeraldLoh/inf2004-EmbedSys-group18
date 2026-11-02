@@ -20,10 +20,14 @@
 #define S3_BARCODE_ADC_CHANNEL BARCODE_ADC_CHANNEL
 
 /* GPIO level the line module's D0 outputs when it is over BLACK.
- * Most TCRT5000/LM393 boards give HIGH on black (no reflection) and light
- * their LED on white. Check yours with drv_ir_debug_print() and flip if needed. */
+ * The trial operator confirmed both on black gave0/0 under HIGH=black:
+ * this harness is LOW=black. Keep other images' existing default. */
 #ifndef S3_LINE_BLACK_LEVEL
+#if APP_CAR_B2_TRIAL
+#define S3_LINE_BLACK_LEVEL 0U
+#else
 #define S3_LINE_BLACK_LEVEL 1U
+#endif
 #endif
 
 /* OPTIONAL digital barcode input (module D0), used only when

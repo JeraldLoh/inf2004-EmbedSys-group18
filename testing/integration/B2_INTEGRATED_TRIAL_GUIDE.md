@@ -179,3 +179,30 @@ was performed. Next hardware check: raised-wheel START/STOP, then a short
 curve run; preserve the log across junction detection, probe and final stop.
 Junction detection on a curve may itself need tuning if both sensors see black
 without a real intersection; this change does not remove junction detection.
+
+## V6: confirmed LOW=black line polarity
+
+The operator performed left-only, right-only and both-on-black checks, then
+explicitly confirmed the long final line_black=0/0 section was BOTH sensors
+physically over black. The previous HIGH=black interpretation was inverted.
+V6 sets S3_LINE_BLACK_LEVEL=0 for APP_CAR_B2_TRIAL only in drv_ir.h; other
+images retain their default and explicit overrides remain possible.
+
+Consequently, earlier white/black and steering/junction interpretations must
+be reconsidered:0/0 in the earlier firmware could be both on black, not line
+loss;1/1 could be both on white, not a crossing. A single-sensor pattern could
+also request steering in the wrong direction. Prior motor/encoder and stop
+observations still stand, but sensor-driven route/recovery conclusions are
+not proof of the physical track geometry. The independent post-junction
+resume-authority issue documented above remains open.
+
+V6 keeps50mm/s, steering settings, motor calibration, junction-pause fix and
+all stop/watchdog limits. The barcode ADC calibration is separate and has not
+been fixed by this digital line polarity change. Firmware compiled, including
+drv_ir.c and subsystem3.c. Automated tests were not run, per user request.
+No flash/car movement was performed and no V6 hardware result is available.
+
+Before a powered run, check at the installed sensor height with motor power
+off: left-only black -> L1/R0; right-only -> L0/R1; both black -> L1/R1;
+both white -> L0/R0. Then check raised-wheel START/STOP and a short floor run.
+Confirm actual turn direction towards the tape rather than raising base speed.
