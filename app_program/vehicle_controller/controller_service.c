@@ -1,4 +1,5 @@
 #include "controller_service.h"
+#include "../project_config/car_trial_tuning.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -19,6 +20,9 @@ static void refresh_status(controller_service_t *service)
 #ifndef CONTROLLER_LINE_CRUISE_MM_S
 #define CONTROLLER_LINE_CRUISE_MM_S 150U
 #endif
+#ifndef CONTROLLER_LINE_CURVATURE_PER_STEER
+#define CONTROLLER_LINE_CURVATURE_PER_STEER 178000
+#endif
 
 void controller_line_default_config(controller_line_config_t *config)
 {
@@ -31,8 +35,8 @@ void controller_line_default_config(controller_line_config_t *config)
      * this legacy micro-1/m, positive-left value to the measured units/sign.
      * Cruise is a speed target, not an actuator effort or tuned PID gain. */
     config->cruise_mm_s = CONTROLLER_LINE_CRUISE_MM_S;
-    config->slow_mm_s = 100U;
-    config->curvature_per_steer_u1_m = 178000;
+    config->slow_mm_s = CONTROLLER_LINE_CRUISE_MM_S < 100U ? CONTROLLER_LINE_CRUISE_MM_S : 100U;
+    config->curvature_per_steer_u1_m = CONTROLLER_LINE_CURVATURE_PER_STEER;
     config->request_life_ms = 150U;
 }
 

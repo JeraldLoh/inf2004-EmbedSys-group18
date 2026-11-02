@@ -20,6 +20,7 @@
  */
 #include <stdbool.h>
 #include <stdint.h>
+#include "../project_config/car_trial_tuning.h"
 
 #include "../contracts/control_messages.h"
 

@@ -1,4 +1,4 @@
-# Buddy 2 integrated trial — 2 November 2026
+# Buddy 2 integrated trial â€” 2 November 2026
 
 ## Source and scope
 
@@ -20,7 +20,17 @@ linear/pivot60mm/s floors,5mm wheel tolerance,10mm overshoot,700ms progress,
 remains FALSE. Explicit CAR_B2_TRIAL permits bounded trial authority instead;
 normal CAR_RUN still refuses START with unqualified gains.
 
-Trial line cruise100mm/s, maximum wheel target120mm/s, maximum goal1m. Each
+Updated line candidate: cruise50mm/s (5cm/s), steering starts12, grows by1
+every20ms and caps25; curvature per steering unit120000 micro-1/m. Centred
+steering returns to zero (no persistent last-side hold or counter-steer).
+Full correction requests approximately42/58mm/s after adapter rounding;
+50mm/s is the chassis cruise target, not a per-wheel cap during turning.
+Barcode/approach slow speed is also capped at50mm/s, so it cannot speed up.
+This is below the previously used60mm/s rolling candidate: floor stalling
+and curve tracking must be checked physically. Tight curves may need retuning.
+Wheel PID/calibration and finite distance/pivot settings are unchanged.
+
+Maximum wheel target120mm/s, maximum goal1m. Each
 manual run is limited to15s by the supervisor; each authority also expires
 within15s independently in the measured executor. Commands keep their short
 leases, faults latch, GP21 stops the motors and release alone never restarts.
@@ -66,7 +76,10 @@ software timestamps. Measured physical STOP<=50ms is still outstanding.
 
 ## Software verification
 
-156/156 native tests and19/19 shared suites pass. Includes real profile values,
+157/157 native tests and19/19 shared suites pass. The added real line/controller/
+motion-adapter test checks noise filtering, gradual correction, both turn signs,
+correction limits, zero centred hold, slow-mode speed and STOP suppression.
+Includes real profile values,
 normal unqualified refusal, explicit trial bounds, line requests, source/ID
 junction result mapping, deadline, STOP, no boot START, supervisor15s cutoff
 and fault-latched START refusal. Existing B2 encoder/PID/goal tests and incoming
@@ -82,3 +95,14 @@ make -j4 SMP=1 CONSOLE=usb_cdc CRASH_REPORT=0 WIFI=none NET=none MQTT=0 TEST=0 B
 Trial mode requires offline USB, no crash UART, no other test image. Normal
 CAR_RUN without CAR_B2_TRIAL keeps production qualification gating. Nothing
 was flashed or physically operated while preparing this image.
+
+## Latest operator evidence and limits
+
+The supplied run showed nonzero feedback on both wheels and repeated steering
+sign changes while the car followed the tape but swerved. It ended with
+MOTION_FAULT (0x8), drv_err=1 near a junction observation; the current log does
+not establish which executor condition caused that fault. The softer line
+candidate addresses steering behavior, not a demonstrated fix for that fault.
+Barcode calibration was unsuccessful, so routes still use the probe fallback.
+Buddy5 detection remains25cm confirmed twice, with6cm emergency guard during
+avoidance/recovery. Its scanning/goal speeds are not reduced by line cruise.

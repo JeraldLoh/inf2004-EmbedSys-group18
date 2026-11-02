@@ -346,25 +346,19 @@ ifeq ($(CAR_RUN),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 # Floor tuning from the 2026-10-29 traces (B2/B3 to review): the right motor
 # ran ~20% slow at equal effort and stalled at ~18% effort, so it gets +30%.
-# Full steer was reached in 140 ms, which swung the car across the tape, so
-# the ramp to full steer now takes ~420 ms.
+# These legacy effort macros do not tune the measured wheel PID.
 CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
-CFLAGS  += -DLINE_STEER_RAMP_MS=6U
-# Slower floor cruise (150 -> 110 mm/s command, effort ~146 L / ~190 R) so
-# the corrections keep up on the curves. At 115 both wheels kept turning;
-# 100 was too slow on the floor.
+# Explicit measured trial tuning lives in project_config/car_trial_tuning.h.
+# Keep the earlier normal CAR_RUN steering flags outside that trial.
 ifeq ($(CAR_B2_TRIAL),1)
-CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=100U -DCAR_RUN_LIMIT_MS=15000U
+CFLAGS  += -DCAR_RUN_LIMIT_MS=15000U
 else
-CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U -DLINE_STEER_RAMP_MS=6U
+CFLAGS  += -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 endif
 # Junction-probe and avoidance pivots stalled at 15% and latched a motion
 # fault, and still stalled at 20% on the foam mat; goals now ask for 30%.
 CFLAGS  += -DMOTION_GOAL_MIN_EFFORT=300
-# Curves: steering snapped to 0 (and briefly counter-steered) each time the
-# inner sensor left the tape, so the car straightened and ran off. Hold a
-# gentle steer toward the last-seen side instead, with no counter-steer.
-CFLAGS  += -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 endif
 CFLAGS  += -DTM_CONSOLE_UART=$(CRASH_REPORT)
 ifeq ($(CRASH_REPORT),0)

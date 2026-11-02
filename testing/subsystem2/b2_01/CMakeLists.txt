@@ -157,5 +157,15 @@ target_compile_definitions(test_integrated_trial_startup PRIVATE APP_CAR_RUN=1 A
 foreach(case IN ITEMS trial_limit trial_fault trial_idle)
     add_test(NAME b2_integrated_startup_${case} COMMAND test_integrated_trial_startup ${case})
 endforeach()
+add_executable(test_line_tuning test_line_tuning.c
+    ${B2_SOURCE}/../diagnostics/b2_move_profile.c
+    ${B2_SOURCE}/../subsystem3/line_follow.c
+    ${B2_SOURCE}/../vehicle_controller/controller_service.c
+    ${B2_SOURCE}/../vehicle_controller/vehicle_controller.c
+    ${B2_SOURCE}/../vehicle_controller/safety.c
+    ${B2_SOURCE}/../contracts/hardware_faults.c)
+target_compile_definitions(test_line_tuning PRIVATE APP_CAR_B2_TRIAL=1)
+target_link_libraries(test_line_tuning PRIVATE b2_fake)
+add_test(NAME b2_integrated_line_tuning COMMAND test_line_tuning)
 get_property(b2_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${b2_tests} PROPERTIES LABELS subsystem2)
