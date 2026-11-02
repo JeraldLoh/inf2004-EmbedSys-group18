@@ -243,3 +243,21 @@ SHA25603f15e680f92e2745e77f9979199feafca38e79dd102428807927e1307ce6111.
 Known line interpretation/recovery and post-junction resume issues remain.
 No new build or automated tests were run for this restoration; no flash,
 vehicle operation or remote push performed.
+
+## V10 local candidate: increase outside and decrease inside during turns
+
+After publishing the restored V5 baseline to testing, the operator requested
+stronger turns by increasing the outside wheel and decreasing the inside.
+V10 changes trial-only curvature-per-steer scaling from120000 to140000.
+At steering90 the adapter rounds curvature from11 to13 reciprocal metres;
+at50mm/s with112mm track, wheel targets become86.4/13.6mm/s (mirrored left),
+versus80.8/19.2 before. Straight targets remain50/50. The historical V8/V9
+outside-only boost is not enabled. Motor PID, effort cap, steering ramp and
+memory, HIGH=black polarity, finite goals and all STOP/watchdog limits remain.
+
+The lower inner target may stall under floor load; physical validation is
+needed. This adjustment cannot fix a zero steering command, sensor mapping,
+line recovery or the known post-junction resume-authority issue.
+Compilation succeeded; automated suites were not run per user request.
+Matching test expectations were updated but not executed. No flash, vehicle
+operation or remote push performed. Remote testing retains the V5 baseline.

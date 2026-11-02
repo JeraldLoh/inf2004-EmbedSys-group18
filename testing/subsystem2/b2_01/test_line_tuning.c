@@ -61,7 +61,7 @@ int main(void) {
     sample(&f,true,false,302); assert(f.controller.status.last_steer==-62);
     sample(&f,true,false,470); assert(f.controller.status.last_steer==-90);
     sample(&f,true,false,1002); assert(f.controller.status.last_steer==-90);
-    assert(f.car.executor.continuous.curvature_u1_m==-11); /* turn left, both forward */
+    assert(f.car.executor.continuous.curvature_u1_m==-13); /* turn left, both forward */
     sample(&f,false,false,1003); sample(&f,false,false,1004);
     assert(f.controller.status.last_steer==-90); /* no sudden straight command on a gap */
     sample(&f,false,false,1104); assert(f.controller.status.last_steer==-45);
@@ -77,7 +77,7 @@ int main(void) {
     sample(&f,false,true,1670); assert(f.controller.status.last_steer==28);
     sample(&f,false,true,1870); assert(f.controller.status.last_steer==62);
     sample(&f,false,true,2570); assert(f.controller.status.last_steer==90);
-    assert(f.car.executor.continuous.curvature_u1_m==11);
+    assert(f.car.executor.continuous.curvature_u1_m==13);
     sample(&f,false,false,2571); sample(&f,false,false,2572);
     sample(&f,false,false,2672); assert(f.controller.status.last_steer==45);
     sample(&f,true,false,2673); sample(&f,true,false,2674);
