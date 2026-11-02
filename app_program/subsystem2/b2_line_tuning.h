@@ -12,10 +12,10 @@
 /* V16 wide-turn candidate: extra inside reduction after the paired target
  * calculation/cap. No extra outside boost; straight requests are untouched. */
 #define B2_LINE_WIDE_TURN_INNER_PERCENT 85U
-/* Unqualified local candidate: avoid requesting a sustained9-10mm/s crawl.
- * Request speed and hard wheel cap still win. Zero means no floor. */
-#define B2_LINE_MIN_ROLLING_MM_S 20U
-#define B2_FIRMWARE_TAG "v17-low-speed-diag"
+/* V17's20mm/s floor widened the operator's curve. Disable it to restore
+ * the V16 target geometry while retaining V17's diagnostic reporting. */
+#define B2_LINE_MIN_ROLLING_MM_S 0U
+#define B2_FIRMWARE_TAG "v18-tight-turn-diag"
 
 static inline int32_t b2_line_shape_curvature(int64_t curvature)
 {
