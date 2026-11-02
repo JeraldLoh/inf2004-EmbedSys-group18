@@ -184,7 +184,9 @@ static void junction(void) {
     assert(controller_service_bind_junction(&f.controller,&ops));
     f.controller.junction.goal_speed_mm_s=30U;
     assert(f.controller.junction.goal_timeout_ms==0U);
-    warm(&f); f.events=true; tick(&f,0U,0U);
+    warm(&f);
+    car_motion_halt(&f.motion); /* the probe's pause: line floor at this generation */
+    f.events=true; tick(&f,0U,0U);
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_APPROACH);
     finish_goal(&f);
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_TURN);
@@ -194,6 +196,15 @@ static void junction(void) {
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_IDLE);
     assert(f.controller.status.junctions_done==1U);
     assert(f.controller.controller.mission==MISSION_VERIFY_LINE);
+    /* Car trial 2026-11-02: line requests after the route were refused
+     * (LINE_PAUSED_NEEDS_NEW_GENERATION) and the car stopped on line lost. */
+    {
+        uint32_t rejected=f.motion.rejected;
+        tick(&f,3U,3U);
+        assert(f.motion.rejected==rejected);
+        assert(f.motion.executor.status.state==MOTION_EXEC_CONTINUOUS);
+        assert(f.motion.executor.continuous.source==MOTION_SOURCE_LINE);
+    }
 }
 static void stop_and_ids(void) {
     fixture_t f;

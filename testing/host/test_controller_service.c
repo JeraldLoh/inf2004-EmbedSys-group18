@@ -584,7 +584,10 @@ static void test_barcode_left_turn(void)
     assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_CONSUMED);
     assert(service.status.junctions_done == 1U);
     assert(f.car.drives == drives + 1);   /* line following again, same tick */
-    assert(f.car.last.authority_generation == gen);
+    /* A new generation: Buddy 2 refuses line requests after a pause (the
+     * probe) until the generation moves on. */
+    assert(f.car.last.authority_generation == gen + 1U);
+    assert(service.controller.authority_generation == gen + 1U);
 }
 
 static void test_straight_and_right_and_uturn(void)
