@@ -27,6 +27,9 @@ typedef struct
     uint32_t linear_sync_slack_um;
     /* The same for pivot goals, capped at half the wheel distance. 0 = off. */
     uint32_t pivot_sync_slack_um;
+    /* Straight goals: the wheel ahead slows by this many mm/s per mm it
+     * leads (at most half its target), keeping the car straight. 0 = off. */
+    uint32_t linear_hold_per_s;
     /* Set only after real direction/load/STOP/speed/pivot qualification.
      * Test fixtures setting true are NOT physical qualification evidence. */
     bool qualified;

@@ -25,6 +25,9 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
     /* Pivots: 20 mm (at most ~10 deg short on a 60 deg pivot), half the
      * wheel distance at most, so a 10 deg junction probe still turns. */
     c->pivot_sync_slack_um=20000U;
+    /* Table run 2026-11-03: the right wheel ran ~5 mm/s faster on straight
+     * goals and the car curved left. The wheel ahead slows 2 mm/s per mm. */
+    c->linear_hold_per_s=2U;
 #endif
     c->tolerance_um=5000U; c->overshoot_um=10000U;
     c->settle_us=200000U; c->settle_speed_um_s=3000U;

@@ -59,7 +59,7 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
         (c->linear_goal_min_speed_mm_s > c->max_speed_mm_s) ||
         (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s) ||
         (c->pivot_max_effort > 1000U) || (c->linear_sync_slack_um > 50000U) ||
-        (c->pivot_sync_slack_um > 50000U)) { return false; }
+        (c->pivot_sync_slack_um > 50000U) || (c->linear_hold_per_s > 10U)) { return false; }
     (void)memset(e, 0, sizeof(*e));
     if (!wheel_measurement_init(&e->measurement, &c->measurement)) { return false; }
     for (i = 0U; i < 2U; ++i)
@@ -464,6 +464,20 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
                 complete = false;
             }
             if (p > e->goal_target_um+e->config.tolerance_um) { complete = false; }
+        }
+        /* Table run 2026-11-03: on straight goals the right wheel ran ~5 mm/s
+         * faster, so the car curved left and the bypass ended left of its
+         * path. Hold the wheels level: the one ahead slows in proportion to
+         * its lead (linear_hold_per_s), at most half its target. */
+        if (linear_goal && e->config.linear_hold_per_s != 0U &&
+            desired[0] != 0U && desired[1] != 0U)
+        {
+            uint64_t p0 = e->measurement.sample.travel_um[0]-e->goal_base_um[0];
+            uint64_t p1 = e->measurement.sample.travel_um[1]-e->goal_base_um[1];
+            unsigned lead = p0 > p1 ? 0U : 1U;
+            uint64_t cut = (p0 > p1 ? p0-p1 : p1-p0)*e->config.linear_hold_per_s;
+            if (cut > desired[lead]/2U) { cut = desired[lead]/2U; }
+            desired[lead] -= (uint32_t)cut;
         }
     }
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL

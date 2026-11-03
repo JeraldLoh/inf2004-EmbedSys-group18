@@ -109,6 +109,40 @@ int main(int argc,char **argv) {
             assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
         }
         fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"straight_hold")==0) {
+        /* Straight 300 mm with the right wheel 10% faster for the same
+         * effort. Run once without the hold and once with it: with it the
+         * leading right wheel is slowed and the gap stays much smaller. */
+        uint64_t gaps[2]; unsigned run;
+        assert(f.car.executor.config.linear_hold_per_s==2U);
+        for(run=0U;run<2U;++run) {
+            motion_goal_request_t r={25U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_FORWARD,300,0,100U,0U};
+            unsigned acc_l=0U,acc_r=0U; uint64_t gap=0U; bool slowed=false;
+            if(run==1U) { init(&f); }
+            else { f.car.executor.config.linear_hold_per_s=0U; }
+            assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+            for(i=0U;i<100U && !f.car.executor.status.terminal_pending;++i) { /* 2 s: short of the end */
+                uint64_t l=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+                uint64_t rr=f.car.executor.measurement.sample.travel_um[1]-f.car.executor.goal_base_um[1];
+                motion_motor_state_t state; unsigned el,er;
+                assert(drv_motor_read(&f.motor,&state)==MOTION_OK);
+                /* Edges per tick follow effort; the right wheel gets 10% more. */
+                acc_l+=(unsigned)(state.left_effort<0?0:state.left_effort)*10U;
+                acc_r+=(unsigned)(state.right_effort<0?0:state.right_effort)*11U;
+                el=acc_l/250U; acc_l%=250U; er=acc_r/250U; acc_r%=250U;
+                tick(&f,el,er);
+                if(f.car.executor.goal_started && rr>l) {
+                    if(rr-l>gap) { gap=rr-l; }
+                    if(f.car.executor.status.target_um_s[1]<f.car.executor.status.target_um_s[0]) { slowed=true; }
+                }
+            }
+            assert(slowed==(run==1U));
+            gaps[run]=gap;
+            car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
+        }
+        printf("straight gap without hold %llu um, with %llu um\n",
+            (unsigned long long)gaps[0],(unsigned long long)gaps[1]);
+        assert(gaps[0]>5000U && gaps[1]*3U<gaps[0]);
     } else if(strcmp(argv[1],"unlimited")==0) {
         assert(car_motion_enable_trial(&f.car,MEASURED_MOTION_NO_RUN_LIMIT));
         for(i=0U;i<1250U;++i) { /* 25 s: past the old 15 s and the 20 s bound */
