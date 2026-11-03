@@ -407,6 +407,12 @@ static void subsystem5_task(INT stacd, void *exinf)
                 b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
                 b5_wifi.max_encounter_ms=m->max_encounter_ms;
                 /* No event stream/profile/plan API is exported by this hookup. */
+                const bool bypass=av_state(&av)==AV_STATE_BYPASS;
+                b1_live_bypass live={.at_ms=at,.fast=0,.active=bypass,
+                    .backing_off=av_state(&av)==AV_STATE_REVERSE && av.backing_off,.segment=bypass?(uint32_t)av.leg_idx:0,
+                    .segments=bypass?(uint32_t)7:0,.side=av.choice.side,
+                    .backoffs=(uint32_t)av.backoffs,.elapsed_ms=av_is_active(&av)?at-av.t_detect:0};
+                (void)b1_submit_live_status(5,&live);
                 if(b1_submit_section(5,&b5_wifi,at)) b5_wifi_at=at;
             }
         }

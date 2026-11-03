@@ -42,7 +42,7 @@ def main():
         run([build(name,sources,extra)])
     for mode in (0,1):
         run([build('lifecycle'+str(mode),['testing/host/test_buddy1_lifecycle.c','app_program/subsystem1/subsystem1.c','app_program/app_main.c'],['-Itesting/host/buddy1_stubs','-DB1_STANDALONE_DEMO='+str(mode)])])
-    sources=['testing/host/test_buddy1_heartbeat.c',bridge,protocol,binary,diagnostics]
+    sources=['testing/host/test_buddy1_heartbeat.c',bridge,protocol,binary,diagnostics,'app_program/subsystem1/buddy1_live_status.c']
     exe=build('heartbeat',sources,['-Itesting/host/buddy1_stubs'])
     for until in (0,5020,5100):run([exe,until])
     run([build('real_snapshot',sources,['-Itesting/host/buddy1_stubs','-DB1_DEMO=0']),0])

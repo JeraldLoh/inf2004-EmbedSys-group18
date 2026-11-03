@@ -9,8 +9,9 @@
 static unsigned clock_ms;
 static jmp_buf done;
 static b1_binary_snapshot expected;
-static unsigned packets;
-static FILE *fixture;
+static unsigned packets, live_packets;
+static b1_live_status live_expected;
+static FILE *fixture,*live_fixture;
 ER tk_get_otm(SYSTIM *t){t->lo=clock_ms;t->hi=0;return E_OK;}
 ER tk_loc_mtx(ID id,int wait){(void)id;(void)wait;return E_OK;}
 ER tk_unl_mtx(ID id){(void)id;return E_OK;}
@@ -28,9 +29,16 @@ ER tk_dly_tsk(unsigned delay){
   assert(n==p.length);assert(memcmp(bytes,p.text,n)==0);++packets;
   if(fixture){for(unsigned i=0;i<n;++i)fprintf(fixture,"%02x",(unsigned char)p.text[i]);fputc(10,fixture);}
  }
+ if(b1_network_take(B1_LIVE_STATUS,&p)){
+  live_expected.uptime_ms=200;
+  unsigned n=b1_encode_live_status(bytes,sizeof(bytes),&live_expected,0);
+  assert(n==p.length && memcmp(bytes,p.text,n)==0);++live_packets;
+  if(live_fixture){for(unsigned i=0;i<n;++i)fprintf(live_fixture,"%02x",(unsigned char)p.text[i]);fputc(10,live_fixture);}
+ }
  clock_ms+=delay;if(clock_ms>220)longjmp(done,1);return E_OK;
 }
 int main(int argc,char **argv){
+ if(argc>2){live_fixture=fopen(argv[2],"w");assert(live_fixture);}
  if(argc>1){fixture=fopen(argv[1],"w");assert(fixture);}
  assert(!b1_car_start_allowed(STOP_REASON_PHYSICAL,0,0,0));
  assert(!b1_car_start_allowed(STOP_REASON_MOTION_FAULT,0,0,0));
@@ -59,8 +67,15 @@ int main(int argc,char **argv){
  assert(!b1_submit_section(3,&bad,99));
  assert(!b1_submit_section(4,&bad,99));
  assert(!b1_submit_section(3,NULL,99));
+ live_expected.present=7;
+ live_expected.motion=(b1_live_motion){.at_ms=11,.left_target=-40,.right_target=80,.targets_valid=1,.searching=1};
+ live_expected.line=(b1_live_line){.at_ms=22,.paused=1};
+ live_expected.bypass=(b1_live_bypass){.at_ms=33,.active=1,.fast=1,.segment=2,.segments=5};
+ assert(b1_submit_live_status(2,&live_expected.motion));assert(b1_submit_live_status(3,&live_expected.line));assert(b1_submit_live_status(5,&live_expected.bypass));
+ b1_live_line invalid={.paused=2};assert(!b1_submit_live_status(3,&invalid));assert(!b1_submit_live_status(4,&invalid));assert(!b1_submit_live_status(3,NULL));
  if(setjmp(done)==0)b1_telemetry_task(0,0);
  if(fixture)assert(fclose(fixture)==0);
- assert(packets==1);puts("PASS merged owner snapshots, preserved timestamps, invalid rejection, STOP precedence and START safety gating");
+ if(live_fixture)assert(fclose(live_fixture)==0);
+ assert(packets==1 && live_packets==1);puts("PASS merged owner snapshots, preserved timestamps, invalid rejection, STOP precedence and START safety gating");
  return 0;
 }

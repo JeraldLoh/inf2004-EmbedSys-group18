@@ -2,10 +2,13 @@
 #define BUDDY1_BRIDGE_H
 #include "buddy1_protocol.h"
 #include "buddy1_binary.h"
+#include "buddy1_live_status.h"
 #define B1_HEARTBEAT 0
 #define B1_TELEMETRY 1
 #define B1_RESULT 2
 #define B1_DIAGNOSTICS 3
+#define B1_LIVE_STATUS 4
+#define B1_SLOT_COUNT 5
 #define B1_PAYLOAD_MAX B1_BINARY_MAX
 #ifndef B1_DEMO
 #if APP_CAR_MQTT
@@ -32,6 +35,8 @@ int b1_submit_snapshot(const b1_snapshot *snapshot);
 int b1_submit_binary_snapshot(const b1_binary_snapshot *snapshot);
 /* Copy one owner-produced section without erasing other buddies. */
 int b1_submit_section(unsigned int id, const void *section, unsigned int at_ms);
+/* Copies only the calling owner's group (2, 3 or 5); nonblocking. */
+int b1_submit_live_status(unsigned id,const void *section);
 int b1_is_online(void);
 int b1_receive_vehicle(b1_command *command);
 void b1_telemetry_task(int stacd, void *exinf);

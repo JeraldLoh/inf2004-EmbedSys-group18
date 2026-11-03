@@ -75,11 +75,11 @@ export class MqttConnection {
   const type=frame.header>>4,b=frame.body;
   if(type===2){
    if(b.length!==2||b[0]!==0||b[1]!==0)throw Error('Broker rejected clean-session connection');
-   const topics=['heartbeat','telemetry','command_result','diagnostics'].map(s=>join(mqttString(this.prefix+'/'+s),[0]));
+   const topics=['heartbeat','telemetry','command_result','diagnostics','live_status'].map(s=>join(mqttString(this.prefix+'/'+s),[0]));
    ws.send(packet(0x82,join([0,1],...topics)));
   }else if(type===9){
    if(this.ready)throw Error('Unexpected duplicate subscription acknowledgement');
-   if(b.length!==6||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
+   if(b.length!==7||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
    clearTimeout(this.deadline);this.ready=true;this.retry=1000;this.onState('connected');
    this.pinger=setInterval(()=>{
     if(this.pingAt){this.onLog('Broker heartbeat timed out','warning');ws.close();return;}

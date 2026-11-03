@@ -1,27 +1,31 @@
+import {liveGroup,lineHeadline,lineSearching,bypassProgress} from './live-status.mjs';
 import {lineNames,terrainNames,avoidanceNames,rangeNames,motionSpeed,systemNames} from './telemetry-view.mjs';
 import {renderCalibration} from './calibration.mjs';
 // Only presentation; all data validity and age remain visible in sensor details.
 export function renderSensorHighlights(id,packet,view,fresh,elapsed){
  const $=key=>document.getElementById(key),s=packet?.buddies?.[id],available=!!s,stale=available&&(!fresh||view.stale);
  $('buddy-'+id).classList.toggle('is-empty',!available);
- renderCalibration(id,s,{stale,demo:!!packet?.demo});
+ renderCalibration(id,s,{stale,demo:!!packet?.demo,live:liveGroup(packet,id)});
  const badge=$('sensor-badge-'+id);badge.lastChild.textContent=!available?'Waiting':stale?'Stale':packet.demo?'Sample':'Live';
  const put=(key,value)=>{$(key).textContent=value;};
  if(id===2){
   const speed=motionSpeed(s);put('motion-primary',speed===null?'—':String(speed));
-  put('motion-target',s?.target_speed_valid?s.target_speed_mm_s+' mm/s':'—');
+  const live=liveGroup(packet,2);
+  put('motion-target',live?.targets_valid?`${live.left_target} / ${live.right_target} mm/s`:s?.target_speed_valid?s.target_speed_mm_s+' mm/s':'—');
   put('motion-left',s?.left_speed_valid?s.left_speed_mm_s+' mm/s':'—');put('motion-right',s?.right_speed_valid?s.right_speed_mm_s+' mm/s':'—');
   put('motion-mode',s?systemNames[s.system_mode]??'Unknown':'Awaiting motion data');
   put('sensor-caption-2',s?`${s.distance_valid?'Travel '+s.distance_mm+' mm':'Distance unavailable'} · ${s.motion_active?'movement reported active':'movement reported inactive'}`:'Wheel speeds and distance appear when the motor task supplies them.');
   $('motion-wheels').classList.toggle('is-moving',!!s?.motion_active&&speed!==null&&!stale);
  }
  if(id===3){
-  put('line-primary',s?lineNames[s.line_state]:'Waiting for the line');
-  put('line-steering',s?(s.steering===0?'Straight':`${Math.abs(s.steering)}% ${s.steering<0?'left':'right'}`):'—');
+  put('line-primary',s?lineHeadline(packet,s):'Waiting for the line');
+  const searching=lineSearching(packet),held=searching||!!liveGroup(packet,3)?.paused;
+  put('line-steering',held?'Controller override':s?(s.steering===0?'Straight':`${Math.abs(s.steering)}% ${s.steering<0?'left':'right'}`):'—');
   put('line-route',s?.scan_valid?['None','Left','Right','Straight','U-turn'][s.route]:'—');
   $('sensor-left').classList.toggle('is-black',!!s?.left_black);$('sensor-right').classList.toggle('is-black',!!s?.right_black);
   $('line-correction').setAttribute('d',`M140 118Q140 65 ${140+(s?.steering??0)*.55} 24`);
-  put('sensor-caption-3',s?'Two line sensors · illuminated dots indicate black.':'Your line position and last barcode route will appear here.');
+  const motion=packet?.buddies?.[2];
+  put('sensor-caption-3',motion?.stop_reasons&128?'Controller reports recovery failed. Check the stop log before restarting.':searching?'The controller is turning to find the line. Sensor steering is not the current motor command.':s?.line_state===4?'Line reacquisition requested by Buddy 3. Controller search status is shown when reported.':s?'Two line sensors · illuminated dots indicate black.':'Your line position and last barcode route will appear here.');
  }
  if(id===4){
   const valid=!!s?.data_valid;
@@ -35,7 +39,8 @@ export function renderSensorHighlights(id,packet,view,fresh,elapsed){
   const ok=s?.front_status===0,lastOK=s?.last_status===0;
   put('obstacle-primary',ok?(s.front_mm/10).toFixed(1):'—');
   put('obstacle-unit',!s?'cm ahead':ok?'cm · scan-start front':rangeNames[s.front_status]);
-  put('obstacle-state',s?avoidanceNames[s.state]:'—');put('obstacle-angle',s&&s.last_status!==4?`${s.direction_halfdeg/2}°`:'—');
+  const live=liveGroup(packet,5);
+  put('obstacle-state',live?.active||live?.backing_off?bypassProgress(live):s?avoidanceNames[s.state]:'—');put('obstacle-angle',s&&s.last_status!==4?`${s.direction_halfdeg/2}°`:'—');
   $('radar-direction').style.transform=`rotate(${s&&s.last_status!==4?-s.direction_halfdeg/2:0}deg)`;
   $('radar-point').style.visibility=ok?'visible':'hidden';
   $('radar-point').setAttribute('cy',String(ok?126-Math.min(95,Math.max(12,s.front_mm/4000*95)):65));

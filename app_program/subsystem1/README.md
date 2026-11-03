@@ -1,9 +1,10 @@
-# Buddy 1 text communications
+# Buddy 1 — live WiFi/MQTT reporting
 
-Ported onto team main; kernel, contracts, controller, pin map and subsystems 2-5
-are retained. The radio service remains the sole raw CYW43/lwIP/MQTT owner.
-subsystem1 owns protected readings, bounded message buffers and text validation.
-See ../../BUDDY1_README.md for build and test instructions.
+See [setup, build and runtime guide](../../BUDDY1_README.md).
 
-Default application startup is inactive. B1_DEMO_RUN=1 opts into the standalone
-demo only. This is not an integrated vehicle runtime or a verified hardware image.
+Buddy 1 validates/copies owner-produced data, encodes binary telemetry and receives
+START/STOP requests. The shared controller decides execution and safety. Motor
+settings, line/avoidance algorithms, watchdog, pins and priorities are unchanged.
+Only the kernel WiFi service calls raw CYW43/lwIP/MQTT. Nonblocking protected copies
+and bounded buffers connect it with subsystem tasks. Current supplementary status
+is type 4 version 3 (80 bytes); see [wire format](../../docs/protocol/CAR_MQTT_HOOKUP.md).

@@ -102,6 +102,10 @@ LOCAL line_side_t s3_reacquire_hint = LINE_SIDE_NONE;
  * following. s3_barcode_ready is one word written only by s3_task. */
 LOCAL BOOL s3_calibrate_request = FALSE;
 LOCAL volatile BOOL s3_barcode_ready = FALSE;
+#if APP_CAR_MQTT
+/* Observation only: 0 not started, 1 running, 2 passed, 3 failed, 4 not reported. */
+static uint32_t s3_wifi_calibration_state,s3_wifi_calibration_reason;
+#endif
 
 #if S3_BARCODE_USE_EDGES
 LOCAL barcode_edges_t s3_edges;
@@ -138,6 +142,9 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
         barcode_decoder_reset(decoder);
         s3_barcode_ready = FALSE;
         active = true;
+#if APP_CAR_MQTT
+        s3_wifi_calibration_state=1U;s3_wifi_calibration_reason=0U;
+#endif
         start_ms = now_ms;
     }
     if (!active)
@@ -157,12 +164,18 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
     if (barcode_sensor_calibrate_finish(bar))
     {
         s3_barcode_ready = TRUE;
+#if APP_CAR_MQTT
+        s3_wifi_calibration_state=2U;
+#endif
         tm_printf((UB *)"[S3] Barcode OK: white %d black %d, thresholds %d/%d\n",
                   (INT)bar->white_level, (INT)bar->black_level,
                   (INT)bar->threshold_low, (INT)bar->threshold_high);
     }
     else
     {
+#if APP_CAR_MQTT
+        s3_wifi_calibration_state=3U;s3_wifi_calibration_reason=1U;
+#endif
         tm_printf((UB *)"[S3] Barcode calibration FAILED: white %d black %d (contrast too low)\n",
                   (INT)bar->white_level, (INT)bar->black_level);
     }
@@ -427,6 +440,13 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 s3_wifi.calibration_high=bar.threshold_high;
 #endif
                 /* Pattern is unavailable: do not invent a decoded mask. */
+#if !S3_BARCODE_USE_EDGES
+                b1_live_line report={.at_ms=at,.calibration_state=s3_wifi_calibration_state,
+                    .calibration_reason=s3_wifi_calibration_reason};
+#else
+                b1_live_line report={.at_ms=at,.calibration_state=4U};
+#endif
+                (void)b1_submit_live_status(3,&report);
                 if(b1_submit_section(3,&s3_wifi,at)) s3_wifi_at=at;
             }
         }
