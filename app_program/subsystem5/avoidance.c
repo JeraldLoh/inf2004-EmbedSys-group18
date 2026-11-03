@@ -691,11 +691,19 @@ static void on_wait_rescan(av_t *a, uint32_t now) {
     if (time_reached(now, a->deadline)) start_coarse(a);
 }
 
+// Time allowed for a straight drive of cm: 3 s plus 0.3 s per cm (down to
+// ~33 mm/s), never less than motion_timeout_ms. Table run 2026-11-03: a
+// ~40 cm out leg at 46 mm/s hit the flat 8 s limit while still driving.
+static uint32_t drive_timeout_ms(const av_t *a, float cm) {
+    uint32_t ms = 3000U + (uint32_t)(cm > 0.0f ? cm * 300.0f : 0.0f);
+    return ms > a->cfg.motion_timeout_ms ? ms : a->cfg.motion_timeout_ms;
+}
+
 static void on_reverse(av_t *a, uint32_t now) {
     if (!a->reverse_issued) {
         if (turn_to(a, now, a->origin_deg)) return; // back up the way we came
         a->hw.motion_reverse(a->hw.ctx, a->reverse_by_cm);
-        a->deadline = now + a->cfg.motion_timeout_ms;
+        a->deadline = now + drive_timeout_ms(a, a->reverse_by_cm);
         a->reverse_issued = true;
         return;
     }
@@ -774,7 +782,7 @@ static void on_bypass(av_t *a, uint32_t now) {
 
     if (!a->leg_active) {
         a->hw.motion_forward(a->hw.ctx, a->legs[i].cm);
-        a->deadline = now + a->cfg.motion_timeout_ms;
+        a->deadline = now + drive_timeout_ms(a, a->legs[i].cm);
         a->leg_active = true;
         return;
     }

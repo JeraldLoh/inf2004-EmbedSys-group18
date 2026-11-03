@@ -52,6 +52,7 @@ typedef struct {
     bool motion_active;
     uint32_t motion_end;
     uint32_t turn_ms, forward_ms, reverse_ms;
+    uint32_t forward_ms_per_cm; // nonzero: forward drives take this per cm
     bool bypass_never_done;
     bool turns_never_done;
     int refuse_kind;           // 0 none, 1 turn, 2 forward, 3 reverse, 4 line search
@@ -155,10 +156,10 @@ static void s_turn(void *ctx, float deg) {
 
 static void s_forward(void *ctx, float cm) {
     sim_t *s = ctx;
-    (void)cm;
     s->forwards++;
     s->refused = s->refuse_kind == 2;
-    start_motion(s, s->forward_ms);
+    start_motion(s, s->forward_ms_per_cm != 0U ? (uint32_t)(cm * (float)s->forward_ms_per_cm)
+                                               : s->forward_ms);
 }
 
 static void s_reverse(void *ctx, float cm) {
@@ -1070,6 +1071,28 @@ static void pivot_plan_passes_the_obstacle(void) {
     CHECK(pl.pass_cm > s.cfg.bypass_pass_cm);
 }
 
+// Table run 2026-11-03: a ~40 cm out leg at ~46 mm/s ran into the flat 8 s
+// leg limit while still driving ("bypass timed out"). The limit now grows
+// with the leg: 3 s + 0.3 s per cm.
+static void long_leg_gets_time_to_finish(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.forward_ms_per_cm = 300; // ~33 mm/s
+    s.obstacle = (blob_t){45, 135, 15.0f, true}; // wide: a long way out
+    CHECK(run_encounter(&s, &av));
+    CHECK(s.last_plan.out_cm * 300.0f > (float)s.cfg.motion_timeout_ms); // old limit too short
+    CHECK_INT(av_metrics(&av)->failures, 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+
+    // A leg that really stalls still times out.
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.bypass_never_done = true;
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 120000));
+    CHECK(av_fail_reason(&av) && strstr(av_fail_reason(&av), "bypass timed out"));
+}
+
 static void line_found_while_passing(void) {
     sim_t s;
     av_t av;
@@ -1283,6 +1306,7 @@ void run_avoidance_tests(void) {
     RUN(obstacle_beside_the_path_is_cleared);
     RUN(out_leg_is_short_with_arc_turns);
     RUN(pivot_plan_passes_the_obstacle);
+    RUN(long_leg_gets_time_to_finish);
     RUN(line_found_while_passing);
     RUN(line_during_return_turn_rejoins_at_once);
     RUN(line_ignored_beside_obstacle);
