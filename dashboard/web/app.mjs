@@ -1,4 +1,6 @@
+import {robotEvents,lineSearchEvents} from './robot-events.mjs';
 import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs';
+import {encodeLiveStatus} from './live-status.mjs';
 import {encodeTelemetry} from './binary.mjs';
 import {encodeCommand,decodeCommand} from './commands.mjs';
 import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs';
@@ -26,17 +28,20 @@ const client=new MqttConnection({
 });
 function receive(topic,payload,time,retained=false){
  try{
+  const previousTelemetry=state.telemetry,previousLiveStatus=state.liveStatus;
   if(!state.receive(topic,payload,time,retained))return;
+  if(topic==='live_status')for(const event of lineSearchEvents(previousLiveStatus,state.liveStatus))log(event.text,event.type);
+  if(topic==='telemetry')for(const event of robotEvents(previousTelemetry,state.telemetry))log(event.text,event.type);
   if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';const m=motionView(state.telemetry),b=state.telemetry.buddies?.[2],stamp=b?`${b.updated_ms}:${b.sequence}`:'';if(m.fresh&&stamp!==lastMotorStamp){history.push({time:time-m.age/1000,speed:m.speed});lastMotorStamp=stamp;}if(history.length>305)history.shift();}
   if(topic==='command_result'){
    const result=state.result.status;
-   $('command-feedback').textContent=preview?'Preview only · '+result:'Robot result: '+result+' · physical execution unconfirmed.';
+   $('command-feedback').textContent=preview?'Preview only · simulated.':({queued:'Request queued · movement not confirmed.',rejected:'Request rejected.',queue_full:'Robot busy · request not queued.',simulated:'Simulated response · no movement confirmed.'}[result]??'Robot replied.');
    log((preview?'Preview':'Robot')+' result: '+result,'command');
   }
  }catch(error){log('Ignored message: '+error.message,'warning');}
  render();
 }
-function reset(){state=new RobotState();history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Controls unlock after a fresh heartbeat.';}
+function reset(){state=new RobotState();history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
 function setPreview(value){
  clearInterval(previewTimer);client.disconnect();preview=value;reset();
  document.body.classList.toggle('preview',preview);
@@ -57,6 +62,10 @@ function setPreview(value){
     buddies:{2:{updated_ms:ms,target_speed_mm_s:simRunning?30:0,left_speed_mm_s:simRunning?30:0,right_speed_mm_s:simRunning?30:0,distance_mm:simDistance,target_speed_valid:1,left_speed_valid:1,right_speed_valid:1,distance_valid:1,odometry_valid:1,motion_active:simRunning?1:0,sequence:simSeq%256,uptime_ms:ms,system_mode:simRunning?2:5,mission_state:simRunning?1:0},3:{updated_ms:ms,line_state:Math.sin(simSeq/5)>.1?2:Math.sin(simSeq/5)<-.1?1:0,steering:Math.round(Math.sin(simSeq/5)*30),adc_valid:1,adc:1800,calibration_low:1400,calibration_high:2000,calibrated:1},
      4:{updated_ms:ms,raw},5:{updated_ms:ms,state:0,front_status:0,front_mm:distance*10,front_at_ms:ms,last_status:0,last_mm:distance*10,last_at_ms:ms,servo_valid:1,servo_deg:90}}
    }),t);
+   receive('live_status',encodeLiveStatus({demo:true,uptime_ms:ms,present:5,
+    motion:{at_ms:ms,left_target:simRunning?30:0,right_target:simRunning?30:0,targets_valid:true,qualified:true,encoder_left_counts:1271,encoder_right_counts:1264,wheel_diameter_mm:65,searching:simRunning&&simSeq%60>=50,searches:Math.floor(simSeq/60),accepted:simSeq},
+    line:{at_ms:ms,paused:simRunning&&simSeq%60>=40&&simSeq%60<45},
+    bypass:{at_ms:ms,fast:false,active:simRunning&&simSeq%60<20,segment:simRunning?Math.floor(simSeq%20/3):0,segments:7,side:1}}),t);
    if(simSeq%5===0)receive('diagnostics',encodeDiagnostics({demo:true,uptime_ms:ms,rejected:0,out_of_range:0,busy:0,last_at_ms:0,section:0,field:0,reason:0,value:0,min:0,max:0}),t);
    simSeq++;
   };
@@ -75,12 +84,13 @@ function send(command){
    if(command==='START')simRunning=true;
    if(command==='STOP')simRunning=false;
    receive('command_result',JSON.stringify({schema:1,demo:true,status:'simulated',command_id:id}),now());
-  }else{client.publish(command,id);$('command-feedback').textContent='Sent to MQTT · waiting for a robot result. Not an execution confirmation.';}
+  }else{client.publish(command,id);$('command-feedback').textContent='Request sent · waiting for robot reply.';}
   log((preview?'Preview only: ':'Sent: ')+command,'command');
  }catch(error){$('command-feedback').textContent=error.message;log(error.message,'warning');}
 }
 function render(){
  const t=now(),status=state.status(t),view=state.telemetryView(t),fresh=view.fresh;
+ if(['Waiting for rover connection.','Ready · choose Start rover or Stop.'].includes($('command-feedback').textContent))$('command-feedback').textContent=status==='online'?'Ready · choose Start rover or Stop.':'Waiting for rover connection.';
  const names={disconnected:connecting?'Connecting to broker…':view.values?'Communication Unavailable':'Ready when you are',waiting:'Broker connected · waiting for rover',online:preview?'Preview running · sample data':'Rover heartbeat received',offline:'Communication Unavailable'};
  $('session-status').textContent=names[status];
  $('session-detail').textContent=preview?'Visual demo only. Your robot is not being controlled.':status==='online'?'Telemetry link is active.':status==='offline'?'No heartbeat for 15 seconds. Last readings are stale. Commands locked.':status==='waiting'?'The Pico has not sent a fresh heartbeat yet.':view.values?'Broker unavailable. Last readings are stale. Commands locked.':'Connect your broker to bring the rover online.';
@@ -113,7 +123,7 @@ function render(){
  if(status!==previousStatus){if(status==='offline')log('Heartbeat timeout: 15 seconds without a fresh heartbeat.','warning');previousStatus=status;}
 }
 function renderBuddies(view,t){
- const packet=view.values,elapsed=view.age===null?0:view.age*1000;
+ const packet=view.values?{...view.values,live_status:state.liveStatus,live_status_elapsed_ms:state.liveStatusAt===null?Infinity:(t-state.liveStatusAt)*1000}:null,elapsed=view.age===null?0:view.age*1000;
  const count=[2,3,4,5].filter(id=>packet?.buddies?.[id]).length;
  $('binary-summary').textContent=count?`${count} subsystems · ${packet.demo?'sample readings':view.fresh?'receiving data':'last received readings'}`:'Waiting for sensor readings';
  for(const id of [2,3,4,5]){

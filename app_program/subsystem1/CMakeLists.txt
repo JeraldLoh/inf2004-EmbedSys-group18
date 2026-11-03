@@ -1,6 +1,7 @@
 # Buddy 1 portable host codecs and tests. Firmware stays in build_make/.
 # The bridge uses tk_* and is tested by the mocked suite in testing/host/.
 add_library(subsystem1_host STATIC
+    buddy1_live_status.c
     buddy1_protocol.c
     buddy1_binary.c
     buddy1_diagnostics.c

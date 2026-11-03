@@ -1,3 +1,4 @@
+import {decodeLiveStatus} from './live-status.mjs';
 import {decodeTelemetry} from './binary.mjs';
 import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs';
 export function validateCommand(command) {
@@ -6,7 +7,7 @@ export function validateCommand(command) {
 }
 export class RobotState {
  constructor(){this.disconnect();}
- disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.demo=null;this.result=null;this.received=0;this.diagnostics=newDiagnostics();}
+ disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.liveStatus=null;this.liveStatusAt=null;this.demo=null;this.result=null;this.received=0;this.diagnostics=newDiagnostics();}
  status(now){return !this.connected?'disconnected':this.lastHeartbeat===null?'waiting':now-this.lastHeartbeat<15?'online':'offline';}
  connectionLost(){this.connected=false;this.result=null;}
  connectionRestored(){this.connected=true;this.lastHeartbeat=null;this.result=null;}
@@ -23,6 +24,7 @@ export class RobotState {
  }
  receiveValidated(topic,payload,now){
   if(payload.length>1024)throw new Error('Message too large');
+  if(topic==='live_status'){const s=decodeLiveStatus(payload);this.liveStatus=s;this.liveStatusAt=now;this.received++;return true;}
   if(topic==='diagnostics'){
    const d=decodeDiagnostics(payload);this.diagnostics.device=d;this.diagnostics.deviceAt=now;this.received++;return true;
   }

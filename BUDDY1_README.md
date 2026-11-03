@@ -1,303 +1,222 @@
-# Buddy 1 Text MQTT Prototype
+# Buddy 1 — WiFi, MQTT and dashboard
 
-Buddy 1 provides Pico W WiFi/MQTT communication and a local website dashboard
-using micro T-Kernel. The current firmware sends **simulated readings** over a
-real WiFi/MQTT connection. START, STOP and SET_SPEED change simulated state;
-they do not operate motors. The binary-format requirement is not implemented yet.
+Buddy 1 connects the Pico W robot to a laptop dashboard. It sends telemetry,
+receives START/STOP requests and forwards them to the shared controller. The
+controller and other buddies own driving, speed, sensing and obstacle avoidance.
 
-## Quick start on a previously configured laptop
+This README covers normal startup, configuration, building, flashing and checks.
+It describes the current `testing` integration, including local Buddy 1 reporting
+changes. It replaces the older text-only, simulated-speed prototype instructions.
 
-1. Connect the laptop to the same trusted 2.4 GHz network as the Pico.
-2. Check the laptop's current WiFi IPv4 address. If it changed, update the
-   private configuration, rebuild and reflash before proceeding.
-3. Run **one** Mosquitto broker using `dashboard/mosquitto-local.conf`.
-4. Plug the already-flashed Pico in normally, without BOOTSEL.
-5. Run `dashboard/Start-Website.cmd` from Windows File Explorer.
-6. Open `http://127.0.0.1:8080/`, exit preview and connect to
-   `ws://localhost:9001`, topic prefix `group18/robot1`.
+## What runs on the robot
 
-Ubuntu/building/flashing are only needed when code or compiled settings change.
-Keep the broker and website-server windows open while using the dashboard.
+One combined UF2 contains the robot application and WiFi/MQTT. Do not flash a
+separate image for each buddy: flashing another UF2 replaces the running image.
 
-## First-time prerequisites
+- Buddy 2: wheel feedback and commanded left/right speed targets.
+- Buddy 3: line and barcode readings.
+- Buddy 5: ultrasonic readings, avoidance state and bypass progress.
+- Shared controller: operating mode, stop reasons, faults and line-search status.
+- Buddy 1: protected data copies, binary encoding, command validation and dashboard.
 
-- Raspberry Pi **Pico W** (RP2040) and a USB data cable. This build is not for
-  Pico 2 or Pico 2 W. Disable/disconnect motors for standalone testing.
-- Windows with WSL Ubuntu; Arm cross compiler, Make, host C/C++ compiler and
-  Pico SDK with TinyUSB, CYW43 and lwIP submodules present. SDK 2.3.0 and
-  Ubuntu Arm GCC 14.2.1 were used for the recorded builds.
-- Windows Python and Mosquitto installed. A browser runs the website's
-  JavaScript; Java and npm are not required to start it.
-- VS Code Serial Monitor or another USB serial terminal, 115200 baud.
+This local integration is based on team revision `61f8836`. Buddy 4 integration
+and the fast S-curve bypass are absent. Buddy 5 uses the seven-leg bypass. The optional hump-pause status is not
+reported by this integration. Missing fields stay unavailable rather than being
+invented. Preview is generated sample data, not a connection to the car.
 
-On Windows, Ubuntu can be installed from an administrator PowerShell:
+## Normal startup — no rebuild needed
 
-```powershell
-wsl --install -d Ubuntu
-```
+Use these steps when the correct firmware is already flashed and its network
+settings have not changed.
 
-Restart Windows if requested, then finish Ubuntu's username/password setup.
-In Ubuntu, install the build tools if missing:
+1. Connect the laptop to the same 2.4 GHz WiFi/hotspot configured in the Pico.
+2. Check the laptop WiFi IPv4 address with `ipconfig`. It must match the broker
+   address compiled into the firmware. Do not use the WSL/VPN adapter address.
+3. Run one Mosquitto broker. In **Command Prompt**, from the repository root:
 
-```bash
-sudo apt update
-sudo apt install -y build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi git cmake
-arm-none-eabi-gcc --version
-```
+   ```cmd
+   "C:\Program Files\mosquitto\mosquitto.exe" -c dashboard/mosquitto-local.conf -v
+   ```
 
-The Pico SDK is a separate prerequisite; use the course setup instructions in
-`docs/template-reference/README.md`. Adjust SDK and project paths below to your
-own installation. Do not repeat installation on every startup.
+   In **PowerShell**, the same executable needs the leading `&`:
 
-## 1 Configure WiFi and the laptop broker address
+   ```powershell
+   & "C:\Program Files\mosquitto\mosquitto.exe" -c dashboard/mosquitto-local.conf -v
+   ```
 
-From the project root in Ubuntu, create the local configuration **only if it
-does not already exist**:
+4. Power the robot normally, without BOOTSEL. For the first motion check, keep
+   the wheels raised and the physical STOP accessible.
+5. Double-click `dashboard/Start-Website.cmd` in File Explorer. Keep that window
+   and the broker window open. The current launcher uses port **8080**.
+6. Open `http://127.0.0.1:8080/`, exit preview and connect the dashboard:
 
-```bash
-test -f config/wifi_secrets.h || cp config/wifi_secrets.example.h config/wifi_secrets.h
-```
+   ```text
+   WebSocket URL: ws://localhost:9001
+   Topic prefix:  group18/robot1
+   ```
 
-Edit `config/wifi_secrets.h` locally:
+7. Wait for a fresh heartbeat and live readings. Use **Start rover** to request
+   autonomous operation and **Stop** to request stopping. Driving speed is set
+   onboard; there is no dashboard speed slider.
 
-| Setting | Meaning |
-|---|---|
-| `WIFI_SSID` | Exact 2.4 GHz network name, including case and spaces. |
-| `WIFI_PASSWORD` | Password for that network. |
-| `MQTT_BROKER_IP` | Laptop's current WiFi IPv4 address, not the Pico's IP and not localhost. |
-| `MQTT_BROKER_PORT` | `1883`. |
-| `MQTT_CLIENT_ID` | A unique ID for this Pico, to avoid session-takeover conflicts. |
+A queued reply confirms that a request entered the command queue, not that the
+controller accepted it or the wheels moved. Remote START does not clear physical
+or hardware/safety stops. A network STOP is not a guaranteed emergency stop.
 
-Find the laptop address in a new Windows Command Prompt:
+A previously started website server on 8082 keeps using 8082 until closed; the
+launcher now starts a server on 8080. This website port is separate from MQTT
+1883 and WebSocket 9001. Refresh with Ctrl+F5 after dashboard-only edits.
 
-```cmd
-ipconfig
-```
+## Configure WiFi and MQTT
 
-Use **Wireless LAN adapter Wi-Fi -> IPv4 Address**, not a WSL/VPN adapter.
-The address can change after changing networks. The Pico connects to the SSID
-compiled into its firmware; it does not follow the laptop's chosen network.
+Private settings live in ignored `config/wifi_secrets.h`. If it does not exist,
+copy `config/wifi_secrets.example.h` and fill in the local values.
 
-`wifi_secrets.h` is ignored by Git. Share the `.example.h`, never the private
-header or firmware binaries built with real credentials. Changing any compiled
-setting requires rebuilding and reflashing.
+| Setting | Value to supply |
+| --- | --- |
+| `WIFI_SSID` | Exact 2.4 GHz WiFi/hotspot name |
+| `WIFI_PASSWORD` | Its password |
+| `MQTT_BROKER_IP` | Laptop WiFi IPv4 address, not localhost or the Pico address |
+| `MQTT_BROKER_PORT` | `1883` |
+| `MQTT_CLIENT_ID` | Unique client ID for this Pico |
 
-## 2 Build the standalone demo
+Changing compiled WiFi/broker settings requires rebuilding and flashing. The Pico
+does not automatically switch to whichever WiFi the laptop chooses. Do not commit
+the private header or share firmware containing real credentials.
 
-Open Ubuntu. Example paths for the current Windows checkout:
+## Build the combined robot firmware
+
+The team update at `61f8836` makes the v6 profile the official CAR_RUN default.
+The historically named `CAR_B2_TRIAL` flag now defaults to 1 for CAR_RUN, and
+Buddy 2 marks that car profile qualified. WiFi builds use radio priority 13.
+Explicit `CAR_B2_TRIAL=0` still selects the unqualified zero-gain diagnostic
+profile. Encoder Configured remains separate from motion qualification.
+
+Prerequisites: WSL Ubuntu, Make, Arm cross compiler and Pico SDK with its required
+submodules. The current local setup uses Pico SDK 2.3.0. Run this in **Ubuntu**,
+adjusting paths for another laptop:
 
 ```bash
 export PICO_SDK_PATH=/mnt/c/Users/ftna/.pico-sdk/sdk/2.3.0
 cd /mnt/c/Users/ftna/Desktop/emb/inf2004-EmbedSys-group18/build_make
-make NET=lwip MQTT=1 TEST=1 B1_DEMO_RUN=1 CONSOLE=usb_cdc CRASH_REPORT=0 -j8
+make -j6 CAR_RUN=1 CAR_MQTT=1 WIFI=cyw43 NET=lwip MQTT=1 SMP=1 CONSOLE=usb_cdc CRASH_REPORT=0 TEST=0
 ```
 
-Wait for a successful build and UF2 generation. Output:
+Wait for a successful link and UF2 generation. The combined WiFi image is:
 
 ```text
-build_make/mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt_test_b1demo.uf2
+build_make/mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt_carrun_b1live.uf2
 ```
 
-`B1_DEMO_RUN=1` explicitly starts only Buddy 1's standalone application task.
-The default `B1_DEMO_RUN=0` retains the team's inactive application startup;
-do not flash its unsuffixed image expecting demo telemetry. Kernel USB/radio
-services may still run. Other buddies' tasks and a Vehicle Controller task are
-not started. Priority 18 and the 4 KiB stack are provisional for integration.
+The filename stays the same after rebuilding; check the build succeeded and the
+file timestamp. The repository also supports a standalone Buddy 1 demo profile;
+its simulated image is not the combined car firmware above. Follow the current
+shared pin configuration; USB console avoids taking sensor pins for a UART console.
 
-Use USB console with `CRASH_REPORT=0`: UART/crash mirroring conflicts with the
-team's GP0/GP1 line-sensor pins.
+## Flash only when firmware or compiled settings change
 
-## 3 Flash the Pico W
-
-1. Stop Serial Monitoring and unplug USB.
+1. Stop Serial Monitoring and unplug the Pico USB cable.
 2. Hold BOOTSEL while plugging USB in; release when **RPI-RP2** appears.
-3. Copy the newly built `_b1demo.uf2` onto that drive.
-4. The drive disappears as the Pico reboots. No second flashing command is needed.
+3. Copy the combined `_carrun_b1live.uf2` file onto that drive.
+4. The drive disappears as the Pico restarts and attempts WiFi, then MQTT.
+5. Check the dashboard heartbeat and live readings before testing movement.
 
-For an ordinary reboot, unplug/replug **without BOOTSEL**. If RPI-RP2 remains,
-the Pico is still in bootloader mode rather than running the application.
+An ordinary power-on does not need BOOTSEL, a build or another flash. Dashboard
+HTML/JavaScript changes only need a browser refresh; they are not stored in the UF2.
 
-## 4 Start one Mosquitto broker
+## What Buddy 1 sends and receives
 
-If a background **Mosquitto Broker** Windows service is already running, stop
-it temporarily in `services.msc` before this manual test. Do not run two brokers
-on port 1883. In our setup, a loopback-only service and a manual LAN broker
-accepted different clients, so a subscriber connected but received no Pico data.
+Topics use the `group18/robot1` prefix:
 
-In a Windows Command Prompt, adjusting paths if needed:
+| Suffix | Format / purpose | Nominal interval |
+| --- | --- | --- |
+| `/heartbeat` | JSON connection heartbeat | 5 seconds |
+| `/telemetry` | Binary v3 combined readings; web decoder also accepts v2 | 200 ms when data is available |
+| `/live_status` | 76-byte supplementary binary v2 (web also accepts v1): targets, searches, bypass progress | 200 ms when data is available |
+| `/diagnostics` | Binary validation and rejection counters | 1 second |
+| `/command` | Binary v2 START/STOP with command ID | On request |
+| `/command_result` | JSON queued/rejected/queue-full or simulated response | On request |
 
-```cmd
-"C:\Program Files\mosquitto\mosquitto.exe" -c "C:\Users\ftna\Desktop\emb\inf2004-EmbedSys-group18\dashboard\mosquitto-local.conf" -v
-```
+The dashboard sends START/STOP only, not SET_SPEED. Each command is an explicit
+8-byte binary packet; use the dashboard rather than a plain-text MQTT command.
+All publishes use QoS 0 and are non-retained. Do not publish retained commands.
 
-Expect ports **1883** (Pico TCP MQTT) and **9001** (browser WebSocket). Leave
-this window open. If its title starts with **Select**, press **Esc**: console
-text selection can pause processing. Click its title bar to focus it without
-selecting console text.
+Only the kernel WiFi service calls raw CYW43/lwIP/MQTT APIs. Buddy tasks copy
+readings to Buddy 1 through protected APIs; bounded buffers transfer messages to
+and from the radio service. Outgoing slots keep latest values rather than a
+history. Commands expire after one second and older connection epochs are ignored.
 
-The supplied broker allows anonymous access on a trusted LAN. Allow the exact
-Mosquitto executable through Windows Firewall on the matching **Private**
-profile when using your own trusted hotspot/home network. Keep the firewall
-enabled; do not mark untrusted school/public WiFi as Private. The WebSocket
-listener is loopback-only. This is a local test setup, not an internet service.
+Sensor sections carry timestamps. Supplementary status expires after 1500 ms;
+its arrival does not refresh the heartbeat. A live connection does not prove every
+sensor is fresh or calibrated. The wheel panel shows Configured only from fresh firmware-reported encoder
+counts/revolution and wheel diameter, not a live pass/fail test.
+Qualification is separate from wheel calibration;
+measured B2 wheel speeds are magnitudes, while commanded targets are signed.
 
-Clear any old retained command before control testing:
+Interfaces: `app_program/subsystem1/buddy1_bridge.h`.
+Detailed telemetry and supplementary status: `docs/protocol/CAR_MQTT_HOOKUP.md`
+and `docs/protocol/telemetry-fields.json`.
 
-```cmd
-"C:\Program Files\mosquitto\mosquitto_pub.exe" -h 127.0.0.1 -t group18/robot1/command -r -n
-```
+## Troubleshooting
 
-Never publish retained movement commands. The firmware receive callback cannot
-inspect the retained flag. The dashboard ignores retained incoming status data.
+- **Waiting for rover:** check the laptop joined the configured WiFi, the compiled
+  broker IP matches its current WiFi IP, and the broker is running. Browser
+  connected means the browser reached the broker; it does not prove the Pico did.
+- **Website refused connection:** start the website server and use its displayed
+  port. It is a different service from the MQTT broker.
+- **No Pico messages despite a connected subscriber:** check for two brokers.
+  A loopback-only Windows service and a manual LAN broker can split clients.
+  Use `netstat -ano | findstr :1883` and identify the processes before stopping any.
+- **START queued but no movement:** inspect controller mode, stop reasons, hardware
+  faults and qualification under Motion sensor details. Also check physical STOP
+  and motor power. Do not assume this needs reflashing.
+- **Stale readings:** inspect the individual sample ages. A current heartbeat alone
+  does not make old sensor data current.
+- **Serial diagnostics:** open the Pico USB COM port at 115200 baud. Useful markers
+  include `wifi: link up`, `buddy1: MQTT ready` and periodic `[HB]` logs. Reopening
+  the serial monitor does not require another flash.
 
-## 5 Check the Pico serial log
+## Checks and evidence limits
 
-In VS Code Serial Monitor, refresh the port list, select the Pico's USB COM
-port and click Start Monitoring at **115200 baud**. COM numbers can change.
-
-Expected messages:
-
-```text
-wifi: link up, ip=...
-buddy1: MQTT ready
-[HB] generated_ms=... publish_attempt_ms=... result=0
-```
-
-WiFi link up proves association/IP acquisition; MQTT ready confirms the command
-subscription. `[HB] result=0` means local lwIP publish acceptance, not confirmed
-broker delivery. Compare received heartbeat timestamps and broker logs too.
-
-WiFi-only testing does not need Mosquitto. MQTT testing does. Check WiFi name,
-2.4 GHz availability and range for SSID-not-found errors. An empty monitor after
-reboot can mean the early log was missed; reconnect the port and wait for the
-periodic heartbeat diagnostics. Do not repeatedly reflash to reopen the monitor.
-
-## 6 Open and connect the website
-
-In Windows File Explorer, double-click `dashboard/Start-Website.cmd`. Clicking
-the file in VS Code only opens its source. Alternatively, from the project root
-in a Windows terminal:
-
-```cmd
-python -B -m http.server 8080 --bind 127.0.0.1 --directory dashboard/web
-```
-
-Use only one website server on port 8080. Leave its window open and out of Select
-mode. Open **http://127.0.0.1:8080/** in Chrome/Edge; no trailing asterisks.
-
-Exit preview, click Connect broker and enter:
-
-```text
-WebSocket URL: ws://localhost:9001
-Topic prefix:  group18/robot1
-```
-
-The browser on the broker laptop uses localhost; the Pico uses the laptop's LAN
-IP. Wait for a fresh heartbeat. **FIRMWARE / SIMULATED** means real Pico transport
-with sample firmware readings. **PREVIEW / SIMULATED** is browser-only generated
-data with no broker or robot commands. Neither is a real sensor/motor test.
-
-Apply a speed percentage, then Start rover; reported simulated speed should
-match. Stop returns it to zero. A command result is not physical execution.
-
-After 15 seconds without heartbeat, the dashboard shows **Communication
-Unavailable** and locks controls. It retains last readings, labelled **STALE**
-with age and last reception time. Telemetry itself becomes stale after three
-seconds without a fresh sample. Heartbeat age is seconds since last heartbeat,
-not a sending rate. Broker reconnection waits for a fresh heartbeat. Explicit
-operator disconnect or a new settings session resets readings to avoid mixing
-data sources. Use Ctrl+F5 after website changes; no Pico reflash is needed.
-
-## 7 Optional independent message checks
-
-Use another Command Prompt, not the running broker/server window. Five messages
-are printed before the subscriber exits; the Pico and broker keep running.
-
-```cmd
-"C:\Program Files\mosquitto\mosquitto_sub.exe" -h 127.0.0.1 -p 1883 -t "group18/robot1/telemetry" -v -C 5 -W 15
-```
-
-```cmd
-"C:\Program Files\mosquitto\mosquitto_sub.exe" -h 127.0.0.1 -p 1883 -t "group18/robot1/heartbeat" -v -C 5 -W 40
-```
-
-Compare `speed_percent` / `distance_cm` with the dashboard, allowing for updates.
-Heartbeat `uptime_ms` gaps should be roughly 5000 ms. Add `-d` for connection
-diagnostics. `-W` is the subscriber's wait limit, not the dashboard timeout.
-
-For a connected subscriber with no messages, check duplicate listeners:
-
-```cmd
-netstat -ano | findstr LISTENING | findstr :1883
-```
-
-Identify a listed PID using `tasklist /FI "PID eq <PID>"` before stopping anything.
-Repeated session-takeover logs can indicate duplicate MQTT client IDs. A local
-website timeout needs a website-server/port check, not a Pico reflash.
-
-## Protocol and team interface
-
-| Topic suffix under `group18/robot1` | Payload / interval |
-|---|---|
-| `/heartbeat` | JSON schema, seq, uptime_ms, demo; nominally every 5 s. |
-| `/telemetry` | JSON schema, seq, uptime_ms, demo, speed_percent, distance_cm; every 1 s in this baseline. |
-| `/command` | Exact ASCII START, STOP or SET_SPEED followed by one space and 0-100. No JSON/newline. |
-| `/command_result` | JSON schema, demo, status: simulated / queued / rejected / queue_full. |
-
-All use QoS 0 and non-retained publishes; no guaranteed delivery or emergency
-STOP response. The radio service alone owns raw CYW43/lwIP/MQTT. Bounded bridge
-buffers hold about eight incoming and eight controller commands; outgoing data
-uses one latest slot per message type, not an unbounded outage backlog. Commands
-expire after one second and observed connection changes invalidate older epochs.
-Overflow can drop commands/results. WiFi retries ordinary down/failure after
-5 s and stalled joining/IP after 30 s; MQTT retry is 3 s with a 15 s attempt
-deadline. These policies are not measured worst-case recovery guarantees.
-
-Application interface: `app_program/subsystem1/buddy1_bridge.h`.
-
-- `b1_submit_snapshot(&snapshot)` copies a complete snapshot; success 1, busy or
-  invalid 0. Current fields: speed_percent 0-100; distance_cm 0-100000.
-- `b1_receive_vehicle(&command)` returns 1 for a fresh current-epoch request,
-  otherwise 0. The Vehicle Controller must decide execution and safety.
-- Both are task-context APIs, not ISR APIs. Use no raw networking calls from
-  other buddies' tasks.
-
-Real integration is still open: `B1_DEMO=1` is the current simulation default.
-Changing it to zero alone does not connect the controller. A reviewed producer,
-controller adapter, percentage-to-physical-speed policy and runtime startup plan
-are needed. The connection epoch is not a vehicle-authority generation.
-
-## Verification and evidence
-
-Recorded observations and screenshots: [testing/subsystem1/TEST_LOG.md](testing/subsystem1/TEST_LOG.md).
-Standalone hardware testing demonstrated WiFi/MQTT telemetry, matching dashboard
-values, simulated speed 42/STOP zero, heartbeat samples about 5010 ms apart after
-the producer-lock fix, loss indication, reboot recovery, and user-reported
-hotspot-interruption recovery. Exact outage transition/recovery deadlines and
-long-duration reliability are not established by screenshots.
-
-Local checks after the fixes: 10 CTest cases, 8 website tests and 5 Python model
-tests passed. Pico demo and inactive application profiles compiled; heartbeat
-fix firmware subsequently compiled and was retested on the Pico. Mock kernel
-tests do not establish actual RTOS scheduling or integrated control timing.
-
-Run tests from the project root:
+From the repository root, run the C checks in Ubuntu:
 
 ```bash
-cmake -S testing/host -B testing/host/build-b1-check
-cmake --build testing/host/build-b1-check
-ctest --test-dir testing/host/build-b1-check --output-on-failure
-python -B -m unittest discover -s dashboard -p test_model.py
-node --test dashboard/web/test.mjs
+cmake -S testing/host -B build/host-live-status
+cmake --build build/host-live-status -j6
+ctest --test-dir build/host-live-status --output-on-failure
+python3 testing/host/verify_buddy1_car.py
 ```
 
-Node is only required for optional website tests. Real sensors/motors and A1
-combined-task timing remain unverified. Binary payloads, 200 ms combined
-telemetry, the common fault mask and out-of-range diagnostic events are later
-work, not features of this text baseline.
+For dashboard checks, with Node installed:
+
+```text
+node --test dashboard/web/*.test.mjs dashboard/web/test.mjs
+```
+
+The local combined build, PC suites and an isolated MQTT roundtrip have passed.
+The user also observed real MQTT telemetry and dashboard START causing movement.
+That is not verification of every buddy, route, calibration or STOP timing on the
+car. Preview and PC tests do not establish hardware behaviour.
 
 ## Shut down
 
-Stop Serial Monitoring, press Ctrl+C in the website-server and manual broker
-windows, then unplug the Pico. Rebuilding, BOOTSEL and Ubuntu setup are not
-required for every normal startup.
+Stop the rover, stop Serial Monitoring, close the website server and manual broker
+with Ctrl+C, then remove robot power as appropriate. Keep local credentials private.
+
+## Diagnosing a sudden stop
+
+The dashboard Activity stream records observed controller-mode, stop-mask,
+hardware-fault, mission and avoidance changes with rover uptime. These are
+snapshot observations: events between messages or during disconnection can be missed.
+For exact executor detail, open USB Serial Monitor at 115200 before starting.
+Keep the output after the stop and do not restart until captured. Useful markers:
+`[CAR STATE]`, `[CAR REASON]`, `[CAR STOP]`, `[CAR START]`, and `[B2 STOP DETAIL]`.
+A motor detail includes reason (for example NO_WHEEL_PROGRESS or COMMAND_EXPIRED),
+wheel mask (1 left, 2 right, 3 both), command/generation and pre-stop targets/speeds.
+Its at_ms is the logger observation time, not an exact ISR event timestamp.
+Logs add diagnosis only; they do not relax timeouts, qualification or stop logic.
+
+Known open issue: an on-car serial capture recorded cutoff=1 at uptime 62832 ms,
+followed by DRIVER_INHIBIT_OR_STOP. The watchdog trigger is confirmed; the cause
+of the missed refresh is not yet established. Timing diagnostics are investigative,
+not a confirmed fix. The motor watchdog remains enabled.

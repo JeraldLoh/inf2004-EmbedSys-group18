@@ -28,7 +28,13 @@ static void wifi_telemetry(uint32_t now)
     s.stop_reasons=c.stop_reasons;s.hardware_faults=c.hardware_faults;
     s.authority_generation=c.authority_generation;s.last_command_id=wifi_command_id;
     s.communication_state=b1_is_online()?1U:0U;
-    /* No target, integrated distance or goal acknowledgement accessor here. */
+    b1_live_motion live={.at_ms=m.sampled_ms,.left_target=m.left_target_mm_s,
+        .right_target=m.right_target_mm_s,.targets_valid=1,.qualified=m.qualified,
+        .searching=c.line_searching,.searches=c.line_searches,.search_fails=c.line_search_fails,
+        .accepted=m.accepted,.rejected=m.rejected,.driver_errors=m.driver_errors,.encoder_left_counts=m.encoder_left_counts,
+        .encoder_right_counts=m.encoder_right_counts,.wheel_diameter_mm=m.wheel_diameter_mm};
+    (void)b1_submit_live_status(2,&live);
+    /* Integrated distance and goal acknowledgement are not supplied here. */
     if(b1_submit_section(2,&s,m.sampled_ms)) wifi_telemetry_at=now;
 }
 #endif
