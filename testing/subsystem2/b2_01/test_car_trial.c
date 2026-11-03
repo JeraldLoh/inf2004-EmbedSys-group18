@@ -18,7 +18,11 @@ static void init(fixture_t *f) {
     assert(!c.qualified && c.track_width_mm==112U && c.max_speed_mm_s==120U);
     assert(c.pid[0].feedforward_milli==2163U && c.pid[1].feedforward_milli==2689U);
     assert(c.linear_goal_min_speed_mm_s==60U && c.pivot_goal_min_speed_mm_s==60U);
-    assert(c.pid[0].max_effort==300U && c.pid[1].max_effort==300U);
+    assert(c.pid[0].max_effort==400U && c.pid[1].max_effort==400U);
+    /* This fixture exercises the unqualified calibration authority path, which
+     * intentionally rejects wheel caps above 30%. Production CAR_RUN instead
+     * qualifies its profile in subsystem2_motion_init(). */
+    c.pid[0].max_effort=300U; c.pid[1].max_effort=300U;
     assert(car_motion_init(&f->car,&f->motor,&f->encoder,&c,&io));
 }
 static void tick(fixture_t *f,unsigned l,unsigned r) {
@@ -46,7 +50,7 @@ int main(int argc,char **argv) {
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"pivot_cap")==0 || strcmp(argv[1],"forward_cap")==0) {
         /* Wheels held still: pivots may reach 40% (pivot_max_effort),
-         * straight goals stay at the 30% PID cap. */
+         * this bounded calibration fixture keeps straight goals at 30%. */
         bool pivot=strcmp(argv[1],"pivot_cap")==0;
         motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,
             pivot?MOTION_GOAL_PIVOT_LEFT:MOTION_GOAL_FORWARD,pivot?0:200,pivot?10000:0,100U,0U};

@@ -5,7 +5,7 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
 {
     car_motion_candidate_config(c);
     /* v6 values. Prior branch notes reported effort199 at ~92/74mm/s;
-     * 199/92 and 199/74 provide rough FF. Bounded to 30%. The car image
+     * 199/92 and 199/74 provide rough FF. Standalone calibration remains bounded to 30%. The car image
      * (CAR_RUN, CAR_B2_TRIAL defaults on) runs this profile qualified after
      * Buddy 2's sign-off on 2026-11-03 (subsystem2_motion.c); it stays
      * unqualified here for B2_MOVE_TEST and the B2 tests. */
@@ -18,9 +18,12 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
     c->linear_goal_min_speed_mm_s=60U;
     c->pivot_goal_min_speed_mm_s=60U; /* V5 pivots stalled near40mm/s; needs physical retest. */
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    /* Operator request: car wheel-output cap 40%; standalone calibration stays 30%. */
+    c->pid[0].max_effort=400U;
+    c->pid[1].max_effort=400U;
     /* Pivots get 40% (operator, 2026-11-03): on a table run the right wheel
      * stalled at 268/300 on the bypass return pivot (NO_WHEEL_PROGRESS).
-     * Straight driving and line following keep the 30% PID cap. */
+     * Straight driving and line following also use a 40% PID cap. */
     c->pivot_max_effort=400U;
     /* Straight goals: the lagging wheel stops with the first within 30 mm. */
     c->linear_sync_slack_um=30000U;
