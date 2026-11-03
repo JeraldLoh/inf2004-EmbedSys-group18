@@ -28,7 +28,10 @@ void av_config_default(av_config_t *cfg) {
     cfg->fine_half_range_deg = 70;
 
     cfg->turn_step_deg = 10;
-    cfg->turn_scan_max_deg = 90;
+    // Car trial 2026-11-03: turning the car to look past 70 deg (only 10-20
+    // deg more than the servo) swung it off course, often right before a
+    // back-off. The servo's +/-70 is the scan; 70 here turns no car.
+    cfg->turn_scan_max_deg = 70;
     cfg->turn_settle_ms = 150;
 
     cfg->detect_cm = 25.0f;
@@ -42,7 +45,7 @@ void av_config_default(av_config_t *cfg) {
     cfg->servo_settle_base_ms = 40;
     cfg->servo_ms_per_deg = 2.0f; // SG90: ~0.1 s / 60 deg, plus margin
 
-    cfg->max_rescans = 2;
+    cfg->max_rescans = 1; // in place, before reversing (was 2)
     cfg->rescan_delay_ms = 500;
     cfg->max_reverses = 2;
     cfg->reverse_cm = 10.0f;
@@ -461,6 +464,8 @@ static void on_coarse(av_t *a, uint32_t now) {
     }
 }
 
+static void start_reverse(av_t *a, uint32_t now, float cm, int attempt);
+
 // An edge on one side with room past it: enough to decide.
 static bool servo_found_a_way(const av_t *a) {
     for (int i = 0; i < 2; i++)
@@ -502,6 +507,13 @@ static void on_fine(av_t *a, uint32_t now) {
         for (int i = 0; i < 2; i++)
             if (!a->edge[i].done) finish_edge(a, i, false, a->edge[i].last_hit_dir, 0.0f);
         enter(a, AV_STATE_DECIDE);
+    } else if (a->nearest_cm < a->cfg.pivot_clearance_cm && a->backoffs < a->cfg.max_reverses) {
+        // Too close for the servo to see past the obstacle: back straight
+        // off and scan afresh from there, rather than turning the car to
+        // look (car trial 2026-11-03: turned left, back, then reversed).
+        a->backoffs++;
+        a->backing_off = false; // a fresh scan, not the reused one
+        start_reverse(a, now, a->cfg.pivot_clearance_cm - a->nearest_cm + 5.0f, a->backoffs);
     } else if (!a->edge[EDGE_RIGHT].done) {
         start_turn_scan(a, AV_STATE_TURN_SCAN_RIGHT);
     } else if (!a->edge[EDGE_LEFT].done) {

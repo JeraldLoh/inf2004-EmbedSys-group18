@@ -757,6 +757,29 @@ static void backoff_reuses_the_scan(void) {
     CHECK(av_profile(&av)->distance_cm >= 20.0f);
 }
 
+// Car trial 2026-11-03: a very close obstacle filled the servo's view, so
+// the car turned left to look, turned back, then reversed and scanned
+// again. Too close with no way past: reverse straight away, no turning,
+// and scan afresh from further back.
+static void too_close_backs_off_without_turning(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 10.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){20, 160, 6.0f, true}; // fills the servo's view
+    s.open_on_reverse = true;                   // from further back: a bottle at 12 cm
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 1);
+    CHECK_INT(s.turns, 0); // nothing turned before the bypass
+    CHECK_INT(av_metrics(&av)->rescans, 0);
+    CHECK(av_profile(&av) && av_profile(&av)->left.found && av_profile(&av)->right.found);
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    check_hygiene(&s);
+}
+
 static void edge_beyond_turn_range_is_partial(void) {
     sim_t s;
     av_t av;
@@ -829,12 +852,12 @@ static void boxed_in_rescans_reverses_then_fails(void) {
     s.bg_cm = 10.0f; // walls everywhere
     CHECK(run_until(&s, &av, AV_STATE_FAILED, 600000));
     const av_metrics_t *m = av_metrics(&av);
-    CHECK_INT(m->rescans, 6); // 2 per cycle x (1 + 2 reverses)
+    CHECK_INT(m->rescans, 3); // 1 per cycle x (1 + 2 reverses)
     CHECK_INT(m->reverses, 2);
     CHECK_INT(s.reverses, 2);
     CHECK_INT(m->failures, 1);
     CHECK_INT(s.bypasses, 0);
-    CHECK_INT(s.max_abs_heading, s.cfg.turn_scan_max_deg);
+    CHECK_INT(s.max_abs_heading, 0); // the servo scans; the car never turns to look
     CHECK(av_fail_reason(&av) != NULL && strstr(av_fail_reason(&av), "no clear path"));
     CHECK(!s.motion_active); // stopped on failure
 
@@ -1288,6 +1311,7 @@ void run_avoidance_tests(void) {
     RUN(wide_servo_does_not_turn_when_one_side_is_open);
     RUN(close_obstacle_backs_off_before_turning);
     RUN(backoff_reuses_the_scan);
+    RUN(too_close_backs_off_without_turning);
     RUN(edge_beyond_turn_range_is_partial);
     RUN(flipped_servo_mounting);
     RUN(back_to_back_encounters_accumulate_metrics);
