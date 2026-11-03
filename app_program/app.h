@@ -19,6 +19,9 @@
 #ifndef APP_CAR_B2_TRIAL
 #define APP_CAR_B2_TRIAL 0 /* explicit bounded integrated trial, not production qualification */
 #endif
+#ifndef APP_OBSTACLE_TABLE
+#define APP_OBSTACLE_TABLE 0 /* trial car on a table: straight drive, bypass, stop */
+#endif
 #ifndef APP_B5_RUN
 #define APP_B5_RUN 0     /* 1 = Buddy 5 obstacle task + controller, motors off */
 #endif

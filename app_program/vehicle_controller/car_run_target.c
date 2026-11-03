@@ -89,10 +89,25 @@ static bool controller_drive(void *context, const motion_continuous_request_t *r
     return subsystem2_motion_continuous(request);
 }
 
+#if APP_OBSTACLE_TABLE
+/* Table test: no line. The controller drives straight (steer 0, never lost),
+ * junctions and barcodes are ignored, and Buddy 5 sees no line during the
+ * bypass. Its line search after the bypass "finds" the line at once, so the
+ * encounter ends normally; the supervisor then stops the car. */
+static volatile bool table_bypass_done;
+#endif
+
 static bool controller_read_line(void *context, controller_line_input_t *line)
 {
     line_status_t status = subsystem3_line_status();
     (void)context;
+#if APP_OBSTACLE_TABLE
+    (void)status;
+    line->steer = 0;
+    line->barcode_active = false;
+    line->on_line = true;
+    return true;
+#endif
     line->steer = subsystem3_steer();
     line->barcode_active = status.barcode_active != 0U;
     line->on_line = (status.left_black != 0U) || (status.right_black != 0U);
@@ -103,18 +118,29 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
 static bool junction_take_route(void *context, route_instruction_t *route)
 {
     (void)context;
+#if APP_OBSTACLE_TABLE
+    (void)route;
+    return false;
+#endif
     return subsystem3_take_route(route) != FALSE;
 }
 
 static bool junction_take(void *context, junction_observation_t *junction)
 {
     (void)context;
+#if APP_OBSTACLE_TABLE
+    (void)junction;
+    return false;
+#endif
     return subsystem3_take_junction(junction) != FALSE;
 }
 
 static bool junction_probe_requested(void *context)
 {
     (void)context;
+#if APP_OBSTACLE_TABLE
+    return false;
+#endif
     return subsystem3_probe_requested() != FALSE;
 }
 
@@ -154,6 +180,10 @@ static bool urgent_stop(void)
 static bool line_seen(void)
 {
     line_status_t status = subsystem3_line_status();
+#if APP_OBSTACLE_TABLE
+    (void)status;
+    return table_bypass_done;
+#endif
     return (status.state != LINE_STATE_REACQUIRE) &&
         ((status.left_black != 0U) || (status.right_black != 0U));
 }
@@ -183,6 +213,11 @@ static bool line_lost(uint32_t *last_line_ms, uint32_t now)
 
 static void line_reacquire(bool toward_left)
 {
+#if APP_OBSTACLE_TABLE
+    (void)toward_left;
+    table_bypass_done = true;
+    return;
+#endif
     subsystem3_reacquire(toward_left ? LINE_SIDE_LEFT : LINE_SIDE_RIGHT);
 }
 
@@ -421,12 +456,18 @@ static void supervise(void)
                     running = true;
                     started_ms = t;
                     last_line_ms = t;
+#if APP_OBSTACLE_TABLE
+                    table_bypass_done = false;
+                    tm_printf((UB*)"[TABLE] RUN: driving straight at the trial speed; "
+                        "obstacle under 25 cm = stop, scan, bypass, stop.\n");
+#else
                     if (CAR_RUN_LIMIT_MS == 0U)
                     { tm_printf((UB*)"[CAR] RUN: following the line (no time limit)\n"); }
                     else
                     { tm_printf((UB*)"[CAR] RUN: following the line (limit %lu s)\n",
                         (unsigned long)(CAR_RUN_LIMIT_MS / 1000U)); }
-                    if (!subsystem3_barcode_calibrated())
+#endif
+                    if (!APP_OBSTACLE_TABLE && !subsystem3_barcode_calibrated())
                     {
                         tm_printf((UB*)"[CAR] barcode NOT calibrated: barcodes ignored, "
                             "junction fallback policy applies. Reset to recalibrate.\n");
@@ -438,6 +479,14 @@ static void supervise(void)
         {
             stop_run(&running, "run time limit", STOP_REASON_NONE);
         }
+#if APP_OBSTACLE_TABLE
+        else if (table_bypass_done)
+        {
+            table_bypass_done = false;
+            stop_run(&running, "table test: bypass done, back on the starting heading. "
+                "Reposition, then GP20 runs again", STOP_REASON_NONE);
+        }
+#endif
         else if (line_lost(&last_line_ms, t))
         {
             stop_run(&running, "line lost (configured no-black timeout); GP20 restarts",
@@ -490,6 +539,12 @@ static void supervisor_task(INT code, void *exinf)
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }
 #if APP_CAR_MQTT
     tm_printf((UB*)"[CAR] Buddy 1 LIVE MQTT enabled: B2/B3/B5 telemetry and controller START/STOP.\n");
+#endif
+#if APP_OBSTACLE_TABLE
+    tm_printf((UB*)"[TABLE] OBSTACLE TABLE TEST: no line following; line sensors, junctions and\n");
+    tm_printf((UB*)"        barcodes are ignored. Drives STRAIGHT until an obstacle is under 25 cm,\n");
+    tm_printf((UB*)"        then scans, bypasses and stops facing the starting direction.\n");
+    tm_printf((UB*)"        Clear table ~40 cm to each side and ~1 m ahead. Hand on GP21 STOP.\n");
 #endif
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
     tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");

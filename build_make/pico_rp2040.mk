@@ -170,6 +170,19 @@ endif
 TEST_SUFFIX := _carrun_b2trial
 endif
 
+# Obstacle avoidance on a table: the trial car drives straight with the line
+# sensors ignored, bypasses an obstacle, then stops. Not for the track.
+OBSTACLE_TABLE ?= 0
+ifneq ($(filter $(OBSTACLE_TABLE),0 1),$(OBSTACLE_TABLE))
+$(error OBSTACLE_TABLE must be 0 or 1)
+endif
+ifeq ($(OBSTACLE_TABLE),1)
+ifneq ($(CAR_B2_TRIAL),1)
+$(error OBSTACLE_TABLE=1 requires CAR_RUN=1 CAR_B2_TRIAL=1)
+endif
+TEST_SUFFIX := _carrun_table
+endif
+
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
 CIRCUIT_TEST ?= 0
 ifneq ($(filter $(CIRCUIT_TEST),0 1),$(CIRCUIT_TEST))
@@ -336,6 +349,7 @@ CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
+CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
 ifeq ($(B2_MOVE_TEST),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 endif
