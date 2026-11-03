@@ -57,11 +57,6 @@ void av_config_default(av_config_t *cfg) {
     // line had already turned. Past the obstacle's front; the plan adds the
     // distance to reach it when the turn out is steep (obstacle_plan_bypass).
     cfg->bypass_pass_cm = 20.0f;
-    // Table run 2026-11-03: a fixed 20 cm past the front took ~80 cm of
-    // driving for one bottle. Pass its width (the sonar sees no depth, so a
-    // round obstacle's width stands in for it) plus this; bypass_pass_cm is
-    // the cap, and the pass when one edge was not found.
-    cfg->bypass_pass_margin_cm = 5.0f;
     // Car trial 2026-11-02: the straight leg out from the line was 30-40 cm
     // and the right wheel stalled on it (NO_WHEEL_PROGRESS) before the car
     // ever turned back. Turning out steeply keeps it to lateral / sin 60.
@@ -116,7 +111,6 @@ const char *av_config_check(const av_config_t *c) {
     if (!(c->pivot_clearance_cm >= 0.0f)) return "pivot_clearance_cm must be >= 0";
     if (!(c->bypass_side_margin_cm >= 0.0f)) return "bypass_side_margin_cm must be >= 0";
     if (!(c->bypass_pass_cm > 0.0f)) return "bypass_pass_cm must be > 0";
-    if (!(c->bypass_pass_margin_cm >= 0.0f)) return "bypass_pass_margin_cm must be >= 0";
     if (c->bypass_min_turn_deg < 1 || c->bypass_max_turn_deg > 89 ||
         c->bypass_min_turn_deg > c->bypass_max_turn_deg)
         return "bypass turn limits must satisfy 1 <= min <= max <= 89";
@@ -610,13 +604,6 @@ static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
     emit(a, now, &e);
 }
 
-// How far past the obstacle's front before turning back.
-static float pass_beyond_cm(const av_t *a) {
-    if (!a->profile.left.found || !a->profile.right.found) return a->cfg.bypass_pass_cm;
-    float cm = a->profile.width_cm + a->cfg.bypass_pass_margin_cm;
-    return cm < a->cfg.bypass_pass_cm ? cm : a->cfg.bypass_pass_cm;
-}
-
 static void on_decide(av_t *a, uint32_t now) {
     // A bypass starts with a pivot. Too close and the front corner sweeps into
     // the obstacle (or a stalled wheel turns the pivot into a forward arc), so
@@ -668,7 +655,7 @@ static void on_decide(av_t *a, uint32_t now) {
         }
         a->off_line = true;
         a->plan = obstacle_plan_bypass(&a->profile, a->choice.side, a->cfg.bypass_side_margin_cm,
-                                       pass_beyond_cm(a), a->cfg.bypass_min_turn_deg,
+                                       a->cfg.bypass_pass_cm, a->cfg.bypass_min_turn_deg,
                                        a->cfg.bypass_max_turn_deg);
         if (a->cfg.turn_radius_cm > 0.0f) {
             a->plan.out_cm = obstacle_arc_out_cm(&a->plan, a->cfg.turn_radius_cm);

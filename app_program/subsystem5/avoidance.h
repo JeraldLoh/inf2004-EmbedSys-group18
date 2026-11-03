@@ -128,8 +128,7 @@ typedef struct {
     float pivot_clearance_cm; // nearest hit must be this far before turning, else back off; 0 disables
 
     float bypass_side_margin_cm; // car center passes this far outside the edge
-    float bypass_pass_cm;        // longest pass beyond the obstacle's front
-    float bypass_pass_margin_cm; // pass = obstacle width + this, up to bypass_pass_cm
+    float bypass_pass_cm;        // straight leg alongside the obstacle
     int bypass_min_turn_deg;
     int bypass_max_turn_deg;
     float turn_radius_cm;        // car turns are forward arcs of this radius; 0 = pivots
