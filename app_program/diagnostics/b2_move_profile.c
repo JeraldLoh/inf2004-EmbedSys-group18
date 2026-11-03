@@ -16,9 +16,10 @@ void b2_move_candidate_profile(measured_motion_executor_config_t *c)
     c->linear_goal_min_speed_mm_s=60U;
     c->pivot_goal_min_speed_mm_s=60U; /* V5 pivots stalled near40mm/s; needs physical retest. */
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-    /* Pivots stay at the 30% cap (operator, 2026-11-02). 45% was tried for
-     * stalled pivots; set pivot_max_effort=450U to use it again. */
-    c->pivot_max_effort=0U;
+    /* Pivots get 40% (operator, 2026-11-03): on a table run the right wheel
+     * stalled at 268/300 on the bypass return pivot (NO_WHEEL_PROGRESS).
+     * Straight driving and line following keep the 30% PID cap. */
+    c->pivot_max_effort=400U;
     /* Straight goals: the lagging wheel stops with the first within 30 mm. */
     c->linear_sync_slack_um=30000U;
     /* Pivots: 20 mm (at most ~10 deg short on a 60 deg pivot), half the

@@ -526,13 +526,19 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         }
         /* Car trial 2026-11-02: pivots stalled at the 30% cap (one wheel
          * stuck at effort 300, NO_WHEEL_PROGRESS). Pivot goals may use
-         * pivot_max_effort; everything else keeps the PID cap. */
+         * pivot_max_effort; everything else keeps the PID cap. The integral
+         * limit and launch effort get the same headroom: feedforward + P +
+         * a 100 integral only reach ~310 on a stuck wheel at 50 mm/s, so a
+         * higher cap alone is never used (table run 2026-11-03: 268). */
         {
+            const wheel_pid_config_t *base = &e->config.pid[i];
             bool pivot = e->status.state == MOTION_EXEC_GOAL &&
                 (e->goal.type == MOTION_GOAL_PIVOT_LEFT || e->goal.type == MOTION_GOAL_PIVOT_RIGHT);
-            e->pid[i].config.max_effort =
-                (pivot && e->config.pivot_max_effort > e->config.pid[i].max_effort)
-                ? e->config.pivot_max_effort : e->config.pid[i].max_effort;
+            uint16_t extra = (pivot && e->config.pivot_max_effort > base->max_effort)
+                ? (uint16_t)(e->config.pivot_max_effort - base->max_effort) : 0U;
+            e->pid[i].config.max_effort = (uint16_t)(base->max_effort + extra);
+            e->pid[i].config.integral_limit = (uint16_t)(base->integral_limit + extra);
+            e->pid[i].config.launch_effort = (uint16_t)(base->launch_effort + extra);
         }
         if (!wheel_pid_step(&e->pid[i], e->ramp_um_s[i], e->measurement.sample.speed_um_s[i], dt, &duty))
         { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_PID_INPUT, (uint8_t)(1U << i)); return MOTION_UNAVAILABLE; }

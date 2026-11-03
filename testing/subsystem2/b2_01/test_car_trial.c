@@ -45,13 +45,13 @@ int main(int argc,char **argv) {
         assert(!car_motion_enable_trial(&f.car,15000001U));
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"pivot_cap")==0 || strcmp(argv[1],"forward_cap")==0) {
-        /* Wheels held still: pivots and straight goals both stay at 30%
-         * (pivot_max_effort is 0 in the trial profile). */
+        /* Wheels held still: pivots may reach 40% (pivot_max_effort),
+         * straight goals stay at the 30% PID cap. */
         bool pivot=strcmp(argv[1],"pivot_cap")==0;
         motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,
             pivot?MOTION_GOAL_PIVOT_LEFT:MOTION_GOAL_FORWARD,pivot?0:200,pivot?10000:0,100U,0U};
         int peak=0;
-        assert(f.car.executor.config.pivot_max_effort==0U);
+        assert(f.car.executor.config.pivot_max_effort==400U);
         assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
         for(i=0U;i<60U && !f.car.executor.status.terminal_pending;++i) {
             motion_motor_state_t state; int l,rr;
@@ -62,7 +62,7 @@ int main(int argc,char **argv) {
             if(l>peak) { peak=l; }
             if(rr>peak) { peak=rr; }
         }
-        assert(peak==300);
+        assert(peak==(pivot?400:300));
         car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"sync")==0 || strcmp(argv[1],"sync_far")==0) {
         /* Straight 200 mm; the left wheel stops 20 mm (sync) or 50 mm
