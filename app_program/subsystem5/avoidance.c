@@ -34,7 +34,7 @@ void av_config_default(av_config_t *cfg) {
     cfg->turn_scan_max_deg = 70;
     cfg->turn_settle_ms = 150;
 
-    cfg->detect_cm = 25.0f;
+    cfg->detect_cm = 20.0f; // operator 2026-11-03 (was 25)
     cfg->clear_hysteresis_cm = 5.0f;
     cfg->detect_confirm_count = 2;
     cfg->edge_margin_cm = 8.0f;
@@ -43,7 +43,9 @@ void av_config_default(av_config_t *cfg) {
     cfg->emergency_stop_cm = 6.0f;
 
     cfg->servo_settle_base_ms = 40;
-    cfg->servo_ms_per_deg = 2.0f; // SG90: ~0.1 s / 60 deg, plus margin
+    // The scan servo sweeps at 300 deg/s (subsystem5.c), not the SG90's full
+    // ~600 deg/s: 3.3 ms/deg plus margin.
+    cfg->servo_ms_per_deg = 4.0f;
 
     cfg->max_rescans = 1; // in place, before reversing (was 2)
     cfg->rescan_delay_ms = 500;
@@ -51,9 +53,9 @@ void av_config_default(av_config_t *cfg) {
     cfg->reverse_cm = 10.0f;
     // Car trial 2026-11-02: a bottle on a curve was first seen at 6 cm and the
     // bypass turn from there hit it. Back off to this range before turning.
-    // 15 cm for pivots; use 20 with arc turns, which carry the car 6-9 cm
-    // forward while turning.
-    cfg->pivot_clearance_cm = 15.0f;
+    // 10 cm for pivots (operator 2026-11-03, was 15); use 20 with arc turns,
+    // which carry the car 6-9 cm forward while turning.
+    cfg->pivot_clearance_cm = 10.0f;
 
     cfg->bypass_side_margin_cm = 15.0f; // half the car width plus a few cm
     // Car trial 2026-11-02: on a curve, 30 cm took the car past where the

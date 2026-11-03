@@ -348,8 +348,8 @@ static void default_config_is_valid(void) {
     av_config_t c;
     av_config_default(&c);
     CHECK(av_config_check(&c) == NULL);
-    CHECK_NEAR(c.detect_cm, 25.0f, 1e-6);
-    CHECK_NEAR(c.pivot_clearance_cm, 15.0f, 1e-6);
+    CHECK_NEAR(c.detect_cm, 20.0f, 1e-6);
+    CHECK_NEAR(c.pivot_clearance_cm, 10.0f, 1e-6);
     CHECK_INT(c.bypass_min_turn_deg, 60);
     CHECK_NEAR(c.turn_radius_cm, 0.0f, 1e-6); // pivots
     CHECK_NEAR(c.path_half_width_cm, 10.0f, 1e-6);
@@ -448,14 +448,14 @@ static void no_obstacle_stays_passive(void) {
     check_hygiene(&s);
 }
 
-static void detects_at_25_cm(void) {
+static void detects_at_20_cm(void) {
     sim_t s;
     av_t av;
     sim_setup(&s, &av, 0);
-    s.obstacle = (blob_t){80, 100, 26.0f, true}; // just outside
+    s.obstacle = (blob_t){80, 100, 21.0f, true}; // just outside
     run_ms(&s, &av, 3000);
     CHECK_INT(av_metrics(&av)->detections, 0);
-    s.obstacle.cm = 24.0f; // just inside
+    s.obstacle.cm = 19.0f; // just inside
     run_ms(&s, &av, 1000);
     CHECK_INT(av_metrics(&av)->detections, 1);
 }
@@ -510,7 +510,7 @@ static void turn_scan_finds_edges_beyond_servo(void) {
     sim_t s;
     av_t av;
     sim_setup_narrow(&s, &av, 0);
-    s.obstacle = (blob_t){70, 110, 20.0f, true}; // +/-20 deg: outside the servo's reach
+    s.obstacle = (blob_t){70, 110, 18.0f, true}; // +/-20 deg: outside the servo's reach
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
     const obstacle_profile_t *p = av_profile(&av);
     CHECK(p && p->left.found && p->right.found);
@@ -518,7 +518,7 @@ static void turn_scan_finds_edges_beyond_servo(void) {
         // Turn to 30 deg is clear, servo looks back 5 deg: still clear -> edge 22.5.
         CHECK_NEAR(p->left.angle_deg, 22.5f, 1e-4);
         CHECK_NEAR(p->right.angle_deg, -22.5f, 1e-4);
-        float true_width = 2.0f * 20.0f * 0.34202f; // 2 r sin(20)
+        float true_width = 2.0f * 18.0f * 0.34202f; // 2 r sin(20)
         CHECK(p->width_cm > 0.9f * true_width && p->width_cm < 1.15f * true_width);
     }
     CHECK_INT(s.max_abs_heading, 30);
@@ -1069,7 +1069,7 @@ static void out_leg_is_short_with_arc_turns(void) {
     s.cfg.turn_radius_cm = 9.0f; // arc turns
     av_platform_t p = platform_for(&s);
     CHECK(av_init(&av, &s.cfg, &p));
-    s.obstacle = (blob_t){80, 100, 22.0f, true};
+    s.obstacle = (blob_t){80, 100, 18.0f, true};
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
     CHECK(s.last_plan.turn_deg >= 60);
     CHECK(s.last_plan.out_cm < 20.0f);
@@ -1082,7 +1082,7 @@ static void pivot_plan_passes_the_obstacle(void) {
     sim_t s;
     av_t av;
     sim_setup(&s, &av, 0);
-    s.obstacle = (blob_t){80, 100, 22.0f, true};
+    s.obstacle = (blob_t){80, 100, 18.0f, true};
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
     const obstacle_profile_t *pr = av_profile(&av);
     bypass_plan_t pl = s.last_plan;
@@ -1296,7 +1296,7 @@ void run_avoidance_tests(void) {
     RUN(invalid_configs_rejected);
     RUN(init_rejects_incomplete_platform);
     RUN(no_obstacle_stays_passive);
-    RUN(detects_at_25_cm);
+    RUN(detects_at_20_cm);
     RUN(single_spike_is_debounced);
     RUN(too_close_counts_as_obstacle);
     RUN(narrow_obstacle_needs_no_car_turns);

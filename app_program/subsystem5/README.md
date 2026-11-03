@@ -112,15 +112,15 @@ together when it is within 20 mm. Forward arcs (both wheels forward, R ~9 cm,
 timed) were tried but carried the car well off the line and their slow inner
 wheel stalled. Set `arc_turns = true`
 and `turn_radius_cm = 9` to use them again. Before turning, the nearest scan
-hit must be at least 15 cm (`pivot_clearance_cm`); if not, the car reverses to
+hit must be at least 10 cm (`pivot_clearance_cm`); if not, the car reverses to
 get that room and plans from the scan it already has. The turn out is at least
 60 deg so the drive out stays short, and the pass beside the obstacle is
 lengthened to reach past its front.
 
 Scan (`av_config_default()`): the servo mount was freed on 2026-11-02, so the
 scan covers 20..160 deg (+/-70) in 10 deg steps and the car stays still while
-scanning. The car only turns to look further for an edge beyond 70 deg (up to
-90). Detection stays at 25 cm.
+scanning; it does not turn to look past 70 deg (`turn_scan_max_deg` = 70), and
+if it is too close to see a way past it reverses and scans again. Detection is at 20 cm. The servo sweeps at 300 deg/s rather than jumping.
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

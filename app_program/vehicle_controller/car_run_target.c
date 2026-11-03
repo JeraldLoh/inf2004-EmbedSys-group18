@@ -459,7 +459,7 @@ static void supervise(void)
 #if APP_OBSTACLE_TABLE
                     table_bypass_done = false;
                     tm_printf((UB*)"[TABLE] RUN: driving straight at the trial speed; "
-                        "obstacle under 25 cm = stop, scan, bypass, stop.\n");
+                        "obstacle under 20 cm = stop, scan, bypass, stop.\n");
 #else
                     if (CAR_RUN_LIMIT_MS == 0U)
                     { tm_printf((UB*)"[CAR] RUN: following the line (no time limit)\n"); }
@@ -542,7 +542,7 @@ static void supervisor_task(INT code, void *exinf)
 #endif
 #if APP_OBSTACLE_TABLE
     tm_printf((UB*)"[TABLE] OBSTACLE TABLE TEST: no line following; line sensors, junctions and\n");
-    tm_printf((UB*)"        barcodes are ignored. Drives STRAIGHT until an obstacle is under 25 cm,\n");
+    tm_printf((UB*)"        barcodes are ignored. Drives STRAIGHT until an obstacle is under 20 cm,\n");
     tm_printf((UB*)"        then scans, bypasses and stops facing the starting direction.\n");
     tm_printf((UB*)"        Clear table ~40 cm to each side and ~1 m ahead. Hand on GP21 STOP.\n");
 #endif

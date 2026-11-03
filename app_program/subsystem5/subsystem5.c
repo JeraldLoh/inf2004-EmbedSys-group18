@@ -57,10 +57,33 @@ static uint32_t cb_now_ms(void *ctx)
     return (uint32_t)now.lo;
 }
 
+/* Car trial 2026-11-03: the servo jumped straight to each new angle (up to
+ * 140 deg at once), which looked violent and erratic. It now sweeps to the
+ * target at B5_SERVO_MDEG_PER_MS; avoidance's servo_ms_per_deg waits for
+ * the sweep before reading. */
+#define B5_SERVO_MDEG_PER_MS 300 /* 300 deg/s */
+static int32_t servo_target_mdeg;
+static int32_t servo_pos_mdeg;
+static uint32_t servo_step_ms;
+
+static void servo_service(uint32_t now)
+{
+    uint32_t dt = now - servo_step_ms;
+    int32_t limit = (int32_t)(dt > 100U ? 100U : dt) * B5_SERVO_MDEG_PER_MS;
+    int32_t diff = servo_target_mdeg - servo_pos_mdeg;
+    servo_step_ms = now;
+    if (diff == 0) { return; }
+    if (diff > limit) { diff = limit; }
+    if (diff < -limit) { diff = -limit; }
+    servo_pos_mdeg += diff;
+    drv_servo_set_angle(&servo, (int)((servo_pos_mdeg + 500) / 1000));
+}
+
 static void cb_servo_set(void *ctx, int angle_deg)
 {
     (void)ctx;
-    drv_servo_set_angle(&servo, angle_deg);
+    servo_target_mdeg = (int32_t)angle_deg * 1000;
+    servo_service(cb_now_ms(NULL));
 }
 
 static range_reading_t cb_measure(void *ctx)
@@ -354,6 +377,7 @@ static void subsystem5_task(INT stacd, void *exinf)
             b5_bridge_init(&bridge);
         }
         armed = now_armed;
+        servo_service(cb_now_ms(NULL));
         if (armed)
         {
             b5_motion_service(&motion, cb_now_ms(NULL));
@@ -445,6 +469,9 @@ EXPORT ER subsystem5_init(void)
     {
         return er;
     }
+    servo_target_mdeg = (int32_t)cfg.center_deg * 1000;
+    servo_pos_mdeg = servo_target_mdeg;
+    servo_step_ms = cb_now_ms(NULL);
     er = drv_sonar_init(&sonar, bindings.dispatcher, PIN_SONAR_TRIGGER,
         PIN_SONAR_ECHO);
     if (er != E_OK)
