@@ -75,12 +75,15 @@ ifneq ($(strip $(C_DEPS)),)
 endif
 endif
 
+# The object list goes to the linker in a file (@file): with WiFi/lwIP/MQTT
+# the command line passes Windows' 8191-character limit and gets cut off.
 # All EXE_FILE
 all: $(EXE_FILE).elf
 
 $(EXE_FILE).elf: $(OBJS)
 	@echo 'Linker: $@'
-	$(LINK)  $(LFLAGS) -T $(LNKFILE) -Wl,-Map,"$(EXE_FILE).map" -o "$(EXE_FILE).elf" $(OBJS)
+	$(file >$(EXE_FILE).objs,$(OBJS))
+	$(LINK)  $(LFLAGS) -T $(LNKFILE) -Wl,-Map,"$(EXE_FILE).map" -o "$(EXE_FILE).elf" @$(EXE_FILE).objs
 	@echo 'Finished building target: $@'
 ifneq ($(SIZE),)
 	$(SIZE) $(EXE_FILE).elf
@@ -92,7 +95,7 @@ endif
 
 # Other EXE_FILEs
 clean:
-	-$(RM) $(OBJS) $(SECONDARY_SIZE) $(ASM_DEPS) $(S_UPPER_DEPS) $(C_DEPS) $(EXE_FILE).elf $(EXE_FILE).map
+	-$(RM) $(OBJS) $(SECONDARY_SIZE) $(ASM_DEPS) $(S_UPPER_DEPS) $(C_DEPS) $(EXE_FILE).elf $(EXE_FILE).map $(EXE_FILE).objs
 	-@echo ' '
 
 .PHONY: all clean dependents

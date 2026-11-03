@@ -532,6 +532,10 @@ static void supervisor_task(INT code, void *exinf)
             failure, (int)er);
         tk_ext_tsk();
     }
+#if APP_CAR_B2_TRIAL
+    if(subsystem2_motion_qualified())
+    { tm_printf((UB*)"[CAR B2] v6 wheel PID, QUALIFIED (Buddy 2 sign-off 2026-11-03). Manual START,no run limit,30%% effort (pivots 40%%),100ms watchdog.\n"); }
+#endif
     if(subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR B2 TRIAL] Buddy3 restored to prior testing source/steering; 50mm/s B2 trial; junction-pause fix; v6 wheel PID. Production qualification FALSE. Manual START,no run limit,30%% effort (pivots 40%%),100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");

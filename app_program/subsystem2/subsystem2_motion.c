@@ -80,7 +80,7 @@ static void diagnostic_worker(INT code, void *exinf)
     (void)code; (void)exinf;
     for (;;) {
         if (started && !announced) {
-            tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u.%u%% min_line_wheel=%umm/s UNQUALIFIED; this configuration supersedes older CAR banner speed text.\n",
+            tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u.%u%% min_line_wheel=%umm/s QUALIFIED (Buddy 2 sign-off 2026-11-03); this configuration supersedes older CAR banner speed text.\n",
                 B2_FIRMWARE_TAG, (unsigned)CONTROLLER_LINE_CRUISE_MM_S,
                 (unsigned long)CONTROLLER_LINE_CURVATURE_PER_STEER,
                 (unsigned)CAR_TRIAL_LINE_INNER_SPEED_PERCENT,
@@ -190,14 +190,15 @@ ER subsystem2_motion_init(const b2_trial_io_t *trial_io)
     io = *trial_io;
 #if APP_CAR_B2_TRIAL
     b2_move_candidate_profile(&config); /* Exact standalone v6 parameter builder. */
+    /* Buddy 2 signed off this profile for driving (operator, 2026-11-03), so
+     * the car runs it qualified: START needs no trial authority and there is
+     * no overall run limit. Physical STOP, command leases and faults remain.
+     * The profile itself stays unqualified for B2_MOVE_TEST and the B2 tests. */
+    config.qualified = true;
 #else
     car_motion_candidate_config(&config);
 #endif
     if (!car_motion_init(&motion, motor, encoder, &config, &measured_io)) { return E_PAR; }
-#if APP_CAR_B2_TRIAL
-    /* No overall run limit: physical STOP, command leases and faults remain. */
-    if(!car_motion_enable_trial(&motion,MEASURED_MOTION_NO_RUN_LIMIT)) { return E_PAR; }
-#endif
     mtx.mtxatr = TA_INHERIT;
     guard = tk_cre_mtx(&mtx);
     if (guard < E_OK) { return guard; }

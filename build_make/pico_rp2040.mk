@@ -155,19 +155,38 @@ endif
 TEST_SUFFIX := _carrun
 endif
 
-# Explicit supervised integration trial; normal CAR_RUN remains qualification-gated.
+# Car motion configuration. CAR_RUN=1 uses Buddy 2's v6 profile and tuning,
+# qualified (Buddy 2 sign-off 2026-11-03): this is the official car. The flag
+# keeps its historical name. CAR_B2_TRIAL=0 selects the old zero-gain
+# placeholder profile instead, for diagnosis only: it refuses START.
+ifeq ($(CAR_RUN),1)
+CAR_B2_TRIAL ?= 1
+else
 CAR_B2_TRIAL ?= 0
+endif
 ifneq ($(filter $(CAR_B2_TRIAL),0 1),$(CAR_B2_TRIAL))
 $(error CAR_B2_TRIAL must be 0 or 1)
 endif
 ifeq ($(CAR_B2_TRIAL),1)
+# The v6 profile is qualified (Buddy 2 sign-off 2026-11-03), so it may also run
+# with Buddy 1's WiFi/MQTT link (CAR_MQTT=1, checked above).
+ifeq ($(CAR_MQTT),1)
+ifneq ($(CAR_RUN)$(SMP)$(CONSOLE)$(TEST),11usb_cdc0)
+$(error CAR_B2_TRIAL=1 CAR_MQTT=1 requires CAR_RUN=1 SMP=1 CONSOLE=usb_cdc TEST=0)
+endif
+else
 ifneq ($(CAR_RUN)$(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),11usb_cdcnonenone00)
 $(error CAR_B2_TRIAL=1 requires CAR_RUN=1 SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
 endif
-ifneq ($(CRASH_REPORT),0)
+endif
+# CRASH_REPORT gets its 0 default further down; unset here means 0.
+ifneq ($(filter-out 0,$(CRASH_REPORT)),)
 $(error CAR_B2_TRIAL=1 requires CRASH_REPORT=0)
 endif
-TEST_SUFFIX := _carrun_b2trial
+TEST_SUFFIX := _carrun
+endif
+ifeq ($(CAR_RUN)$(CAR_B2_TRIAL),10)
+TEST_SUFFIX := _carrun_unqualified
 endif
 
 # Obstacle avoidance on a table: the trial car drives straight with the line
@@ -350,6 +369,12 @@ CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
+ifeq ($(CAR_MQTT),1)
+# The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
+# The radio service shares core 0, so keep it below the car's control tasks
+# (motor 6, supervisor 9, controller 10, Buddy 5 12) and above Buddy 1 (18).
+CFLAGS  += -DCYW43_TASK_PRIORITY=13
+endif
 ifeq ($(B2_MOVE_TEST),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 endif

@@ -4,9 +4,11 @@
 void b2_move_candidate_profile(measured_motion_executor_config_t *c)
 {
     car_motion_candidate_config(c);
-    /* UNTUNED starting values, not calibration evidence. Prior branch notes
-     * reported effort199 at ~92/74mm/s. 199/92 and 199/74 provide rough FF.
-     * Bound all tests to30%; normal CAR_RUN remains unqualified with zero gains. */
+    /* v6 values. Prior branch notes reported effort199 at ~92/74mm/s;
+     * 199/92 and 199/74 provide rough FF. Bounded to 30%. The car image
+     * (CAR_RUN, CAR_B2_TRIAL defaults on) runs this profile qualified after
+     * Buddy 2's sign-off on 2026-11-03 (subsystem2_motion.c); it stays
+     * unqualified here for B2_MOVE_TEST and the B2 tests. */
     c->pid[0]=(wheel_pid_config_t){1500U,1500U,0U,2163U,300U,100U,300U,500000U};
     c->pid[1]=(wheel_pid_config_t){1500U,1500U,0U,2689U,300U,100U,300U,500000U};
     c->max_speed_mm_s=120U; c->max_goal_mm=1000U;
