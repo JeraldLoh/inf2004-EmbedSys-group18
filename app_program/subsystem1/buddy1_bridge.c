@@ -108,9 +108,11 @@ int b1_submit_section(unsigned int id,const void *section,unsigned int at) {
  /* Scratch is protected by guard, avoiding a full snapshot on sensor stacks. */
  static b1_binary_snapshot candidate;
  b1_validation_error error;
- if(!section || (id!=2 && id!=3 && id!=5)) return 0;
+ if(!section || (id!=2 && id!=3 && id!=4 && id!=5)) return 0;
  if(!lock()){count_busy();return 0;}
  candidate=latest;
+ /* Section 4 is Buddy 4's own 17-byte frame (s4_telemetry_pack), copied as is. */
+ if(id==4){memcpy(candidate.s4,section,sizeof candidate.s4);candidate.s4_at_ms=at;candidate.present|=B1_SECTION_4;}
  if(id==2){candidate.s2=*(const b1_s2_telemetry*)section;candidate.s2_at_ms=at;candidate.present|=B1_SECTION_2;candidate.fault_mask=candidate.s2.hardware_faults;}
  if(id==3){candidate.s3=*(const b1_s3_telemetry*)section;candidate.s3_at_ms=at;candidate.present|=B1_SECTION_3;}
  if(id==5){candidate.s5=*(const b1_s5_telemetry*)section;candidate.s5_at_ms=at;candidate.present|=B1_SECTION_5;}

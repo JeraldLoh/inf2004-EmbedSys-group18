@@ -80,22 +80,26 @@ void s4_est_default_config(s4_cfg_t *cfg)
     cfg->confirm_samples = S4_CONFIRM_SAMPLES;
     cfg->cal_max_retries = S4_CAL_MAX_RETRIES;
     cfg->cal_samples = S4_CAL_SAMPLES;
+    cfg->climb_nose_down = S4_CLIMB_NOSE_DOWN;
     cfg->level_ddeg = S4_LEVEL_DDEG;
-    cfg->ascend_ddeg = S4_ASCEND_DDEG;
-    cfg->descend_ddeg = S4_DESCEND_DDEG;
+    cfg->dip_ddeg = S4_DIP_DDEG;
+    cfg->raise_on_mm = S4_RAISE_ON_MM;
+    cfg->raise_off_mm = S4_RAISE_OFF_MM;
     cfg->min_hump_mm = S4_MIN_HUMP_MM;
     cfg->base_uncertainty_mm = S4_BASE_UNCERTAINTY_MM;
     cfg->cal_max_spread_mg = S4_CAL_MAX_SPREAD_MG;
     cfg->still_vib_mg = S4_STILL_VIB_MG;
     cfg->long_accel_mg = S4_LONG_ACCEL_MG;
     cfg->settle_ms = S4_SETTLE_MS;
-    cfg->crest_timeout_ms = S4_CREST_TIMEOUT_MS;
     cfg->episode_timeout_ms = S4_EPISODE_TIMEOUT_MS;
+    cfg->launch_holdoff_ms = S4_LAUNCH_HOLDOFF_MS;
     cfg->min_length_mm = S4_MIN_HUMP_LENGTH_MM;
     cfg->max_length_mm = S4_MAX_HUMP_LENGTH_MM;
     cfg->hump_cap_mm_s = S4_HUMP_CAP_MM_S;
     cfg->degraded_cap_mm_s = S4_DEGRADED_CAP_MM_S;
     cfg->tilt_limit_ddeg = S4_TILT_LIMIT_DDEG;
+    cfg->caster_arm_mm = S4_CASTER_ARM_MM;
+    cfg->track_mm = S4_TRACK_MM;
     cfg->rough_vib_mg = S4_ROUGH_VIB_MG;
     cfg->collision_mg = S4_COLLISION_MG;
     cfg->collision_hold_ms = S4_COLLISION_HOLD_MS;
@@ -119,8 +123,11 @@ bool s4_est_config_valid(const s4_cfg_t *cfg)
         (cfg->cal_max_retries >= 1U) &&
         (cfg->cal_samples >= 8U) &&
         (cfg->level_ddeg > 0U) &&
-        (cfg->level_ddeg < cfg->ascend_ddeg) &&
-        (cfg->level_ddeg < cfg->descend_ddeg) &&
+        (cfg->level_ddeg < cfg->dip_ddeg) &&
+        (cfg->raise_off_mm > 0U) &&
+        (cfg->raise_off_mm < cfg->raise_on_mm) &&
+        (cfg->caster_arm_mm >= 20U) && (cfg->caster_arm_mm <= 1000U) &&
+        (cfg->track_mm >= 20U) && (cfg->track_mm <= 1000U) &&
         (cfg->min_length_mm < cfg->max_length_mm) &&
         (cfg->settle_ms > 0U) &&
         (cfg->collision_mg > 0U) &&
@@ -181,6 +188,7 @@ void s4_est_begin_calibration(s4_est_t *est)
     est->cal_active = 1U;
     est->cal_retries = 0U;
     est->in_episode = 0U;
+    est->pitch_smooth_primed = 0U;
     reset_cal_window(est);
     set_terrain(est, TERRAIN_UNKNOWN);
 }
@@ -299,6 +307,18 @@ static void calibration_step(
 
     if (!still)
     {
+        /* Keep the evidence for the FAILED report: spread and window mean. */
+        est->cal_fail_reason = S4_CALFAIL_MOVING;
+        est->cal_fail_spread = 0U;
+        for (axis = 0U; axis < 3U; axis++)
+        {
+            uint32_t spread = (uint32_t)((int32_t)est->cal_max[axis] - est->cal_min[axis]);
+            if (spread > est->cal_fail_spread)
+            {
+                est->cal_fail_spread = (uint16_t)min_u32(spread, UINT16_MAX);
+            }
+            est->cal_fail_mean[axis] = (int16_t)(est->cal_sum[axis] / (int32_t)est->cal_count);
+        }
         est->cal_retries++;
         if (est->cal_retries >= est->cfg.cal_max_retries)
         {
@@ -325,6 +345,12 @@ static void calibration_step(
     if ((g_mg < 700U) || (g_mg > 1300U) || (mean[IMU_UP] <= 0))
     {
         /* Not resting on its wheels, or the scale/mounting is wrong. */
+        est->cal_fail_reason = (mean[IMU_UP] <= 0) ? S4_CALFAIL_UPSIDE : S4_CALFAIL_GRAVITY;
+        est->cal_fail_spread = 0U;
+        for (axis = 0U; axis < 3U; axis++)
+        {
+            est->cal_fail_mean[axis] = (int16_t)clamp32(mean[axis], INT16_MIN, INT16_MAX);
+        }
         finish_calibration(est, false, events);
         return;
     }
@@ -462,6 +488,17 @@ static void accel_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
         }
         est->pitch_ddeg = imu_wrap_ddeg(imu_pitch_ddeg(filtered) - est->pitch0_ddeg);
         est->roll_ddeg = imu_wrap_ddeg(imu_roll_ddeg(filtered) - est->roll0_ddeg);
+        /* Second smoothing (~140 ms) for terrain states and the hump peak. */
+        if (!est->pitch_smooth_primed)
+        {
+            est->pitch_smooth_x16 = (int32_t)est->pitch_ddeg * 16;
+            est->roll_smooth_x16 = (int32_t)est->roll_ddeg * 16;
+            est->pitch_smooth_primed = 1U;
+        }
+        est->pitch_smooth_x16 += asr32(((int32_t)est->pitch_ddeg * 16) -
+                                       est->pitch_smooth_x16, S4_PITCH_SMOOTH_SHIFT);
+        est->roll_smooth_x16 += asr32(((int32_t)est->roll_ddeg * 16) -
+                                      est->roll_smooth_x16, S4_PITCH_SMOOTH_SHIFT);
         if ((abs32(est->pitch_ddeg) > (int32_t)est->cfg.tilt_limit_ddeg) ||
             (abs32(est->roll_ddeg) > (int32_t)est->cfg.tilt_limit_ddeg))
         {
@@ -608,6 +645,21 @@ static void motion_step(s4_est_t *est, const s4_input_t *in)
     {
         est->motion = S4_MOTION_MOVING;
     }
+    /* Launch hold-off clock: restarts only after 200 ms really standing,
+       not on one quiet sample at low speed. */
+    if (est->motion == S4_MOTION_STATIONARY)
+    {
+        est->still_ms = add_sat_u16(est->still_ms, in->dt_ms);
+        if (est->still_ms >= 200U)
+        {
+            est->moving_ms = 0U;
+        }
+    }
+    else
+    {
+        est->still_ms = 0U;
+        est->moving_ms = add_sat_u16(est->moving_ms, in->dt_ms);
+    }
 
     est->longitudinal = S4_LONG_STEADY;
     if (est->calibrated && (est->terrain == TERRAIN_LEVEL) &&
@@ -644,6 +696,54 @@ static int32_t distance_step_um(s4_est_t *est, const s4_input_t *in, uint16_t dt
     return (int32_t)est->cfg.fallback_speed_mm_s * (int32_t)dt_ms;
 }
 
+/* Pitch and roll for terrain decisions and the hump peak: the fast angles
+   smoothed once more, so vibration does not start false episodes or inflate
+   the peak. */
+static int32_t smooth_pitch(const s4_est_t *est)
+{
+    return asr32(est->pitch_smooth_x16 + 8, 4);
+}
+
+static int32_t smooth_roll(const s4_est_t *est)
+{
+    return asr32(est->roll_smooth_x16 + 8, 4);
+}
+
+/*
+ * Height of the highest raised contact, in micrometres, for a car with two
+ * drive wheels and a caster, while the lowest contact is on the floor:
+ *
+ *   caster_arm x sin|pitch| + (track / 2) x sin|roll|
+ *
+ * Right wheel alone raised by h: roll = h / track and the axle centre rises
+ * h / 2, so both terms are h / 2. Both wheels raised: roll 0, pitch term h.
+ * Caster raised: pitch term h. With climb_only, pitch towards the caster
+ * side (braking reads the same way when the caster is behind) is ignored,
+ * and so is all pitch for launch_holdoff_ms after moving off (acceleration
+ * reads as nose-up): used from LEVEL, so only a real climb or a roll starts
+ * an episode. Roll is not affected by speeding up or braking.
+ */
+static int32_t raised_um(const s4_est_t *est, bool climb_only)
+{
+    int32_t pitch = smooth_pitch(est);
+    int32_t roll = abs32(smooth_roll(est));
+
+    if (est->cfg.climb_nose_down)
+    {
+        pitch = -pitch;   /* now > 0 means the drive wheels are up */
+    }
+    if (climb_only)
+    {
+        pitch = ((pitch > 0) && (est->moving_ms >= est->cfg.launch_holdoff_ms)) ? pitch : 0;
+    }
+    else
+    {
+        pitch = abs32(pitch);
+    }
+    return (int32_t)((((int64_t)est->cfg.caster_arm_mm * 1000 * imu_sin_q15(pitch)) +
+                      ((int64_t)est->cfg.track_mm * 500 * imu_sin_q15(roll))) / 32768);
+}
+
 static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
 {
     uint32_t peak_mm;
@@ -661,6 +761,21 @@ static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
     est->in_episode = 0U;
 
     peak_mm = (est->peak_um > 0) ? (uint32_t)((est->peak_um + 500) / 1000) : 0U;
+    /*
+     * Sum(sin(pitch) x distance) follows the axle centre, so it misses a
+     * one-sided ramp (half the height) and averages a short hump over the
+     * caster arm. The peak raised height (raised_um) is exact for both while
+     * the car is on a hump. Report whichever is larger: the integral wins on
+     * long ramps (slope shallower than h / caster_arm), the attitude on humps.
+     */
+    if (est->saw_descent && (est->peak_raise_um > 0))
+    {
+        uint32_t raised_mm = (uint32_t)((est->peak_raise_um + 500) / 1000);
+        if (raised_mm > peak_mm)
+        {
+            peak_mm = raised_mm;
+        }
+    }
     residual_mm = (uint32_t)(abs32(est->height_um) / 1000);
     path_mm = est->path_um / 1000U;
     residual_limit = (peak_mm / 2U > 10U) ? (peak_mm / 2U) : 10U;
@@ -706,58 +821,85 @@ static void begin_episode(s4_est_t *est)
     est->episode_ms = 0U;
     est->saw_descent = 0U;
     est->peak_um = (est->height_um > 0) ? est->height_um : 0;
-    est->peak_pitch_ddeg = (int16_t)abs32(est->pitch_ddeg);
+    est->peak_pitch_ddeg = (int16_t)abs32(smooth_pitch(est));
+    est->peak_raise_um = raised_um(est, false);
 }
 
-static uint8_t terrain_candidate(const s4_est_t *est, int32_t pitch)
+/*
+ * Terrain states follow the raised height g (raised_um), so a one-sided ramp
+ * (mostly roll) and a full-width hump (pitch) take the same path:
+ *   LEVEL      -> ASCENDING   g >= raise_on (climb or roll only), or a
+ *                             dip: anti-climb pitch beyond dip_ddeg
+ *   ASCENDING  -> CREST       g has fallen 1 mm or 10% below its peak
+ *   CREST      -> ASCENDING   g reaches a new peak
+ *              -> DESCENDING  g has fallen 2 mm or 25% below its peak
+ *   DESCENDING -> SETTLING    g < raise_off and the height integral is back
+ *                             below raise_on (else all contacts are on top
+ *                             of a wide hump; at most 2 s): on the floor
+ *              -> ASCENDING   g back near the peak (e.g. the caster crossing)
+ *   SETTLING   -> ASCENDING   g >= raise_on again: the same episode continues
+ *              -> LEVEL       settled for settle_ms: result published
+ */
+static uint8_t terrain_candidate(const s4_est_t *est)
 {
     const s4_cfg_t *cfg = &est->cfg;
-    int32_t level = (int32_t)cfg->level_ddeg;
-    int32_t ascend = (int32_t)cfg->ascend_ddeg;
-    int32_t descend = -(int32_t)cfg->descend_ddeg;
+    int32_t on = (int32_t)cfg->raise_on_mm * 1000;
+    int32_t off = (int32_t)cfg->raise_off_mm * 1000;
+    int32_t peak = est->peak_raise_um;
+    int32_t crest_drop = (peak / 10 > 1000) ? (peak / 10) : 1000;
+    int32_t fall_drop = (peak / 4 > 2000) ? (peak / 4) : 2000;
+    int32_t g;
+    int32_t climb_pitch;
 
     switch (est->terrain)
     {
         case TERRAIN_LEVEL:
-            if (pitch >= ascend)
+            if (raised_um(est, true) >= on)
             {
                 return TERRAIN_ASCENDING;
             }
-            if (pitch <= descend)
+            climb_pitch = est->cfg.climb_nose_down ? -smooth_pitch(est) : smooth_pitch(est);
+            if (climb_pitch <= -(int32_t)cfg->dip_ddeg)
             {
                 return TERRAIN_DESCENDING;
             }
             break;
         case TERRAIN_ASCENDING:
-            if (pitch < level)
+            if (raised_um(est, false) <= peak - crest_drop)
             {
                 return TERRAIN_CREST;
             }
             break;
         case TERRAIN_CREST:
-            if (pitch <= descend)
+            g = raised_um(est, false);
+            if (g <= peak - fall_drop)
             {
                 return TERRAIN_DESCENDING;
             }
-            if (pitch >= ascend)
+            if (g >= peak)
             {
                 return TERRAIN_ASCENDING;
             }
             break;
         case TERRAIN_DESCENDING:
-            if (pitch > -level)
+            g = raised_um(est, false);
+            /* Attitude level again. If the height integral says the body is
+               still up, all three contacts are on top of a wide hump: wait
+               for the caster (bounded, in case odometry is poor). */
+            if ((g < off) &&
+                ((est->height_um < on) || (est->state_ms >= 2000U)))
             {
                 return TERRAIN_SETTLING;
             }
-            break;
-        case TERRAIN_SETTLING:
-            if (pitch >= ascend)
+            if (g > peak - crest_drop)
             {
                 return TERRAIN_ASCENDING;
             }
-            if (pitch <= descend)
+            break;
+        case TERRAIN_SETTLING:
+            if (raised_um(est, false) >= on)
             {
-                return TERRAIN_DESCENDING;
+                return TERRAIN_ASCENDING;
             }
             break;
         default:
@@ -768,14 +910,8 @@ static uint8_t terrain_candidate(const s4_est_t *est, int32_t pitch)
 
 static void change_terrain(s4_est_t *est, uint8_t next, s4_events_t *events)
 {
-    if ((est->terrain == TERRAIN_SETTLING) && (next == TERRAIN_ASCENDING))
-    {
-        /* A second hump straight after the first. */
-        finish_episode(est, false, events);
-        rebase_height(est);
-        begin_episode(est);
-    }
-    else if (est->terrain == TERRAIN_LEVEL)
+    (void)events;
+    if (est->terrain == TERRAIN_LEVEL)
     {
         begin_episode(est);
     }
@@ -793,8 +929,7 @@ static void terrain_step(
     s4_events_t *events)
 {
     const s4_cfg_t *cfg = &est->cfg;
-    int32_t pitch = est->pitch_ddeg;
-    bool in_level_band = abs32(pitch) < (int32_t)cfg->level_ddeg;
+    int32_t pitch = smooth_pitch(est);   /* reported peak pitch */
     uint8_t candidate;
 
     if ((est->faults & S4_FAULT_BLOCKING) != 0U)
@@ -811,7 +946,8 @@ static void terrain_step(
     }
     if ((est->terrain == TERRAIN_UNKNOWN) || (est->terrain == TERRAIN_INVALID))
     {
-        if (in_level_band)
+        /* Below the climb threshold, so a slightly tilted floor is LEVEL. */
+        if (raised_um(est, false) < (int32_t)cfg->raise_on_mm * 1000)
         {
             rebase_height(est);
             set_terrain(est, TERRAIN_LEVEL);
@@ -823,10 +959,11 @@ static void terrain_step(
         return;
     }
 
-    /* Height gained = sin(pitch) x distance along the surface. */
+    /* Height gained = sin(pitch) x distance along the surface. The fast pitch
+       is used here: its noise averages out in the sum, and it has less lag. */
     if (ds_um != 0)
     {
-        est->height_um += (int32_t)(((int64_t)ds_um * imu_sin_q15(pitch)) / 32768);
+        est->height_um += (int32_t)(((int64_t)ds_um * imu_sin_q15(est->pitch_ddeg)) / 32768);
         est->path_um += (uint32_t)abs32(ds_um);
         if (!est->dist_odometry)
         {
@@ -845,15 +982,25 @@ static void terrain_step(
         {
             est->peak_pitch_ddeg = (int16_t)abs32(pitch);
         }
+        {
+            int32_t g = raised_um(est, false);
+            if (g > est->peak_raise_um)
+            {
+                est->peak_raise_um = g;
+            }
+        }
     }
 
-    if ((est->terrain == TERRAIN_LEVEL) && in_level_band)
+    /* Re-zero while level and no climb or dip is forming. Waiting for the
+       level band instead would let a floor tilted between the level and
+       climb thresholds accumulate height for metres before a hump. */
+    if ((est->terrain == TERRAIN_LEVEL) &&
+        (terrain_candidate(est) == TERRAIN_LEVEL))
     {
         rebase_height(est);
     }
 
-    if (((est->terrain == TERRAIN_SETTLING) && (est->state_ms >= cfg->settle_ms)) ||
-        ((est->terrain == TERRAIN_CREST) && (est->state_ms >= cfg->crest_timeout_ms)))
+    if ((est->terrain == TERRAIN_SETTLING) && (est->state_ms >= cfg->settle_ms))
     {
         finish_episode(est, false, events);
         set_terrain(est, TERRAIN_LEVEL);
@@ -866,7 +1013,7 @@ static void terrain_step(
         return;
     }
 
-    candidate = terrain_candidate(est, pitch);
+    candidate = terrain_candidate(est);
     if (candidate == est->terrain)
     {
         est->pending = candidate;
@@ -1134,6 +1281,7 @@ void s4_est_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
         {
             est->faults |= S4_FAULT_STALE;
             est->filters_primed = 0U;
+            est->pitch_smooth_primed = 0U;
         }
     }
     if (in->mag_ok)

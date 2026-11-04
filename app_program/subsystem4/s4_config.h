@@ -25,7 +25,7 @@
 #define S4_MAG_ADDR 0x1EU
 #define S4_ACCEL_FS_CODE 1U       /* +/-4 g: 2 mg/LSB, room for 3 g shocks */
 #define S4_MAX_BUS_ERRORS 3U      /* consecutive errors before re-open */
-#define S4_REOPEN_TICKS 50U       /* retry the bus every 1 s when faulted */
+#define S4_REOPEN_TICKS 10U       /* retry the bus every 200 ms when faulted */
 
 /*
  * Mounting: which sensor axis points RIGHT, FORWARD and UP on the car.
@@ -40,6 +40,7 @@
 /* --- Filtering ----------------------------------------------------------- */
 #define S4_LPF_SHIFT 2U           /* fast EMA alpha = 1/4 (~80 ms) */
 #define S4_SLOW_EXTRA_SHIFT 3U    /* slow EMA alpha = 1/32 (~640 ms) */
+#define S4_PITCH_SMOOTH_SHIFT 3U  /* pitch EMA 1/8 (~140 ms) for terrain states */
 
 /* --- Level calibration (car still on a level floor) ---------------------- */
 #define S4_CAL_SAMPLES 64U        /* 1.28 s at 50 Hz */
@@ -47,18 +48,49 @@
 #define S4_CAL_MAX_RETRIES 5U
 
 /* --- Terrain / hump state machine ---------------------------------------- */
-#define S4_LEVEL_DDEG 25U         /* |pitch| below this counts as level */
-#define S4_ASCEND_DDEG 50U        /* pitch above this starts a climb */
-#define S4_DESCEND_DDEG 50U       /* pitch below minus this is descending */
+/*
+ * The car is two drive wheels plus a caster. With the caster and at least
+ * one wheel on the floor, the height of the highest raised wheel (or of the
+ * caster) follows from the attitude alone:
+ *
+ *   raised = caster_arm x sin|pitch| + (track / 2) x sin|roll|
+ *
+ * Demo ramp: about 10 mm high, 195 mm long, under the RIGHT wheel only.
+ * That rolls the car 5.1 deg (10 / 112 mm track) and pitches it only
+ * ~2.2 deg, with the same sign all the way across, so a pitch-only state
+ * machine cannot see it. Both halves give 5 mm, so the formula reads 10 mm.
+ * A full-width hump gives caster_arm x sin(pitch) + 0 = h as well.
+ * The terrain states follow this raised height in mm.
+ */
+#define S4_RAISE_ON_MM 4U         /* raised wheel above this starts a climb */
+#define S4_RAISE_OFF_MM 2U        /* below this the car is back on the floor */
+#define S4_LEVEL_DDEG 10U         /* |pitch| below this counts as level (distance) */
+#define S4_DIP_DDEG 50U           /* anti-climb pitch that starts an episode from
+                                     LEVEL (braking reads nose-down) */
+/*
+ * MEASURE BOTH on the car and replace these placeholders (ruler, mm):
+ *   S4_CASTER_ARM_MM  drive axle centre to the caster's floor contact,
+ *                     along the car. Error moves the height by half as
+ *                     much on the one-sided ramp (10% -> 0.5 mm).
+ *   S4_TRACK_MM       left tyre centre to right tyre centre. 112 is Buddy 2's
+ *                     MOTION_TRACK_WIDTH_MM.
+ *   S4_CLIMB_NOSE_DOWN 0 when the caster is BEHIND the drive wheels (wheels
+ *                     climbing tilts the nose up), 1 when it is in front.
+ */
+#define S4_CASTER_ARM_MM 130U
+#define S4_TRACK_MM 112U
+#define S4_CLIMB_NOSE_DOWN 0U
 #define S4_CONFIRM_SAMPLES 3U     /* consecutive samples to change state */
-#define S4_SETTLE_MS 300U         /* level time after descent before result */
-#define S4_CREST_TIMEOUT_MS 2000U /* flat top longer than this = step */
+#define S4_SETTLE_MS 300U         /* on the floor this long after a descent */
 #define S4_EPISODE_TIMEOUT_MS 8000U
+#define S4_LAUNCH_HOLDOFF_MS 500U  /* moving off reads nose-up: pitch cannot
+                                      start a climb this long after rest */
 #define S4_MIN_HUMP_MM 5U
 #define S4_MIN_HUMP_LENGTH_MM 80U
 #define S4_MAX_HUMP_LENGTH_MM 1500U
 #define S4_BASE_UNCERTAINTY_MM 3U
-#define S4_FALLBACK_SPEED_MM_S 150U /* distance estimate without odometry */
+#define S4_FALLBACK_SPEED_MM_S 60U  /* distance estimate without odometry:
+                                       the CAR_RUN line cruise speed */
 #define S4_ODOM_STALE_TICKS 10U     /* odometry older than 200 ms is unused */
 
 /* --- Persistent failures and calibration retry --------------------------- */

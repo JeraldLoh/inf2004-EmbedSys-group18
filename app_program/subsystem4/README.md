@@ -23,14 +23,15 @@ subsystem's contracts, calibration and evidence.
 
 | Item | State |
 |---|---|
-| Portable math, estimator, packing, seqlock, MQTT payloads | Implemented; host tests pass (`testing/host`) |
-| LSM303 driver and IMU task (micro T-Kernel) | Implemented; compiles warning-free with the course ARM flags; **not yet run on hardware** |
+| Portable math, estimator, packing, seqlock, MQTT payloads | Implemented; host tests pass (`testing/host/test_terrain_estimator.c`, `ctest -L subsystem4`) |
+| LSM303 driver and IMU task (micro T-Kernel) | Implemented; `CAR_RUN=1` and `CAR_MQTT=1` images build with no `-Wall -Wextra` warnings in Buddy 4 files; **not yet run on hardware** |
 | On-target self-test S4-T01..T11 | Implemented (`make TEST=1`); not yet run |
-| Lifecycle hookup (`subsystem4_init/start/test`) | Done: defined in `task_imu.c`; the whole-car build (`CAR_RUN=1`) starts Buddy 4 |
+| Lifecycle hookup (`subsystem4_init/start/test`) | Done: `car_run_target.c` inits Buddy 4 after the others and starts it after Buddy 5. Optional: a failure is printed and the car runs without it |
 | Root I2C configuration | Done: I2C on, I2C1 on GP2/GP3, boot starts unit 1 `"iicb"` only (Integration step 1) |
-| Controller, Buddy 2 and Buddy 3 links | Done in `CAR_RUN=1` (see "Whole-car wiring"); host-tested where portable, **not yet run on the car** |
-| Fault reporting | Evidence in the detail mask and events; latched failures polled by the controller into **provisional** shared fault bits |
-| Thresholds in `s4_config.h` | Uncalibrated starting values |
+| Controller, Buddy 2 and Buddy 1 links | Done in `CAR_RUN=1` (see "Whole-car wiring"); **not yet run on the car** |
+| Buddy 3 hump pause (tribunal R2) | **Not wired**: Buddy 3 has no hump input yet (see "Open items") |
+| Fault reporting | Detail mask, events and `s4_sensor_failures()`, shown in the `[B4]` console line and MQTT section 4. **Not** latched into the shared hardware fault mask (see "Whole-car wiring") |
+| Thresholds in `s4_config.h` | Hump thresholds sized for the 10 mm x 195 mm demo hump by host simulation; `S4_CASTER_ARM_MM`, `S4_TRACK_MM` and `S4_CLIMB_NOSE_DOWN` are **placeholders to measure** |
 
 ## Files
 
@@ -101,10 +102,34 @@ them be tested on a PC.
 
 | Link | How | Notes |
 |---|---|---|
-| Buddy 4 → controller: speed cap | Controller sensor hook `read_terrain` (every 10 ms tick) reads the snapshot with `s4_terrain_report_from_words()` | `vehicle_controller_update_terrain()`; the line-tracking speed takes the lowest cap. Hump cap 100 mm/s, below the 150 mm/s cruise |
-| Buddy 4 → controller: faults | Hook `read_hardware_faults` reads `s4_sensor_failures()` | IMU or magnetometer evidence lasting 1 s is latched and mapped to **provisional** `HARDWARE_FAULT_IMU` / `HARDWARE_FAULT_MAG` (bits 12/13, `contracts/hardware_faults.h`). Latched until reset; does not stop the car |
-| Buddy 2 → Buddy 4: odometry | Binding `read_odometry_mm`, called by the IMU task each period | Buddy 2's edge counts × `motion_calibration.h` (65 mm wheel, 1271/1264 edges per rev), signed by the last non-zero command per wheel. Buddy 2's code is unchanged |
-| Buddy 4 → Buddy 3: hump pause | The `read_terrain` hook calls `subsystem3_set_hump()` from status bit 23 | Buddy 3 holds the last steering, takes no junctions, discards a partial barcode and pauses decoding until level (tribunal R2) |
+| Buddy 4 → controller: speed cap | `controller_task_bind_terrain(b4_read_terrain)`: the controller task reads the snapshot every 10 ms tick with `s4_terrain_report_from_words()` | `vehicle_controller_update_terrain()`; line tracking takes the lowest cap. The hump cap (100 mm/s) only bites above it: the official car cruises at 60 mm/s, so today it changes nothing |
+| Buddy 2 → Buddy 4: odometry | Binding `read_odometry_mm` = `b4_read_odometry()`, called by the IMU task each period | Integrates `subsystem2_motion_telemetry()` wheel speeds over its sample time, each wheel signed by its last non-zero target, so a pivot adds no distance. Buddy 2's code is unchanged |
+| Buddy 4 → Buddy 1: MQTT | `b4_wifi_telemetry()` sends `s4_telemetry_pack()` as section 4 every 200 ms (`CAR_MQTT=1`); the controller's terrain state also fills section 2 | The dashboard's `decodeBuddy4()` already matches `s4_packed.h` |
+| Buddy 4 → console | `[B4]` line every second next to `[CAR]`, plus event lines (terrain, hump, calibration) | See "Reading the serial log" |
+| Buddy 4 → controller: faults | **Not mapped.** | Any bit in the shared hardware fault mask blocks junction handling and MQTT START, so an unplugged IMU would stop a run. The provisional `HARDWARE_FAULT_IMU/MAG` bits stay unused until the team agrees a non-blocking class |
+
+### Reading the serial log
+
+```text
+[B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=-0.5 deg vib=8 mg motion=1 odom=1 faults=0x2 fail=0x0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 1450 us/sample
+[B4] terrain ASCENDING, cap 100 mm/s
+[B4] terrain CREST, cap 100 mm/s
+[B4] terrain DESCENDING, cap 100 mm/s
+[B4] terrain SETTLING, cap 100 mm/s
+[B4] hump 10 mm +/-5, peak 2 deg, 27 cm, valid
+[B4] terrain LEVEL, cap 0 mm/s
+```
+
+- `cal=RUNNING-keep still` / `none`: level calibration is running or failed; it retries every 2 s once the car is still.
+- `faults` is the 7-bit detail mask: 0x01 I2C, 0x02 magnetometer, 0x04 stale, 0x08 uncalibrated, 0x10 saturated, 0x20 tilt, 0x40 collision. 0x2 alone is normal until the magnetometer is calibrated or if it is absent.
+- `vib` is the vibration level while driving. Host simulation shows no false humps up to about 30 mg of noise; if it reads well above that and you see `INVALID` humps on flat floor, raise `S4_RAISE_ON_MM` to 5 or `S4_PITCH_SMOOTH_SHIFT` to 4. At 45 mg, simulation gave about one INVALID episode a minute and no valid ones.
+- `odom=1` means the height came from Buddy 2's wheel speeds; 0 means the fallback speed was used.
+
+### Open items
+
+- **Buddy 3 hump pause (tribunal R2).** Status bit 23 is published, but Buddy 3 has no input for it, and the controller does not hold steering on a hump. On a 10 mm hump the line sensors tilt by only about 4°, so this may not be needed. Buddy 3 should decide after a hump run.
+- **MQTT commands to Buddy 4** (`s4_command()`: recalibrate, magnetometer calibration, range report) are not routed by Buddy 1 yet.
+- **Event queue.** Nothing reads `s4_mbf_events`; the oldest event is dropped when it is full (`s4_events_dropped`). Events still reach the console.
 
 If level calibration fails at start-up (for example the car was handled
 during Buddy 3's barcode sweep), the IMU task retries it every 2 s until it
@@ -120,12 +145,9 @@ applies.
 | B4 → controller | `tk_rcv_mbf(s4_mbf_events, &msg, tmo)` | 4-byte events, single reader. When the queue is full the oldest event is dropped (`s4_events_dropped`). |
 | B4 → Buddy 1 | `s4_telemetry_pack(buf, 17)` | Binary frame; decode with the tables in DATA_REPRESENTATION.md. |
 | Buddy 1 → B4 | `s4_command(byte)` | After Buddy 1 has validated authority: 1 recalibrate, 2 clear latched, 3/4 magnetometer calibration start/stop, 5 print the observed ranges and sample timing. |
-| B4 → Buddy 3 | status word bit 23 (hump flag) → `subsystem3_set_hump()` | While set, Buddy 3 holds the last steering, takes no junctions and pauses barcode decoding (tribunal decision R2). |
-| B4 → controller | `s4_sensor_failures()` (`S4_FAILURE_IMU`, `S4_FAILURE_MAG`) | Persistent sensor failures, latched. The controller owns the shared hardware fault mask and maps these to provisional bits. The detail mask (status bits 19..13) and `S4_EV_FAULT` events keep the full evidence; UNCAL, SATURATED, TILT and COLLISION are status, not failures. |
+| B4 → Buddy 3 | status word bit 23 (hump flag) | Published, but **not consumed yet**: Buddy 3 has no hump input (tribunal decision R2, see "Open items"). |
+| B4 → controller | `s4_sensor_failures()` (`S4_FAILURE_IMU`, `S4_FAILURE_MAG`) | Persistent sensor failures, latched until reset. Shown in the `[B4]` line (`fail=`); not mapped into the shared hardware fault mask (it would block junctions and START). The detail mask (status bits 19..13) and `S4_EV_FAULT` events keep the full evidence; UNCAL, SATURATED, TILT and COLLISION are status, not failures. |
 | Any → B4 | `s4_request(S4_REQ_*)` | ISR-safe. |
-
-Still not consumed: nothing reads `s4_mbf_events` (the 4-byte event queue),
-so completed-turn and calibration events only reach the console log.
 
 Week 8 tribunal decisions applied here:
 
@@ -158,7 +180,7 @@ headroom for 3 g shocks. All maths is integer: the RP2040 has no FPU.
 (1.28 s) and requires each axis to stay within a 40 mg spread. Any movement
 restarts the window, and after 5 retries it fails. The resting gravity vector
 gives the mounting pitch/roll offsets and the gravity magnitude. **Keep the
-car still on a level floor until "S4 level calibration done" prints.**
+car still on a level floor until `[B4] level calibration done` prints, or the `[B4]` status line shows `cal=level`.**
 
 **Hump height.** The briefing suggests h ≈ v²/2g from a vertical
 acceleration impulse. That requires integrating noisy acceleration twice,
@@ -172,31 +194,58 @@ Without odometry it falls back to `S4_FALLBACK_SPEED_MM_S` × dt, and the
 uncertainty is widened. Integration starts as soon as the pitch leaves the
 level band, so the climb before the state is confirmed is not lost.
 
+The integral follows the drive axle centre. It misses half of a ramp under
+one wheel, and it averages a short hump over the caster arm. The car has two
+drive wheels and a caster, so while the lowest contact is on the floor the
+height of the highest raised wheel (or of the caster) follows from the
+attitude alone:
+
+  **raised = caster_arm × sin|pitch| + (track / 2) × sin|roll|**
+
+- Demo ramp, under the **right wheel only**: roll = 10 / 112 mm = 5.1° and
+  pitch only about 2.2°, with the same sign all the way across. Each term
+  gives 5 mm, so the total is 10 mm.
+- Full-width hump: roll 0, so the pitch term alone gives h. When the caster
+  crosses, the pitch term gives the caster's height.
+
+Buddy 4 reports the larger of the peak raised height and the integral. On
+long ramps the integral wins, on humps the attitude. Pitch and roll come
+from a second 140 ms smoothing, so vibration does not inflate the peak.
+Measure `S4_CASTER_ARM_MM` (drive axle centre to the caster's floor contact)
+and `S4_TRACK_MM` (tyre centre to tyre centre). On the one-sided ramp, a 10%
+error in the caster arm moves the height by 0.5 mm.
+
 Each result reports:
 
 - the peak height;
 - the uncertainty: base + residual height at the end + 1% of the path, plus
   half the height when distance was estimated;
 - the length and the peak pitch;
-- a valid bit. Valid requires an ascent and a descent, height ≥ 5 mm, length
-  between 80 and 1500 mm, a small residual, and no fault during the episode.
+- a valid bit. Valid requires a rise and a fall back to the floor, height
+  ≥ 5 mm, length between 80 and 1500 mm, a small residual, and no fault
+  during the episode.
 
-**Terrain state machine.** Pitch is in tenths of a degree. Each transition
-needs `S4_CONFIRM_SAMPLES` consecutive samples.
+**Terrain state machine.** It follows the raised height g in mm, so a
+one-sided ramp (roll) and a full-width hump (pitch) take the same path. Each
+transition needs `S4_CONFIRM_SAMPLES` consecutive samples.
 
 | From | To | When |
 |---|---|---|
-| LEVEL | ASCENDING / DESCENDING | pitch ≥ +5° / ≤ −5° (a dip or step down goes straight to DESCENDING) |
-| ASCENDING | CREST | pitch < +2.5° |
-| CREST | DESCENDING / ASCENDING | pitch ≤ −5° / ≥ +5°; flat top for over 2 s ends as a "step" (invalid hump) |
-| DESCENDING | SETTLING | pitch > −2.5° |
-| SETTLING | LEVEL (publish result) | 300 ms settled; a new climb publishes and starts the next hump |
+| LEVEL | ASCENDING | g ≥ 4 mm (`S4_RAISE_ON_MM`), counting roll and only climb-direction pitch (nose-up with the caster behind, `S4_CLIMB_NOSE_DOWN 0`). For 0.5 s after moving off from rest, pitch is ignored, because acceleration reads as nose-up |
+| LEVEL | DESCENDING | pitch beyond 5° the other way (a dip or step down; braking reads nose-down, hence the large value) |
+| ASCENDING | CREST | g has fallen 1 mm or 10% below its peak |
+| CREST | ASCENDING / DESCENDING | new peak / g 2 mm or 25% below the peak |
+| DESCENDING | SETTLING | g < 2 mm (`S4_RAISE_OFF_MM`) and the height integral is back below 4 mm. If the integral is still high, all three contacts are on top of a wide hump: wait for the caster, at most 2 s |
+| DESCENDING | ASCENDING | g back near the peak (the caster crossing a full-width hump) |
+| SETTLING | ASCENDING | g ≥ 4 mm again: the same hump continues |
+| SETTLING | LEVEL (publish result) | 300 ms on the floor |
 | any | INVALID | I2C error or stale data; returns to LEVEL only once level again |
 | any | UNKNOWN | not calibrated, or recalibrating |
 
-**Speed caps.** LEVEL has no cap. The hump states use 100 mm/s (below the
-controller's 150 mm/s cruise, so the cap takes effect). UNKNOWN,
-INVALID, tilt over 25°, and the impact hold all use 100 mm/s.
+**Speed caps.** LEVEL has no cap. The hump states use 100 mm/s. UNKNOWN,
+INVALID, tilt over 25°, and the impact hold all use 100 mm/s. The official
+car (`CAR_RUN=1`) cruises at 60 mm/s, so the caps only take effect on faster
+profiles.
 
 **Motion and collision.** The vibration level is the filtered deviation of
 |a| from 1 g. A horizontal jolt above 1000 mg relative to the slow filter is
@@ -214,17 +263,29 @@ differential is the more reliable turn source.
 
 ## Calibration and demo procedure
 
-1. Power on with the car still and level. Wait for `S4 level calibration done`.
-2. Optional magnetometer calibration: send command 3, spin the car slowly
+1. Power on with the car still and level. Wait for `cal=level` in the `[B4]` line.
+2. Optional magnetometer calibration (needs `s4_command()` routed from MQTT, not done yet): send command 3, spin the car slowly
    through at least 360° on the floor, then send command 4. Look for
-   `S4 magnetometer calibration done`.
+   `[B4] magnetometer calibration done`.
 3. Drive over the hump. The console prints the terrain transitions and
-   `S4 hump 39 mm +/-7, peak 17 deg, 44 cm, valid`.
+   `[B4] hump 10 mm +/-5, peak 2 deg, 27 cm, valid`.
 4. Measure the real hump with a ruler. Append the comparison to
    `testing/subsystem4/TEST_LOG.md` (test S4-H01) and tune `s4_config.h`
    from it.
 
 ## Known limitations
+
+- Calibrate on the floor the car will drive on. Pitch and roll are measured
+  against the calibration surface, and 4 mm of raised height is only about
+  2° of roll or 1.8° of pitch (130 mm caster arm). A floor tilted 1.5°
+  relative to it eats most of that margin, and a hump on it reads high. The
+  height integral does not drift on such a floor (host test).
+- The raised-height formula assumes a rigid car whose lowest contact is on
+  the floor. If the whole car is on top of a wide raised area, the attitude
+  reads level; the height integral holds the episode open for up to 2 s.
+- With the caster in front (`S4_CLIMB_NOSE_DOWN 1`), climbing reads
+  nose-down like braking, so a hard stop can open a false episode. A ramp
+  under one wheel is still detected through roll alone.
 
 - Pitch includes linear acceleration: 0.1 g of acceleration reads as about
   5.7° of pitch. Hard acceleration while on a hump inflates the height. The

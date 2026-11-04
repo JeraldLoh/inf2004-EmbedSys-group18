@@ -254,18 +254,35 @@ EXPORT W dev_i2c_llctl( UW unit, INT cmd, UW p1, UW p2, UW *pp)
 		/* Initial Configuration */
 		out_w(I2C_ENABLE(unit), 0);						// Disable I2C
 
+#if DEVCNF_I2C_STANDARD_MODE
+		/* 100 kbit/s: four times the rise-time margin of fast mode, for
+		   buses with only the internal pull-ups (Group 18: GY-511 on a
+		   Grove cable). Counts as the pico-sdk computes them at 125 MHz:
+		   period 1250, low 3/5, high 2/5, spike filter low/16. */
+		out_w(I2C_CON(unit), I2C_CON_SLAVE_DISABLE | I2C_CON_MASTER_MODE	// Master Mode
+			| I2C_CON_RESTART_EN | I2C_CON_TX_EMPTY_CTRL
+			| I2C_CON_7BIT_ADR | I2C_CON_SPEED_STANDARD);		// 7bit Address & Standard Speed
+#else
 		out_w(I2C_CON(unit), I2C_CON_SLAVE_DISABLE | I2C_CON_MASTER_MODE	// Master Mode
 			| I2C_CON_RESTART_EN | I2C_CON_TX_EMPTY_CTRL
 			| I2C_CON_7BIT_ADR | I2C_CON_SPEED_FAST);			// 7bit Address & Fast Speed
+#endif
 
 		out_w(I2C_RX_TL(unit), 0);
 		out_w(I2C_TX_TL(unit), 0);
 		out_w(I2C_DMA_CR(unit), I2C_DMA_CR_RDMAE | I2C_DMA_CR_TDMAE);
 
+#if DEVCNF_I2C_STANDARD_MODE
+		/* Set Baudrate (100Kbts)*/
+		out_w(I2C_SS_SCL_HCNT(unit), 500);
+		out_w(I2C_SS_SCL_LCNT(unit), 750);
+		out_w(I2C_FS_SPKLEN(unit), 750/16);
+#else
 		/* Set Baudrate (400Kbts)*/
 		out_w(I2C_FS_SCL_HCNT(unit), 126);
 		out_w(I2C_FS_SCL_LCNT(unit), 187);
 		out_w(I2C_FS_SPKLEN(unit), 187/16);
+#endif
 		out_w(I2C_SDA_HOLD(unit), 38);
 
 		/* I2C interrupt enable */

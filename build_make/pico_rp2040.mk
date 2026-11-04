@@ -202,6 +202,18 @@ endif
 TEST_SUFFIX := _carrun_table
 endif
 
+# Skip the 3 s barcode sweep at start-up (bench testing other subsystems).
+# Barcodes are then ignored and the junction fallback policy applies.
+NO_BARCODE_CAL ?= 0
+ifneq ($(filter $(NO_BARCODE_CAL),0 1),$(NO_BARCODE_CAL))
+$(error NO_BARCODE_CAL must be 0 or 1)
+endif
+ifeq ($(NO_BARCODE_CAL),1)
+ifneq ($(CAR_RUN),1)
+$(error NO_BARCODE_CAL=1 requires CAR_RUN=1)
+endif
+endif
+
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
 CIRCUIT_TEST ?= 0
 ifneq ($(filter $(CIRCUIT_TEST),0 1),$(CIRCUIT_TEST))
@@ -369,6 +381,7 @@ CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
+CFLAGS  += -DAPP_NO_BARCODE_CAL=$(NO_BARCODE_CAL)
 ifeq ($(CAR_MQTT),1)
 # The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
 # The radio service shares core 0, so keep it below the car's control tasks
@@ -432,7 +445,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

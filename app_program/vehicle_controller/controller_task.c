@@ -32,6 +32,7 @@ static stop_reason_mask_t urgent_reasons;
 static uint32_t urgent_sequence;
 static controller_motion_request_t latest_continuous;
 static bool continuous_pending;
+static bool (*terrain_reader)(terrain_report_t *report); /* set before start */
 
 static UINT ingress_enter(void)
 {
@@ -160,6 +161,14 @@ static void controller_task_main(INT code, void *exinf)
         if (now_ms()-last_tick >= 10U)
         {
             last_tick = now_ms();
+            if (terrain_reader != NULL)
+            {
+                terrain_report_t terrain;
+                if (terrain_reader(&terrain))
+                {
+                    vehicle_controller_update_terrain(&service.controller, &terrain);
+                }
+            }
             if (!motion.bound) { controller_service_tick(&service, last_tick); }
         }
         (void)tk_unl_mtx(guard);
@@ -213,6 +222,13 @@ ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     if (!initialized || started || motion.bound || service.outputs.drive != NULL) { return E_OBJ; }
     return controller_motion_init(&motion, &service, outputs, session, caution, cruise)
         ? E_OK : E_PAR;
+}
+ER controller_task_bind_terrain(bool (*read_terrain)(terrain_report_t *report))
+{
+    if (!initialized || started) { return E_OBJ; }
+    if (read_terrain == NULL) { return E_PAR; }
+    terrain_reader = read_terrain;
+    return E_OK;
 }
 ER controller_task_start(void)
 {

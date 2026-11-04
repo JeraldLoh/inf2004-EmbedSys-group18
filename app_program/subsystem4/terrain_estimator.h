@@ -73,10 +73,12 @@ typedef struct
     unsigned int confirm_samples : 4;   /* 1..15 */
     unsigned int cal_max_retries : 3;   /* 1..7 */
     unsigned int cal_samples : 8;       /* 8..255 */
+    unsigned int climb_nose_down : 1;   /* 1 = caster in front of the drive axle */
 
     uint8_t level_ddeg;
-    uint8_t ascend_ddeg;
-    uint8_t descend_ddeg;
+    uint8_t dip_ddeg;          /* anti-climb pitch from LEVEL that starts an episode */
+    uint8_t raise_on_mm;       /* raised wheel height that starts a climb */
+    uint8_t raise_off_mm;      /* below this the car is back on the floor */
     uint8_t min_hump_mm;
     uint8_t base_uncertainty_mm;
     uint8_t cal_max_spread_mg;
@@ -84,13 +86,15 @@ typedef struct
     uint8_t long_accel_mg;
 
     uint16_t settle_ms;
-    uint16_t crest_timeout_ms;
     uint16_t episode_timeout_ms;
+    uint16_t launch_holdoff_ms;  /* after moving off, pitch cannot start a climb */
     uint16_t min_length_mm;
     uint16_t max_length_mm;
     uint16_t hump_cap_mm_s;
     uint16_t degraded_cap_mm_s;
     uint16_t tilt_limit_ddeg;
+    uint16_t caster_arm_mm;    /* drive axle to caster contact, along the car */
+    uint16_t track_mm;         /* left to right drive wheel contact */
     uint16_t rough_vib_mg;
     uint16_t collision_mg;
     uint16_t collision_hold_ms;
@@ -116,6 +120,15 @@ typedef struct
 
 #define S4_MAX_EVENTS 6U
 
+/* Why the last level calibration failed (s4_est_t.cal_fail_reason). */
+enum
+{
+    S4_CALFAIL_NONE = 0,
+    S4_CALFAIL_MOVING = 1,    /* an axis varied more than cal_max_spread_mg */
+    S4_CALFAIL_GRAVITY = 2,   /* |mean| outside 700..1300 mg */
+    S4_CALFAIL_UPSIDE = 3     /* the UP axis does not read +1 g */
+};
+
 typedef struct
 {
     uint8_t count;
@@ -139,6 +152,9 @@ typedef struct
     int16_t pitch0_ddeg;
     int16_t roll0_ddeg;
     uint16_t g0_mg;
+    /* Evidence from the last failed level-calibration window (diagnostics). */
+    int16_t cal_fail_mean[3];  /* vehicle frame: right, forward, up (mg) */
+    uint16_t cal_fail_spread;  /* largest per-axis max-min (mg) */
 
     /* Magnetometer hard-iron calibration, sensor frame raw LSB. */
     int16_t mag_off[3];
@@ -147,6 +163,8 @@ typedef struct
 
     /* Attitude and turning. */
     int16_t pitch_ddeg;
+    int32_t pitch_smooth_x16;  /* pitch EMA (ddeg x16): terrain states, peak */
+    int32_t roll_smooth_x16;   /* roll EMA (ddeg x16): terrain states, peak */
     int16_t roll_ddeg;
     uint16_t heading_ddeg;
     int32_t turn_ddps;
@@ -157,12 +175,15 @@ typedef struct
     int32_t peak_um;
     uint32_t path_um;
     int16_t peak_pitch_ddeg;
+    int32_t peak_raise_um;     /* highest raised wheel seen this episode */
 
     /* Saturating millisecond timers. */
     uint16_t state_ms;
     uint16_t episode_ms;
     uint16_t no_sample_ms;
     uint16_t impact_ms;
+    uint16_t moving_ms;          /* time since the car last stood still */
+    uint16_t still_ms;           /* time standing still */
     uint16_t shock_mg;
 
     /* Task-private state flags as C bit-fields. */
@@ -175,10 +196,12 @@ typedef struct
     unsigned int calibrated : 1;
     unsigned int cal_active : 1;
     unsigned int cal_retries : 3;
+    unsigned int cal_fail_reason : 2;   /* S4_CALFAIL_* of the last failure */
     unsigned int mag_cal_active : 1;
     unsigned int mag_calibrated : 1;
     unsigned int heading_valid : 1;
     unsigned int filters_primed : 1;
+    unsigned int pitch_smooth_primed : 1;
     unsigned int mag_primed : 1;
     unsigned int turn_state : 2;        /* S4_TURN_* */
     unsigned int turn_quiet : 4;

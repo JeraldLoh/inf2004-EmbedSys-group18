@@ -167,6 +167,21 @@ LOCAL void s4_log_event(s4_event_msg_t msg)
             tm_printf((UB *)"[B4] %s calibration %s\n",
                       s4_get(msg, S4_EV_CAL_KIND_SHIFT, 1U) ? "magnetometer" : "level",
                       s4_get(msg, S4_EV_CAL_OK_SHIFT, 1U) ? "done" : "FAILED");
+            if (!s4_get(msg, S4_EV_CAL_KIND_SHIFT, 1U) && !s4_get(msg, S4_EV_CAL_OK_SHIFT, 1U))
+            {
+                static const char *const why[] = {
+                    "unknown",
+                    "car moving or vibrating: keep it still, motors and servo idle",
+                    "gravity magnitude outside 700..1300 mg: check the sensor scale/wiring",
+                    "UP axis does not read +1 g: board upside down or S4_AXIS_* wrong"
+                };
+                tm_printf((UB *)"[B4]   reason: %s\n", why[s4_est.cal_fail_reason]);
+                tm_printf((UB *)"[B4]   window mean right=%d fwd=%d up=%d mg, "
+                          "largest axis spread %d mg (limit %d)\n",
+                          (INT)s4_est.cal_fail_mean[0], (INT)s4_est.cal_fail_mean[1],
+                          (INT)s4_est.cal_fail_mean[2], (INT)s4_est.cal_fail_spread,
+                          (INT)S4_CAL_MAX_SPREAD_MG);
+            }
             break;
         default:
             break;
@@ -231,10 +246,13 @@ LOCAL void s4_acquire(s4_input_t *in)
         er = drv_lsm303_read_accel(&s4_dev, raw, &fresh);
         if (er < E_OK)
         {
-            in->bus_fault = 1U;
+            /* One glitch only skips this sample (the estimator coasts and
+               goes STALE after S4_STALE_MS); the I2C fault, which makes the
+               terrain INVALID, is raised once the errors persist. */
             s4_bus_errors++;
             if (++error_run >= S4_MAX_BUS_ERRORS)
             {
+                in->bus_fault = 1U;
                 drv_lsm303_close(&s4_dev);
                 reopen_wait = S4_REOPEN_TICKS;
             }
