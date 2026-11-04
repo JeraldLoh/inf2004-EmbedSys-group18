@@ -1,5 +1,6 @@
 /* Explicit integrated trial is bounded and never flips production-qualified. */
 #include "fake_motion_hal.h"
+#include "../../../app_program/project_config/car_trial_tuning.h"
 #include "car_motion.h"
 #include "../diagnostics/b2_move_profile.h"
 #include <assert.h>
@@ -38,6 +39,8 @@ static bool line(fixture_t *f,uint32_t id) {
 }
 int main(int argc,char **argv) {
     fixture_t f; unsigned i; assert(argc==2); init(&f);
+    /* Buddy 3 treats both-white as centred, not evidence of line loss. */
+    assert(CONTROLLER_LINE_LOST_MS == 0U);
     if(strcmp(argv[1],"normal")==0) {
         assert(!line(&f,1U) && !f.car.executor.status.authorized); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"bounds")==0) {
