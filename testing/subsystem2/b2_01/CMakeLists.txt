@@ -87,7 +87,7 @@ endforeach()
 
 add_executable(test_motion_control test_motion_control.c)
 target_link_libraries(test_motion_control PRIVATE b2_runtime_policy)
-foreach(case IN ITEMS measurement pid admission forward reverse left right both_wheels stall overshoot stop_race ttl controller result_adapter)
+foreach(case IN ITEMS transition_watchdog measurement pid admission forward reverse left right both_wheels stall overshoot stop_race ttl controller result_adapter)
     add_test(NAME b2_motion_${case} COMMAND test_motion_control ${case})
 endforeach()
 add_executable(test_controller_transport test_controller_transport.c

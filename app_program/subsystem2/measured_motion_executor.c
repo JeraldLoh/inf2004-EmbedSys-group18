@@ -345,6 +345,10 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     {
         if (drv_motor_apply(e->motor, e->status.generation, 0, 0) != MOTION_OK)
         { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_ZERO_OUTPUT_IO, 3U); return MOTION_IO_ERROR; }
+        /* Zero output is committed: retire the previous powered interval's
+         * watchdog during the intentional dwell. The nonzero path below
+         * re-arms it before applying motor power. */
+        e->io.cancel_watchdog(e->io.context);
         if (!reached(now, e->transition_until_us) || !e->measurement.sample.speed_valid ||
             e->measurement.sample.speed_um_s[0] > e->config.settle_speed_um_s ||
             e->measurement.sample.speed_um_s[1] > e->config.settle_speed_um_s) { return MOTION_OK; }
