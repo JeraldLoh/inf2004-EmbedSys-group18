@@ -46,7 +46,11 @@
 #define	DEVCONF_ADC_PIN_INIT_0	FALSE
 #endif
 #define	DEVCONF_ADC_PIN_INIT_1	FALSE
+#if defined(APP_S3_LINE_PID) && (APP_S3_LINE_PID != 0)
+#define	DEVCONF_ADC_PIN_INIT_2	TRUE	/* GP28 line PID sensor (Buddy 3) */
+#else
 #define	DEVCONF_ADC_PIN_INIT_2	FALSE
+#endif
 #define	DEVCONF_ADC_PIN_INIT_3	FALSE
 
 /* Interrupt t priority */

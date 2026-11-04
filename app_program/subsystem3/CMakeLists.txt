@@ -7,6 +7,7 @@
 # subsystem3_host below.
 add_library(subsystem3_host STATIC
     line_follow.c
+    line_pid.c
     barcode_sensor.c
     barcode_edges.c
     barcode_decoder.c
