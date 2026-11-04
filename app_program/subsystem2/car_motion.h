@@ -7,6 +7,13 @@
  * metres, positive RIGHT. Conversion happens here, never in the wire codec.
  * Controller owns source/generation admission; the runtime checks its current
  * authority before invoking these methods. Calls are externally serialized. */
+typedef enum {
+    CAR_REJECT_NONE = 0, CAR_REJECT_SOURCE, CAR_REJECT_LIFETIME,
+    CAR_REJECT_LINE_PAUSED, CAR_REJECT_ID, CAR_REJECT_AUTHORITY,
+    CAR_REJECT_EXECUTOR, CAR_REJECT_ENCODER_CAPTURE
+} car_motion_reject_t;
+const char *car_motion_reject_name(car_motion_reject_t reason);
+
 typedef struct
 {
     measured_motion_executor_t executor;
@@ -17,8 +24,16 @@ typedef struct
     uint32_t last_goal_id[6];
     uint32_t line_floor;
     uint32_t accepted, rejected;
+    car_motion_reject_t last_reject;
+    motion_status_t last_reject_status;
+    uint32_t rejected_id, rejected_generation;
+    motion_source_t rejected_source;
     bool retained_valid, line_floor_set;
 } car_motion_t;
+
+/* Caller must hold the same external serialization as the motion methods. */
+bool car_motion_record_rejection(car_motion_t *motion, car_motion_reject_t reason,
+    motion_status_t status, motion_source_t source, uint32_t id, uint32_t generation);
 
 /* Candidate configuration is deliberately unqualified, with zero gains.
  * Supply qualified measured gains before authorizing real movement. */
@@ -27,7 +42,7 @@ bool car_motion_init(car_motion_t *motion, drv_motor_t *motor,
     drv_encoder_t *encoder, const measured_motion_executor_config_t *config,
     const measured_motion_executor_io_t *io);
 #if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
-/* Startup-only opt-in, <=15s per authority. Supervisor also limits whole run. */
+/* Startup-only opt-in, <=15s per authority or MEASURED_MOTION_NO_RUN_LIMIT. */
 bool car_motion_enable_trial(car_motion_t *motion, uint32_t limit_us);
 #endif
 bool car_motion_continuous(car_motion_t *motion,

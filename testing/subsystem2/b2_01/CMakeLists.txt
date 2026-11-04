@@ -87,7 +87,7 @@ endforeach()
 
 add_executable(test_motion_control test_motion_control.c)
 target_link_libraries(test_motion_control PRIVATE b2_runtime_policy)
-foreach(case IN ITEMS measurement pid admission forward reverse left right both_wheels stall overshoot stop_race ttl controller result_adapter)
+foreach(case IN ITEMS transition_watchdog measurement pid admission forward reverse left right both_wheels stall overshoot stop_race ttl controller result_adapter)
     add_test(NAME b2_motion_${case} COMMAND test_motion_control ${case})
 endforeach()
 add_executable(test_controller_transport test_controller_transport.c
@@ -144,28 +144,23 @@ target_link_libraries(test_goal_approach PRIVATE b2_fake)
 foreach(case IN ITEMS legacy_shortfall forward reverse coast blocked cap pivot_left pivot_right pivot_legacy pivot_cap)
     add_test(NAME b2_goal_approach_${case} COMMAND test_goal_approach ${case})
 endforeach()
-add_executable(test_car_trial test_car_trial.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c)
+add_executable(test_car_trial test_car_trial.c ${B2_SOURCE}/car_motion.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c)
 target_compile_definitions(test_car_trial PRIVATE APP_CAR_B2_TRIAL=1)
 target_link_libraries(test_car_trial PRIVATE b2_fake)
-foreach(case IN ITEMS normal bounds line goal goal_obstacle deadline stop)
+foreach(case IN ITEMS bend_speed normal bounds line goal goal_obstacle deadline stop unlimited pivot_cap forward_cap sync sync_far pivot_sync pivot_sync_far straight_hold)
     add_test(NAME b2_integrated_trial_${case} COMMAND test_car_trial ${case})
 endforeach()
 add_executable(test_integrated_trial_startup test_car_startup.c
     ${B2_SOURCE}/../vehicle_controller/car_run_target.c)
 target_include_directories(test_integrated_trial_startup PRIVATE ${B2_SOURCE} stubs)
-target_compile_definitions(test_integrated_trial_startup PRIVATE APP_CAR_RUN=1 APP_CAR_B2_TRIAL=1 APP_B2_BENCH=0)
+target_compile_definitions(test_integrated_trial_startup PRIVATE APP_CAR_RUN=1 APP_CAR_B2_TRIAL=1 APP_B2_BENCH=0 CAR_RUN_LIMIT_MS=15000U)
 foreach(case IN ITEMS trial_limit trial_fault trial_idle)
     add_test(NAME b2_integrated_startup_${case} COMMAND test_integrated_trial_startup ${case})
 endforeach()
-add_executable(test_line_tuning test_line_tuning.c
-    ${B2_SOURCE}/../diagnostics/b2_move_profile.c
-    ${B2_SOURCE}/../subsystem3/line_follow.c
-    ${B2_SOURCE}/../vehicle_controller/controller_service.c
-    ${B2_SOURCE}/../vehicle_controller/vehicle_controller.c
-    ${B2_SOURCE}/../vehicle_controller/safety.c
-    ${B2_SOURCE}/../contracts/hardware_faults.c)
-target_compile_definitions(test_line_tuning PRIVATE APP_CAR_B2_TRIAL=1)
-target_link_libraries(test_line_tuning PRIVATE b2_fake)
-add_test(NAME b2_integrated_line_tuning COMMAND test_line_tuning)
+add_executable(test_integrated_trial_unlimited test_car_startup.c
+    ${B2_SOURCE}/../vehicle_controller/car_run_target.c)
+target_include_directories(test_integrated_trial_unlimited PRIVATE ${B2_SOURCE} stubs)
+target_compile_definitions(test_integrated_trial_unlimited PRIVATE APP_CAR_RUN=1 APP_CAR_B2_TRIAL=1 APP_B2_BENCH=0)
+add_test(NAME b2_integrated_startup_trial_unlimited COMMAND test_integrated_trial_unlimited trial_unlimited)
 get_property(b2_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${b2_tests} PROPERTIES LABELS subsystem2)

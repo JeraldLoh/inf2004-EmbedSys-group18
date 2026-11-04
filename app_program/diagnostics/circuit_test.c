@@ -81,17 +81,15 @@ static void menu(unsigned selected)
 static void report(void)
 {
     motion_encoder_snapshot_t e;
-    uint16_t adc=0U;
     line_status_t line={0};
     uint32_t words[S4_WORDS];
-    bool have_adc=s3_ready && subsystem3_barcode_raw(&adc);
     if (s3_ready) { line=subsystem3_line_status(); }
     if (subsystem2_read_encoders(&e)==MOTION_OK)
     {
-        tm_printf((UB*)"[CIRCUIT] ENC L=%lu R=%lu epoch=%lu | GPIO7=%u GPIO0=%u black L=%u R=%u | ADC26=%u valid=%d barcode_cal=%d\n",
+        tm_printf((UB*)"[CIRCUIT] ENC L=%lu R=%lu epoch=%lu | GPIO7=%u GPIO0=%u black L=%u R=%u | barcode_cal=%d (raw ADC unavailable: Buddy3 API restored)\n",
             (unsigned long)e.left_count,(unsigned long)e.right_count,(unsigned long)e.reset_epoch,
             gpio_get_val(PIN_LINE_LEFT),gpio_get_val(PIN_LINE_RIGHT),
-            (unsigned)line.left_black,(unsigned)line.right_black,(unsigned)adc,(int)have_adc,
+            (unsigned)line.left_black,(unsigned)line.right_black,
             (int)(s3_ready && subsystem3_barcode_calibrated()));
     }
     if (s4_ready && s4_shared_read(words))

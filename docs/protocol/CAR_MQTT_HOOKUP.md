@@ -40,3 +40,40 @@ Telemetry uses the current binary schema approximately every 200 ms. Source time
 - Actual merged bridge packet crossed isolated MQTT to the dashboard decoder/model; combined ARM firmware compiled.
 - Full team CMake tests still reference missing Buddy 4 test files and are not claimed passing.
 - These automated checks do not establish correct combined hardware behavior. Keep wheels raised for initial motor checks; physical line following still needs diagnosis.
+
+## demo supplementary reporting (type 4)
+
+A separate live_status topic preserves the existing telemetry v2/v3 layouts.
+Frame header: B1, version, type=4, demo flag. All u32/i32 fields are little endian.
+Version 1 is 64 bytes, version 2 adds encoder settings (76 bytes), and current
+version 3 adds the observed barcode calibration state (80 bytes).
+
+| Offset | Field |
+| --- | --- |
+| 4 | uptime_ms u32 |
+| 8 | present bits: motion/controller=1, line=2, avoidance=4 |
+| 9 | flags: targets_valid=1, qualified=2, searching=4 |
+| 10 | paused 0/1 (current demo does not have hump pausing) |
+| 11 | flags: fast=1, bypass_active=2, clearance_reverse=4 |
+| 12 | motion sample ms |
+| 16,20 | signed left/right target mm/s |
+| 24,28 | search attempts/failures u32 |
+| 32,36 | line/avoidance sample ms |
+| 40 | segment index low 3 bits, count next 3 bits; index=count means finishing |
+| 41 | chosen side: none=0, left=1, right=2 |
+| 42,43 | reserved zero |
+| 44,48 | back-off count / active encounter elapsed ms |
+| 52,56,60 | accepted/rejected/driver-error counters |
+| 64,68,72 | active left/right encoder counts/rev, wheel diameter mm |
+| 76 | barcode calibration: 0 not started, 1 running, 2 passed, 3 failed, 4 unavailable |
+| 77 | calibration failure reason: 0 unknown/none, 1 low contrast |
+| 78,79 | reserved zero |
+
+Unlisted flag bits must be zero. All timestamps use kernel milliseconds;
+unsigned subtraction handles wrap and rejects future/ambiguous ages. Browser
+freshness adds time since this topic's reception; age >=1500 ms is unavailable.
+Older live-status versions cannot invent calibration outcomes. Extra status is
+latest-value data, not an event queue. Missing events cannot be reconstructed.
+The original 61f8836 motor settings, watchdog, line loss/search and task priorities
+are preserved. Configured encoder parameters and qualified motion are different
+from a live calibration result. Buddy 5 calibration results are not reported.

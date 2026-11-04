@@ -1,5 +1,6 @@
 /* Explicit integrated trial is bounded and never flips production-qualified. */
 #include "fake_motion_hal.h"
+#include "../../../app_program/project_config/car_trial_tuning.h"
 #include "car_motion.h"
 #include "../diagnostics/b2_move_profile.h"
 #include <assert.h>
@@ -38,12 +39,139 @@ static bool line(fixture_t *f,uint32_t id) {
 }
 int main(int argc,char **argv) {
     fixture_t f; unsigned i; assert(argc==2); init(&f);
-    if(strcmp(argv[1],"normal")==0) {
+    /* Buddy 3 treats both-white as centred, not evidence of line loss. */
+    assert(CONTROLLER_LINE_LOST_MS == 0U);
+    if(strcmp(argv[1],"bend_speed")==0) {
+        motion_continuous_request_t r={1U,1U,MOTION_SOURCE_LINE,60,0,100U,0U,150U};
+        int32_t curves[5]={0,2800000,-2800000,5600000,-5600000};
+        assert(car_motion_enable_trial(&f.car,15000000U));
+        for(i=0U;i<5U;++i) {
+            r.command_id=i+1U; r.curvature_u1_m=curves[i];
+            assert(car_motion_continuous(&f.car,&r,0U,0U));
+            assert(f.car.executor.continuous.speed_mm_s==(i<3U?60:54));
+            if(i<3U) { assert(f.car.executor.continuous.curvature_u1_m==0); }
+            else { assert(f.car.executor.continuous.curvature_u1_m==(i==3U?-4:4)); }
+        }
+        r.command_id=6U; r.source=MOTION_SOURCE_OBSTACLE;
+        assert(car_motion_continuous(&f.car,&r,0U,0U));
+        assert(f.car.executor.continuous.speed_mm_s==60);
+        r.source=MOTION_SOURCE_LINE; r.command_id=7U; r.speed_mm_s=-1;
+        assert(!car_motion_continuous(&f.car,&r,0U,0U));
+        r.command_id=8U; r.speed_mm_s=(int32_t)f.car.executor.config.max_speed_mm_s+1;
+        assert(!car_motion_continuous(&f.car,&r,0U,0U));
+    } else if(strcmp(argv[1],"normal")==0) {
         assert(!line(&f,1U) && !f.car.executor.status.authorized); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"bounds")==0) {
         assert(!car_motion_enable_trial(&f.car,0U));
         assert(!car_motion_enable_trial(&f.car,15000001U));
         assert(car_motion_enable_trial(&f.car,15000000U)); fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"pivot_cap")==0 || strcmp(argv[1],"forward_cap")==0) {
+        /* Wheels held still: pivots may reach 40% (pivot_max_effort),
+         * straight goals stay at the 30% PID cap. */
+        bool pivot=strcmp(argv[1],"pivot_cap")==0;
+        motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,
+            pivot?MOTION_GOAL_PIVOT_LEFT:MOTION_GOAL_FORWARD,pivot?0:200,pivot?10000:0,100U,0U};
+        int peak=0;
+        assert(f.car.executor.config.pivot_max_effort==400U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<60U && !f.car.executor.status.terminal_pending;++i) {
+            motion_motor_state_t state; int l,rr;
+            tick(&f,0U,0U);
+            assert(drv_motor_read(&f.motor,&state)==MOTION_OK);
+            l=state.left_effort<0?-state.left_effort:state.left_effort;
+            rr=state.right_effort<0?-state.right_effort:state.right_effort;
+            if(l>peak) { peak=l; }
+            if(rr>peak) { peak=rr; }
+        }
+        assert(peak==(pivot?400:300));
+        car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"sync")==0 || strcmp(argv[1],"sync_far")==0) {
+        /* Straight 200 mm; the left wheel stops 20 mm (sync) or 50 mm
+         * (sync_far) short. Within the 30 mm slack both stop together and the
+         * goal completes; beyond it the old per-wheel rule (and its stall
+         * fault) still applies. */
+        uint64_t short_um=strcmp(argv[1],"sync")==0?20000U:50000U;
+        motion_goal_request_t r={23U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_FORWARD,200,0,100U,0U};
+        motion_goal_result_t out;
+        assert(f.car.executor.config.linear_sync_slack_um==30000U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<800U && !f.car.executor.status.terminal_pending;++i) {
+            uint64_t left=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+            tick(&f,left+short_um<f.car.executor.goal_target_um?6U:0U,6U);
+        }
+        assert(f.car.executor.status.terminal_pending);
+        assert(car_motion_result(&f.car,r.source,23U,&out));
+        if(short_um==20000U) {
+            assert(out.code==MOTION_RESULT_COMPLETED);
+            assert(out.travelled_mm>=180 && out.travelled_mm<=200);  /* average of the two */
+        } else {
+            assert(out.code==MOTION_RESULT_FAULT);
+            assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
+        }
+        fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"pivot_sync")==0 || strcmp(argv[1],"pivot_sync_far")==0) {
+        /* 60 deg pivot left (~59 mm per wheel); the left wheel stops 15 mm
+         * (pivot_sync) or 30 mm (pivot_sync_far) short of its share. Within
+         * the 20 mm pivot slack both stop and the turn completes. */
+        uint64_t short_um=strcmp(argv[1],"pivot_sync")==0?15000U:30000U;
+        motion_goal_request_t r={24U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_PIVOT_LEFT,0,60000,100U,0U};
+        motion_goal_result_t out;
+        assert(f.car.executor.config.pivot_sync_slack_um==20000U);
+        assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+        for(i=0U;i<800U && !f.car.executor.status.terminal_pending;++i) {
+            uint64_t left=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+            tick(&f,(!f.car.executor.goal_started || left+short_um<f.car.executor.goal_target_um)?6U:0U,6U);
+        }
+        assert(f.car.executor.status.terminal_pending);
+        assert(car_motion_result(&f.car,r.source,24U,&out));
+        if(short_um==15000U) { assert(out.code==MOTION_RESULT_COMPLETED); }
+        else {
+            assert(out.code==MOTION_RESULT_FAULT);
+            assert(f.car.executor.status.detail_reason==MOTION_DETAIL_NO_PROGRESS);
+        }
+        fake_assert_safe(&f.f);
+    } else if(strcmp(argv[1],"straight_hold")==0) {
+        /* Straight 300 mm with the right wheel 10% faster for the same
+         * effort. Run once without the hold and once with it: with it the
+         * leading right wheel is slowed and the gap stays much smaller. */
+        uint64_t gaps[2]; unsigned run;
+        assert(f.car.executor.config.linear_hold_per_s==2U);
+        for(run=0U;run<2U;++run) {
+            motion_goal_request_t r={25U,1U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_FORWARD,300,0,100U,0U};
+            unsigned acc_l=0U,acc_r=0U; uint64_t gap=0U; bool slowed=false;
+            if(run==1U) { init(&f); }
+            else { f.car.executor.config.linear_hold_per_s=0U; }
+            assert(car_motion_enable_trial(&f.car,15000000U)); assert(car_motion_goal(&f.car,&r,0U));
+            for(i=0U;i<100U && !f.car.executor.status.terminal_pending;++i) { /* 2 s: short of the end */
+                uint64_t l=f.car.executor.measurement.sample.travel_um[0]-f.car.executor.goal_base_um[0];
+                uint64_t rr=f.car.executor.measurement.sample.travel_um[1]-f.car.executor.goal_base_um[1];
+                motion_motor_state_t state; unsigned el,er;
+                assert(drv_motor_read(&f.motor,&state)==MOTION_OK);
+                /* Edges per tick follow effort; the right wheel gets 10% more. */
+                acc_l+=(unsigned)(state.left_effort<0?0:state.left_effort)*10U;
+                acc_r+=(unsigned)(state.right_effort<0?0:state.right_effort)*11U;
+                el=acc_l/250U; acc_l%=250U; er=acc_r/250U; acc_r%=250U;
+                tick(&f,el,er);
+                if(f.car.executor.goal_started && rr>l) {
+                    if(rr-l>gap) { gap=rr-l; }
+                    if(f.car.executor.status.target_um_s[1]<f.car.executor.status.target_um_s[0]) { slowed=true; }
+                }
+            }
+            assert(slowed==(run==1U));
+            gaps[run]=gap;
+            car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
+        }
+        printf("straight gap without hold %llu um, with %llu um\n",
+            (unsigned long long)gaps[0],(unsigned long long)gaps[1]);
+        assert(gaps[0]>5000U && gaps[1]*3U<gaps[0]);
+    } else if(strcmp(argv[1],"unlimited")==0) {
+        assert(car_motion_enable_trial(&f.car,MEASURED_MOTION_NO_RUN_LIMIT));
+        for(i=0U;i<1250U;++i) { /* 25 s: past the old 15 s and the 20 s bound */
+            if(i%5U==0U) { assert(line(&f,1U+i)); }
+            tick(&f,2U,2U);
+        }
+        assert(f.car.executor.status.authorized && !f.car.executor.config.qualified);
+        car_motion_cancel(&f.car,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"goal")==0 || strcmp(argv[1],"goal_obstacle")==0) {
         motion_goal_request_t r={23U,1U,MOTION_SOURCE_JUNCTION,MOTION_GOAL_PIVOT_LEFT,0,90000,100U,0U};
         motion_goal_result_t out; unsigned left=0U,right=0U; bool counted=false;

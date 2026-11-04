@@ -108,6 +108,7 @@ static void test_without_ops_service_is_a_no_op(void)
 static void test_turn_becomes_authority_stamped_pivot(void)
 {
     setup();
+    assert(!m.config.arc_turns);   /* pivots by default */
     b5_motion_turn(&m, 30000, 100U);
     assert(m.state == B5_MOVE_PENDING && !b5_motion_done(&m));
     b5_motion_service(&m, 110U);
@@ -124,6 +125,63 @@ static void test_turn_becomes_authority_stamped_pivot(void)
     b5_motion_service(&m, 200U);
     assert(f.last_goal.type == MOTION_GOAL_PIVOT_RIGHT);
     assert(f.last_goal.target_mdeg == 45000);
+}
+
+/* Default: a turn is a timed forward arc (pivots stalled on the car). */
+static void test_turn_is_a_timed_forward_arc(void)
+{
+    uint32_t t;
+    setup();
+    m.config.arc_turns = true;
+    b5_motion_turn(&m, 45000, 1000U);           /* 45 deg left */
+    assert(m.state == B5_MOVE_ARC && !b5_motion_done(&m));
+    b5_motion_service(&m, 1000U);
+    assert(f.goals == 0 && f.continuous == 1);
+    assert(f.last_request.source == MOTION_SOURCE_OBSTACLE);
+    assert(f.last_request.authority_generation == 7U);
+    assert(f.last_request.speed_mm_s == 50);     /* both wheels forward */
+    assert(f.last_request.curvature_u1_m == 11000000);
+    assert(f.last_request.expires_ms > f.last_request.created_ms);
+    /* 45 / 31.5 deg/s = 1428 ms, + 200 ms ramp. */
+    assert(m.arc_ms == 1628U);
+    for (t = 1010U; t < 2628U; t += 10U)
+    {
+        b5_motion_service(&m, t);
+        assert(m.state == B5_MOVE_ARC);
+    }
+    assert(f.halts == 0);
+    b5_motion_service(&m, 2628U);
+    assert(b5_motion_done(&m) && f.halts == 1);
+
+    setup();
+    m.config.arc_turns = true;
+    b5_motion_turn(&m, -20000, 0U);             /* right */
+    b5_motion_service(&m, 0U);
+    assert(f.last_request.curvature_u1_m == -11000000);
+}
+
+static void test_arc_waits_for_authority_then_fails(void)
+{
+    setup();
+    m.config.arc_turns = true;
+    f.allowed = false;
+    b5_motion_turn(&m, 30000, 0U);
+    b5_motion_service(&m, 100U);
+    assert(m.state == B5_MOVE_ARC && f.continuous == 0);
+    f.allowed = true;                           /* controller caught up */
+    b5_motion_service(&m, 200U);
+    assert(m.arc_started && f.continuous == 1);
+
+    f.allowed = false;                          /* STOP mid-arc */
+    b5_motion_service(&m, 300U);
+    assert(b5_motion_failed(&m) && f.halts == 1);
+
+    setup();
+    m.config.arc_turns = true;
+    f.allowed = false;
+    b5_motion_turn(&m, 30000, 0U);
+    b5_motion_service(&m, m.config.wait_ms);
+    assert(b5_motion_failed(&m) && m.last_result == MOTION_RESULT_REJECTED);
 }
 
 static void test_straight_moves(void)
@@ -153,7 +211,7 @@ static void test_waits_for_authority_then_submits(void)
 {
     setup();
     f.allowed = false;   /* controller has not entered the obstacle mission */
-    b5_motion_turn(&m, 10000, 1000U);
+    b5_motion_straight(&m, 100, false, 1000U);
     b5_motion_service(&m, 1100U);
     assert(m.state == B5_MOVE_PENDING && f.goals == 0);
     f.allowed = true;
@@ -166,7 +224,7 @@ static void test_rejected_submission_is_retried(void)
 {
     setup();
     f.accept_goal = false;   /* stale authority still in flight */
-    b5_motion_turn(&m, 10000, 0U);
+    b5_motion_straight(&m, 100, false, 0U);
     b5_motion_service(&m, 10U);
     assert(m.state == B5_MOVE_PENDING && f.goals == 1);
     f.accept_goal = true;
@@ -178,7 +236,7 @@ static void test_no_authority_fails_after_wait(void)
 {
     setup();
     f.allowed = false;
-    b5_motion_turn(&m, 10000, 1000U);
+    b5_motion_straight(&m, 100, false, 1000U);
     b5_motion_service(&m, 1000U + m.config.wait_ms - 1U);
     assert(!b5_motion_failed(&m));
     b5_motion_service(&m, 1000U + m.config.wait_ms);
@@ -188,7 +246,7 @@ static void test_no_authority_fails_after_wait(void)
     /* Authority arriving exactly at the deadline still counts. */
     setup();
     f.allowed = false;
-    b5_motion_turn(&m, 10000, 1000U);
+    b5_motion_straight(&m, 100, false, 1000U);
     b5_motion_service(&m, 1100U);
     f.allowed = true;
     b5_motion_service(&m, 1000U + m.config.wait_ms);
@@ -198,7 +256,7 @@ static void test_no_authority_fails_after_wait(void)
 static void test_goal_results(void)
 {
     setup();
-    b5_motion_turn(&m, 10000, 0U);
+    b5_motion_straight(&m, 100, false, 0U);
     b5_motion_service(&m, 0U);
     b5_motion_service(&m, 10U);
     assert(m.state == B5_MOVE_GOAL);       /* PROGRESS */
@@ -225,7 +283,7 @@ static void test_goal_results(void)
 static void test_stop_halts_and_clears(void)
 {
     setup();
-    b5_motion_turn(&m, 10000, 0U);
+    b5_motion_straight(&m, 100, false, 0U);
     b5_motion_service(&m, 0U);
     b5_motion_stop(&m);
     assert(f.halts == 1 && b5_motion_done(&m) && !b5_motion_failed(&m));
@@ -274,6 +332,8 @@ int main(void)
     test_ops_all_or_nothing();
     test_without_ops_service_is_a_no_op();
     test_turn_becomes_authority_stamped_pivot();
+    test_turn_is_a_timed_forward_arc();
+    test_arc_waits_for_authority_then_fails();
     test_straight_moves();
     test_zero_moves_complete_at_once();
     test_waits_for_authority_then_submits();

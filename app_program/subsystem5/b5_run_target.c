@@ -113,7 +113,7 @@ static void startup_task(INT code, void *exinf)
         tm_printf((UB*)"[B5 RUN] Motors stay inhibited: nothing drives the wheels in this build\n");
         tm_printf((UB*)"         (no Buddy 2 move executor). Turns/moves are refused, so a wide\n");
         tm_printf((UB*)"         obstacle ends in a latched safe stop. GP21 STOP always works.\n");
-        tm_printf((UB*)"[B5 RUN] Status line every 1 s; hand under 25 cm = obstacle.\n");
+        tm_printf((UB*)"[B5 RUN] Status line every 1 s; hand under 20 cm = obstacle.\n");
     }
     tk_ext_tsk();
 }

@@ -143,6 +143,18 @@ static void b5_goal(void) {
     finish_goal(&f); b5_motion_service(&f.b5,f.ms);
     assert(b5_motion_done(&f.b5) && f.b5.last_result==MOTION_RESULT_COMPLETED);
     assert(!f.motion.executor.status.terminal_pending);
+    /* B5 arc turn: a forward arc on the continuous path (right = -11/m
+     * in B5 units; car_motion flips the sign for the executor). */
+    f.b5.config.arc_turns=true;
+    b5_motion_turn(&f.b5,-90000,f.ms); b5_motion_service(&f.b5,f.ms);
+    assert(f.b5.state==B5_MOVE_ARC && f.b5.arc_started);
+    assert(f.motion.executor.status.state==MOTION_EXEC_CONTINUOUS);
+    assert(f.motion.executor.continuous.source==MOTION_SOURCE_OBSTACLE);
+    assert(f.motion.executor.continuous.curvature_u1_m==11);
+    b5_motion_stop(&f.b5);
+    assert(b5_motion_done(&f.b5));
+    /* Pivot goals: the default. */
+    f.b5.config.arc_turns=false;
     b5_motion_turn(&f.b5,-90000,f.ms); b5_motion_service(&f.b5,f.ms);
     assert(f.b5.state==B5_MOVE_GOAL && f.motion.executor.goal.type==MOTION_GOAL_PIVOT_RIGHT);
     finish_goal(&f); b5_motion_service(&f.b5,f.ms);
@@ -173,7 +185,9 @@ static void junction(void) {
     assert(controller_service_bind_junction(&f.controller,&ops));
     f.controller.junction.goal_speed_mm_s=30U;
     assert(f.controller.junction.goal_timeout_ms==0U);
-    warm(&f); f.events=true; tick(&f,0U,0U);
+    warm(&f);
+    car_motion_halt(&f.motion); /* the probe's pause: line floor at this generation */
+    f.events=true; tick(&f,0U,0U);
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_APPROACH);
     finish_goal(&f);
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_TURN);
@@ -183,6 +197,15 @@ static void junction(void) {
     assert(f.controller.junction_phase==CONTROLLER_JUNCTION_IDLE);
     assert(f.controller.status.junctions_done==1U);
     assert(f.controller.controller.mission==MISSION_VERIFY_LINE);
+    /* Car trial 2026-11-02: line requests after the route were refused
+     * (LINE_PAUSED_NEEDS_NEW_GENERATION) and the car stopped on line lost. */
+    {
+        uint32_t rejected=f.motion.rejected;
+        tick(&f,3U,3U);
+        assert(f.motion.rejected==rejected);
+        assert(f.motion.executor.status.state==MOTION_EXEC_CONTINUOUS);
+        assert(f.motion.executor.continuous.source==MOTION_SOURCE_LINE);
+    }
 }
 static void stop_and_ids(void) {
     fixture_t f;

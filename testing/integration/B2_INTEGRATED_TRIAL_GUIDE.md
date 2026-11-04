@@ -179,3 +179,100 @@ was performed. Next hardware check: raised-wheel START/STOP, then a short
 curve run; preserve the log across junction detection, probe and final stop.
 Junction detection on a curve may itself need tuning if both sensors see black
 without a real intersection; this change does not remove junction detection.
+
+## V7: 60mm/s candidate after polarity revert
+
+At the operator's request V6 polarity was reverted (d4184ad). V7 retains the
+previous HIGH=black line interpretation and changes only trial line cruise
+from50 to60mm/s (6cm/s), plus its banner and matching test expectation.
+The slow line/barcode/approach target is also60mm/s, capped at cruise.
+Steering remains12..90, ramp6ms, fading memory200ms, curvature scaling120000;
+nominal full-turn wheel targets are approximately97/23mm/s. Turning radius
+is unchanged; the new command traverses the same requested arc faster.
+Motor PID/calibration,30% effort,100ms watchdog,15s run limit, physical STOP,
+normal production gating and known post-junction resume issue are unchanged.
+
+Compiled successfully. Automated tests were not run, per user request. The
+updated test expectation is recorded but has not been executed. No hardware
+validation, flashing or remote push was performed for this version.
+
+## V8: outside-wheel boost during line turns
+
+The operator requested stronger turns by increasing the opposite/outside wheel.
+V8 keeps60mm/s straight cruise and all V7 steering and HIGH=black settings.
+In APP_CAR_B2_TRIAL only, continuous LINE requests receive an additional
+outside-wheel target of50% of the original absolute turn speed offset.
+This is clipped to the existing per-wheel speed cap after base cap scaling.
+The inside target is not reduced. At full correction nominal targets change
+from97/23 to115/23mm/s (mirrored for left turns); at zero curvature both remain
+60mm/s. This increases the chassis speed during turns as well as the wheel
+speed difference. Nominal full-turn radius changes from91 to84mm.
+
+Finite distance/pivot goals and Buddy5 obstacle/search requests do not receive
+this boost. Existing acceleration,120mm/s maximum wheel target,30% effort,
+watchdog, command lifetime, physical STOP and15s run limit remain in force.
+A requested boost may not be reached under load at the unchanged effort cap.
+The known post-junction resume-authority and line-recovery issues remain open.
+
+Firmware compilation succeeded. Automated tests were skipped per user request;
+no hardware result, flashing or remote push was performed. First check raised-
+wheel START/STOP and correct turn direction, then retry the same floor curve
+with GP21 accessible. Retain target/measured wheel speeds and any stop messages.
+
+## V9: return base line speed to50mm/s, retain turn boost
+
+At the operator's request, V9 changes V8 base line cruise/slow speed from60
+back to50mm/s. The outside-wheel boost remains50% of the original turn offset;
+nominal full-turn wheel targets are96/19mm/s, mirrored for left turns, while
+straight targets are50/50. All other V8 tuning, HIGH=black polarity, motion
+limits and known integration limitations remain. Firmware compiled successfully.
+Automated tests were skipped per user request; the matching source expectation
+was updated but not executed. No physical testing, flashing or push performed.
+
+## Current settings restored to operator-reported V5 baseline
+
+At the operator's request, restore the firmware sources to a0190ea/d6bc6ad,
+matching the V5 image associated with the report of three successful line
+following attempts out of four. Base50mm/s; HIGH=black; steering12..90 with
+6ms ramp and200ms fading memory; junction-pause fix; no outside-wheel boost.
+Motor PID/calibration and stop protections match that baseline.
+
+Later V6-V9 notes above are historical and do not describe current firmware.
+Use the existing group18_b2_integrated_line50_v5_2026-11-02.uf2 artifact,
+SHA25603f15e680f92e2745e77f9979199feafca38e79dd102428807927e1307ce6111.
+Known line interpretation/recovery and post-junction resume issues remain.
+No new build or automated tests were run for this restoration; no flash,
+vehicle operation or remote push performed.
+
+## V10 local candidate: increase outside and decrease inside during turns
+
+After publishing the restored V5 baseline to testing, the operator requested
+stronger turns by increasing the outside wheel and decreasing the inside.
+V10 changes trial-only curvature-per-steer scaling from120000 to140000.
+At steering90 the adapter rounds curvature from11 to13 reciprocal metres;
+at50mm/s with112mm track, wheel targets become86.4/13.6mm/s (mirrored left),
+versus80.8/19.2 before. Straight targets remain50/50. The historical V8/V9
+outside-only boost is not enabled. Motor PID, effort cap, steering ramp and
+memory, HIGH=black polarity, finite goals and all STOP/watchdog limits remain.
+
+The lower inner target may stall under floor load; physical validation is
+needed. This adjustment cannot fix a zero steering command, sensor mapping,
+line recovery or the known post-junction resume-authority issue.
+Compilation succeeded; automated suites were not run per user request.
+Matching test expectations were updated but not executed. No flash, vehicle
+operation or remote push performed. Remote testing retains the V5 baseline.
+
+## V11 local candidate: reduce inner line-turn target by15%
+
+At the operator's request V11 multiplies the inside wheel speed target by0.85
+for nonzero-curvature continuous LINE requests in APP_CAR_B2_TRIAL only. The
+outside target stays as in V10. Straight50/50, finite goals and obstacle moves
+are unchanged. Full right-turn nominal targets are86.4/11.56mm/s, mirrored
+for left; integer status output truncates these to86/11mm/s. Base50mm/s,
+curvature140000, original HIGH=black, steering ramp/memory and effort/watchdog/
+run limits are retained. The smaller inner target can stall under floor load;
+retain the next log to compare target and measured speeds. This does not fix
+line-loss stops or post-junction resume-authority rejection.
+
+Compilation succeeded. Automated tests skipped per user request. No physical
+trial, flash or remote push performed. Remote testing retains the V5 baseline.

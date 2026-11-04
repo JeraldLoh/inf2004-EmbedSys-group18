@@ -60,6 +60,7 @@ typedef struct
 {
     int8_t steer;          /* -100 (full left) .. +100 (full right) */
     bool barcode_active;   /* a barcode is being read: hold a steady speed */
+    bool on_line;          /* either sensor sees black (line search) */
 } controller_line_input_t;
 
 typedef struct
@@ -124,6 +125,13 @@ typedef struct
     uint32_t slow_mm_s;                 /* barcode read / junction approach */
     int32_t curvature_per_steer_u1_m;   /* steer 100 -> this * 100 */
     uint32_t request_life_ms;           /* Buddy 2 stops if not refreshed */
+    /* Line search: no black for lost_ms while following -> stop and pivot
+     * search_step_mdeg at a time toward the side last seen, up to
+     * search_max_mdeg, then the other way. Needs junction outputs (goals).
+     * 0 = off: keep driving on the last steering. */
+    uint32_t lost_ms;
+    int32_t search_step_mdeg;
+    int32_t search_max_mdeg;
 } controller_line_config_t;
 
 typedef struct
@@ -148,6 +156,9 @@ typedef struct
     uint32_t routes_rejected;
     uint32_t junctions_done;      /* routes driven to the end */
     route_command_t last_route;
+    uint32_t line_searches;     /* line lost and searched for */
+    uint32_t line_search_fails;
+    bool line_searching;
 } controller_status_t;
 
 typedef struct
@@ -169,6 +180,13 @@ typedef struct
     goal_id_t next_goal_id;
     bool holdoff;
     system_time_ms_t holdoff_until_ms;
+
+    system_time_ms_t line_seen_ms;
+    bool searching;
+    bool search_seen;      /* a sensor saw black during this step */
+    int8_t search_dir;     /* +1 right, -1 left: the side tried first */
+    int8_t search_pass;    /* 0 toward search_dir, 1 the other way */
+    int32_t search_mdeg;   /* heading vs where the line was lost, + = search_dir */
 } controller_service_t;
 
 void controller_line_default_config(controller_line_config_t *config);

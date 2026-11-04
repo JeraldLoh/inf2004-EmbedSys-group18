@@ -63,7 +63,7 @@ Modes: 2 = AUTO, 5 = STOPPED. Missions: 1 TRACK_LINE, 2 JUNCTION_APPROACH,
 | INT-25d | Raised | Move tape left/right under the sensors | `steer` changes sign; inner wheel slows, outer speeds up; never reverses | Log, video |
 | INT-25e | Raised | Press GP21 while running | Wheels stop at once; `[CAR] STOPPED: STOP button`; `stops` shows 0x1; restarts only with a new GP20 gesture | Log, time to stop |
 | INT-25f | Raised | Let it run 60 s | Stops by itself: `run time limit` | Log |
-| INT-26a | Raised | Running, hand at 20 cm in front of the sonar | Wheels stop at once; mission 5 -> 6; servo sweeps; then pivot goal (wheels turn opposite ways briefly) | Log, video |
+| INT-26a | Raised | Running, hand at 20 cm in front of the sonar (detection is under 25 cm) | Wheels stop at once; mission 5 -> 6; servo sweeps about 20..160 deg while the wheels stay still; then the bypass starts (pivot goal, wheels turn opposite ways briefly) | Log, video |
 | INT-26b | Raised | Running, hand removed during the scan | Back to mission 1 (line) or 9 then 1 | Log |
 | INT-27a | Floor | Slow loop of tape, no junctions; GP20 start | Follows the loop for 60 s or until STOP; stays on the line | Video, laps, off-line count |
 | INT-27b | Floor | Box on the loop | Stops before it (>= 6 cm), scans, goes round, finds the line again, carries on | Video, log, encounter time |

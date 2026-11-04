@@ -21,10 +21,11 @@ with it):
 | `obstacle.c/.h` | Scan geometry: direction+distance to x/y, obstacle width, side choice, bypass plan |
 | `avoidance.c/.h` | Non-blocking detect, scan, decide, bypass, reacquire state machine (section 6.5) |
 
-Scanning: the servo checks a narrow arc first (coarse sweep, then fine steps).
-Edges outside the servo's reach are found by turning the whole car on the spot
-in steps (`TURN_SCAN_RIGHT/LEFT`); once a turn shows open space, the servo looks
-back to pin the edge down. The bypass is a mirrored three-leg detour (turn out,
+Scanning: the servo sweeps a coarse arc; the nearest reading in the car's path
+is the obstacle (the centre echo alone can miss a round bottle), and the fine
+steps fan out from it to find both edges. Only if the servo finds no open side
+does the car turn on the spot in steps (`TURN_SCAN_RIGHT/LEFT`) to look further;
+once a turn shows open space, the servo looks back to pin the edge down. The bypass is a mirrored three-leg detour (turn out,
 drive, straighten, drive alongside, turn back the same angle, drive, straighten)
 so the car ends near the line facing the line direction, then searches for it.
 Motion is requested through `motion_turn` / `motion_forward` / `motion_reverse`.
@@ -101,8 +102,25 @@ motion bindings, and then:
   MONITOR when AUTO ends, so a failed encounter does not disable it for the
   next run.
 
-Placeholders: goal speed 100 mm/s, goal timeout 4 s, search 80 mm/s on a
-~33 cm radius (`b5_motion_default_config()`).
+Moves and the line search run at 50 mm/s, the trial line cruise, so avoidance
+never drives faster than line following; Buddy 2's measured executor sets
+each move's time limit. Search arc ~33 cm radius (`b5_motion_default_config()`).
+
+Turns are pivots (`arc_turns = false`) at the trial's 30% effort cap. A
+lagging wheel used to finish the pivot alone and stall; Buddy 2 now stops both
+together when it is within 20 mm. Forward arcs (both wheels forward, R ~9 cm,
+timed) were tried but carried the car well off the line and their slow inner
+wheel stalled. Set `arc_turns = true`
+and `turn_radius_cm = 9` to use them again. Before turning, the nearest scan
+hit must be at least 10 cm (`pivot_clearance_cm`); if not, the car reverses to
+get that room and plans from the scan it already has. The turn out is at least
+60 deg so the drive out stays short, and the pass beside the obstacle is
+lengthened to reach past its front.
+
+Scan (`av_config_default()`): the servo mount was freed on 2026-11-02, so the
+scan covers 20..160 deg (+/-70) in 10 deg steps and the car stays still while
+scanning; it does not turn to look past 70 deg (`turn_scan_max_deg` = 70), and
+if it is too close to see a way past it reverses and scans again. Detection is at 20 cm. The servo sweeps at 300 deg/s rather than jumping.
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.

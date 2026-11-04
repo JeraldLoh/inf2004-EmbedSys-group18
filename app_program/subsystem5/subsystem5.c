@@ -57,10 +57,33 @@ static uint32_t cb_now_ms(void *ctx)
     return (uint32_t)now.lo;
 }
 
+/* Car trial 2026-11-03: the servo jumped straight to each new angle (up to
+ * 140 deg at once), which looked violent and erratic. It now sweeps to the
+ * target at B5_SERVO_MDEG_PER_MS; avoidance's servo_ms_per_deg waits for
+ * the sweep before reading. */
+#define B5_SERVO_MDEG_PER_MS 300 /* 300 deg/s */
+static int32_t servo_target_mdeg;
+static int32_t servo_pos_mdeg;
+static uint32_t servo_step_ms;
+
+static void servo_service(uint32_t now)
+{
+    uint32_t dt = now - servo_step_ms;
+    int32_t limit = (int32_t)(dt > 100U ? 100U : dt) * B5_SERVO_MDEG_PER_MS;
+    int32_t diff = servo_target_mdeg - servo_pos_mdeg;
+    servo_step_ms = now;
+    if (diff == 0) { return; }
+    if (diff > limit) { diff = limit; }
+    if (diff < -limit) { diff = -limit; }
+    servo_pos_mdeg += diff;
+    drv_servo_set_angle(&servo, (int)((servo_pos_mdeg + 500) / 1000));
+}
+
 static void cb_servo_set(void *ctx, int angle_deg)
 {
     (void)ctx;
-    drv_servo_set_angle(&servo, angle_deg);
+    servo_target_mdeg = (int32_t)angle_deg * 1000;
+    servo_service(cb_now_ms(NULL));
 }
 
 static range_reading_t cb_measure(void *ctx)
@@ -207,6 +230,9 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             tm_printf((UB*)"[B5] decision: side %d (0 none, 1 left, 2 right)\n",
                 (int)e->side);
             break;
+        case AV_EVT_REVERSING:
+            tm_printf((UB*)"[B5] reversing (attempt %d)\n", e->attempt);
+            break;
         case AV_EVT_EMERGENCY_STOP:
             tm_printf((UB*)"[B5] emergency stop\n");
             break;
@@ -351,6 +377,7 @@ static void subsystem5_task(INT stacd, void *exinf)
             b5_bridge_init(&bridge);
         }
         armed = now_armed;
+        servo_service(cb_now_ms(NULL));
         if (armed)
         {
             b5_motion_service(&motion, cb_now_ms(NULL));
@@ -380,6 +407,12 @@ static void subsystem5_task(INT stacd, void *exinf)
                 b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
                 b5_wifi.max_encounter_ms=m->max_encounter_ms;
                 /* No event stream/profile/plan API is exported by this hookup. */
+                const bool bypass=av_state(&av)==AV_STATE_BYPASS;
+                b1_live_bypass live={.at_ms=at,.fast=0,.active=bypass,
+                    .backing_off=av_state(&av)==AV_STATE_REVERSE && av.backing_off,.segment=bypass?(uint32_t)av.leg_idx:0,
+                    .segments=bypass?(uint32_t)7:0,.side=av.choice.side,
+                    .backoffs=(uint32_t)av.backoffs,.elapsed_ms=av_is_active(&av)?at-av.t_detect:0};
+                (void)b1_submit_live_status(5,&live);
                 if(b1_submit_section(5,&b5_wifi,at)) b5_wifi_at=at;
             }
         }
@@ -435,13 +468,16 @@ EXPORT ER subsystem5_init(void)
         return E_OBJ;
     }
 
-    av_config_default(&cfg); /* servo 78/90/102: measured on the car */
+    av_config_default(&cfg); /* servo 20/90/160: free mount, see avoidance.c */
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);
     if (er != E_OK)
     {
         return er;
     }
+    servo_target_mdeg = (int32_t)cfg.center_deg * 1000;
+    servo_pos_mdeg = servo_target_mdeg;
+    servo_step_ms = cb_now_ms(NULL);
     er = drv_sonar_init(&sonar, bindings.dispatcher, PIN_SONAR_TRIGGER,
         PIN_SONAR_ECHO);
     if (er != E_OK)

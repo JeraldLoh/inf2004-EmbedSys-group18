@@ -39,6 +39,7 @@ typedef enum
     B5_MOVE_PENDING,    /* waiting for obstacle authority */
     B5_MOVE_GOAL,       /* Buddy 2 goal running */
     B5_MOVE_SEARCH,     /* arcing toward the line */
+    B5_MOVE_ARC,        /* turning as a timed forward arc */
     B5_MOVE_DONE,
     B5_MOVE_FAILED
 } b5_move_state_t;
@@ -51,6 +52,12 @@ typedef struct
     int32_t search_speed_mm_s;
     int32_t search_curvature_u1_m; /* toward the line side */
     uint32_t search_life_ms;       /* refreshed every service call */
+    /* Turns as forward arcs instead of pivots: both wheels go forward, so
+     * there is far less wheel scrub. Timed open loop from speed x curvature. */
+    bool arc_turns;
+    int32_t turn_speed_mm_s;
+    int32_t turn_curvature_u1_m;   /* magnitude; sign comes from the turn */
+    uint32_t turn_lag_ms;          /* added to each arc for ramp up/down */
 } b5_motion_config_t;
 
 typedef struct
@@ -62,6 +69,9 @@ typedef struct
     uint32_t deadline_ms;
     goal_id_t next_id;
     bool search_left;
+    bool arc_left;
+    bool arc_started;
+    uint32_t arc_ms;                    /* length of the arc in progress */
     motion_result_code_t last_result;   /* of the last finished goal */
 } b5_motion_t;
 

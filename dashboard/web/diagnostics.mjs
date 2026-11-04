@@ -55,7 +55,7 @@ export function renderDiagnostics(state,time,build){
  $('diagnostic-browser-note').textContent=d.lastRxError?`Last browser rejection: ${d.lastRxError.reason}`:'Browser counters cover this dashboard session only.';
  const terrain=state.telemetry?.buddies?.[4];
  $('diagnostic-clamped').textContent=terrain?`Last Buddy 4 frame: ${terrain.clamped?'one or more fields saturated to fit':'no saturation flag'}.`:'No Buddy 4 saturation report available.';
- $('diagnostic-build').textContent=build?.verified?'Verified static RAM comparison':'Build comparison pending';
+ $('diagnostic-build').textContent=build?.verified?'Recorded static RAM comparison':'Build comparison pending';
  $('diagnostic-before').textContent=build?.verified?`${build.before.static_ram_bytes.toLocaleString()} B`:'—';
  $('diagnostic-after').textContent=build?.verified?`${build.after.static_ram_bytes.toLocaleString()} B`:'—';
  $('diagnostic-delta').textContent=build?.verified?`${build.after.static_ram_bytes-build.before.static_ram_bytes>=0?'+':''}${(build.after.static_ram_bytes-build.before.static_ram_bytes).toLocaleString()} B`:'—';

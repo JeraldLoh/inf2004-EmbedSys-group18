@@ -23,6 +23,9 @@ static void refresh_status(controller_service_t *service)
 #ifndef CONTROLLER_LINE_CURVATURE_PER_STEER
 #define CONTROLLER_LINE_CURVATURE_PER_STEER 178000
 #endif
+#ifndef CONTROLLER_LINE_LOST_MS
+#define CONTROLLER_LINE_LOST_MS 0U   /* off: see controller_line_config_t */
+#endif
 
 void controller_line_default_config(controller_line_config_t *config)
 {
@@ -37,6 +40,9 @@ void controller_line_default_config(controller_line_config_t *config)
     config->cruise_mm_s = CONTROLLER_LINE_CRUISE_MM_S;
     config->slow_mm_s = CONTROLLER_LINE_CRUISE_MM_S < 100U ? CONTROLLER_LINE_CRUISE_MM_S : 100U;
     config->curvature_per_steer_u1_m = CONTROLLER_LINE_CURVATURE_PER_STEER;
+    config->lost_ms = CONTROLLER_LINE_LOST_MS;
+    config->search_step_mdeg = 15000;   /* sensors ~5 cm ahead sweep ~1.3 cm */
+    config->search_max_mdeg = 60000;
     config->request_life_ms = 150U;
 }
 
@@ -491,6 +497,28 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
         {
             service->holdoff = false;
             service->status.junctions_seen++;
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+            /* Explicit trial policy: no live barcode route means pass through.
+             * Keep the continuous LINE lease alive; do not pause, probe or
+             * submit a finite approach goal that must stop to complete. */
+            if (junction.candidate && following_line(controller->mission) &&
+                safety_motion_allowed(&controller->safety) &&
+                vehicle_controller_hardware_faults(controller) == 0U &&
+                ((controller->route_lifecycle != ROUTE_LIFECYCLE_PENDING) ||
+                 (now_ms > controller->route.expires_ms)))
+            {
+                if (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING)
+                {
+                    controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
+                }
+                controller->mission = MISSION_TRACK_LINE;
+                service->status.last_route = ROUTE_COMMAND_STRAIGHT;
+                service->status.junctions_done++;
+                service->holdoff = true;
+                service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
+                return;
+            }
+#endif
             action = vehicle_controller_on_junction(controller, &junction, now_ms);
             execute(service, &action);
             if (action.type == CONTROLLER_ACTION_EXECUTE_ROUTE)
@@ -631,12 +659,134 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
     refresh_status(service);
 }
 
+/* ---- Line search --------------------------------------------------------
+ * Car trial 2026-11-02: with the no-black stop off, a car that had lost the
+ * line drove on along its last steering and left the course. The sensors
+ * straddle the line, so both white is normal when centred; only a longer
+ * time with no black at all (lost_ms) counts as lost. Then the car stops and
+ * pivots, a step at a time, toward the side the line was last seen, then the
+ * other way, and carries on following as soon as a sensor sees black. */
+
+static void search_end(controller_service_t *service, system_time_ms_t now_ms)
+{
+    route_instruction_t route;
+    junction_observation_t junction;
+
+    service->searching = false;
+    service->status.line_searching = false;
+    service->line_seen_ms = now_ms;
+    /* Pivoting over the line can look like a crossbar: drop those events. */
+    (void)service->junction_out.take_route(service->junction_out.context, &route);
+    (void)service->junction_out.take_junction(service->junction_out.context, &junction);
+}
+
+static void search_fail(controller_service_t *service, system_time_ms_t now_ms)
+{
+    controller_action_t action;
+
+    search_end(service, now_ms);
+    goal_step_done(service);
+    service->status.line_search_fails++;
+    action = vehicle_controller_latch_stop(&service->controller,
+        STOP_REASON_RECOVERY_FAILED);
+    execute(service, &action);
+}
+
+static void search_next(controller_service_t *service, system_time_ms_t now_ms)
+{
+    int32_t step = service->line.search_step_mdeg;
+    int32_t max = service->line.search_max_mdeg;
+    int32_t mdeg = step;
+    int8_t dir = service->search_dir;
+
+    if ((service->search_pass == 0) && (service->search_mdeg < max))
+    {
+        service->search_mdeg += step;
+    }
+    else if (service->search_pass == 0)
+    {
+        service->search_pass = 1;   /* swing back across to the other side */
+        dir = (int8_t)-dir;
+        mdeg = service->search_mdeg + step;
+        service->search_mdeg = -step;
+    }
+    else if (service->search_mdeg > -max)
+    {
+        dir = (int8_t)-dir;
+        service->search_mdeg -= step;
+    }
+    else
+    {
+        search_fail(service, now_ms);
+        return;
+    }
+    service->search_seen = false;
+    if (!submit_goal(service,
+            (dir > 0) ? MOTION_GOAL_PIVOT_RIGHT : MOTION_GOAL_PIVOT_LEFT, 0, mdeg))
+    {
+        search_fail(service, now_ms);
+    }
+}
+
+static void search_start(controller_service_t *service,
+    const controller_line_input_t *line, system_time_ms_t now_ms)
+{
+    service->searching = true;
+    service->status.line_searching = true;
+    service->status.line_searches++;
+    /* Buddy 3 keeps steering toward the side last seen: steer > 0 = right. */
+    service->search_dir = (line->steer < 0) ? -1 : 1;
+    service->search_pass = 0;
+    service->search_mdeg = 0;
+    search_next(service, now_ms);
+}
+
+static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
+{
+    const vehicle_controller_t *controller = &service->controller;
+    controller_line_input_t line = {0, false, false};
+    motion_goal_result_t result = {0};
+
+    if ((controller->mode != SYSTEM_MODE_AUTO) ||
+        !following_line(controller->mission) ||
+        !vehicle_controller_motion_allowed(controller, MOTION_SOURCE_JUNCTION))
+    {
+        search_end(service, now_ms);   /* STOP, obstacle or mode change */
+        return;
+    }
+    if (service->outputs.read_line(service->outputs.context, &line) && line.on_line)
+    {
+        service->search_seen = true;
+    }
+    switch (poll_goal(service, &result))
+    {
+        case GOAL_RUNNING:
+            break;
+        case GOAL_DONE:
+            goal_step_done(service);
+            if (service->search_seen)
+            {
+                search_end(service, now_ms);   /* line following takes over */
+            }
+            else
+            {
+                search_next(service, now_ms);
+            }
+            break;
+        default:
+            search_end(service, now_ms);
+            goal_failed(service, &result, now_ms);
+            break;
+    }
+    refresh_status(service);
+}
+
 void controller_service_tick(
     controller_service_t *service,
     system_time_ms_t now_ms)
 {
     const vehicle_controller_t *controller;
-    controller_line_input_t line = {0, false};
+    controller_line_input_t line = {0, false, false};
     motion_continuous_request_t request;
     uint32_t speed;
 
@@ -645,11 +795,17 @@ void controller_service_tick(
     {
         return;
     }
+    if (service->searching)
+    {
+        search_tick(service, now_ms);
+        return;   /* the line search owns the motion */
+    }
     if (service->junction_bound)
     {
         junction_tick(service, now_ms);
         if (service->junction_phase != CONTROLLER_JUNCTION_IDLE)
         {
+            service->line_seen_ms = now_ms;
             return;   /* a junction step owns the motion */
         }
     }
@@ -659,7 +815,19 @@ void controller_service_tick(
         !vehicle_controller_motion_allowed(controller, MOTION_SOURCE_LINE) ||
         !service->outputs.read_line(service->outputs.context, &line))
     {
+        service->line_seen_ms = now_ms;   /* the lost timer runs only while following */
         return;   /* nothing sent: Buddy 2 stops when the last one expires */
+    }
+    if (line.on_line)
+    {
+        service->line_seen_ms = now_ms;
+    }
+    else if ((service->line.lost_ms != 0U) && service->junction_bound &&
+        (controller->mission != MISSION_JUNCTION_APPROACH) &&
+        ((now_ms - service->line_seen_ms) >= service->line.lost_ms))
+    {
+        search_start(service, &line, now_ms);
+        return;
     }
 
     speed = (line.barcode_active ||

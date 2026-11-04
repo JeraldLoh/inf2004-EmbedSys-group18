@@ -155,19 +155,51 @@ endif
 TEST_SUFFIX := _carrun
 endif
 
-# Explicit supervised integration trial; normal CAR_RUN remains qualification-gated.
+# Car motion configuration. CAR_RUN=1 uses Buddy 2's v6 profile and tuning,
+# qualified (Buddy 2 sign-off 2026-11-03): this is the official car. The flag
+# keeps its historical name. CAR_B2_TRIAL=0 selects the old zero-gain
+# placeholder profile instead, for diagnosis only: it refuses START.
+ifeq ($(CAR_RUN),1)
+CAR_B2_TRIAL ?= 1
+else
 CAR_B2_TRIAL ?= 0
+endif
 ifneq ($(filter $(CAR_B2_TRIAL),0 1),$(CAR_B2_TRIAL))
 $(error CAR_B2_TRIAL must be 0 or 1)
 endif
 ifeq ($(CAR_B2_TRIAL),1)
+# The v6 profile is qualified (Buddy 2 sign-off 2026-11-03), so it may also run
+# with Buddy 1's WiFi/MQTT link (CAR_MQTT=1, checked above).
+ifeq ($(CAR_MQTT),1)
+ifneq ($(CAR_RUN)$(SMP)$(CONSOLE)$(TEST),11usb_cdc0)
+$(error CAR_B2_TRIAL=1 CAR_MQTT=1 requires CAR_RUN=1 SMP=1 CONSOLE=usb_cdc TEST=0)
+endif
+else
 ifneq ($(CAR_RUN)$(SMP)$(CONSOLE)$(WIFI)$(NET)$(MQTT)$(TEST),11usb_cdcnonenone00)
 $(error CAR_B2_TRIAL=1 requires CAR_RUN=1 SMP=1 CONSOLE=usb_cdc WIFI=none NET=none MQTT=0 TEST=0)
 endif
-ifneq ($(CRASH_REPORT),0)
+endif
+# CRASH_REPORT gets its 0 default further down; unset here means 0.
+ifneq ($(filter-out 0,$(CRASH_REPORT)),)
 $(error CAR_B2_TRIAL=1 requires CRASH_REPORT=0)
 endif
-TEST_SUFFIX := _carrun_b2trial
+TEST_SUFFIX := _carrun
+endif
+ifeq ($(CAR_RUN)$(CAR_B2_TRIAL),10)
+TEST_SUFFIX := _carrun_unqualified
+endif
+
+# Obstacle avoidance on a table: the trial car drives straight with the line
+# sensors ignored, bypasses an obstacle, then stops. Not for the track.
+OBSTACLE_TABLE ?= 0
+ifneq ($(filter $(OBSTACLE_TABLE),0 1),$(OBSTACLE_TABLE))
+$(error OBSTACLE_TABLE must be 0 or 1)
+endif
+ifeq ($(OBSTACLE_TABLE),1)
+ifneq ($(CAR_B2_TRIAL),1)
+$(error OBSTACLE_TABLE=1 requires CAR_RUN=1 CAR_B2_TRIAL=1)
+endif
+TEST_SUFFIX := _carrun_table
 endif
 
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
@@ -336,6 +368,13 @@ CFLAGS  += -DAPP_B5_RUN=$(B5_RUN)
 CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
+CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
+ifeq ($(CAR_MQTT),1)
+# The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
+# The radio service shares core 0, so keep it below the car's control tasks
+# (motor 6, supervisor 9, controller 10, Buddy 5 12) and above Buddy 1 (18).
+CFLAGS  += -DCYW43_TASK_PRIORITY=13
+endif
 ifeq ($(B2_MOVE_TEST),1)
 CFLAGS  += -DCNF_TIMER_PERIOD=1
 endif
@@ -349,12 +388,13 @@ CFLAGS  += -DCNF_TIMER_PERIOD=1
 # These legacy effort macros do not tune the measured wheel PID.
 CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
 # Explicit measured trial tuning lives in project_config/car_trial_tuning.h.
-# Keep the earlier normal CAR_RUN steering flags outside that trial.
+# Restore Buddy 3's original testing-branch steering in every CAR_RUN image.
+CFLAGS  += -DLINE_STEER_RAMP_MS=6U -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
 ifeq ($(CAR_B2_TRIAL),1)
-CFLAGS  += -DCAR_RUN_LIMIT_MS=15000U
+# No run limit (2026-11-02): GP21, line loss or a fault ends the run.
+CFLAGS  += -DCAR_RUN_LIMIT_MS=0U
 else
-CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U -DLINE_STEER_RAMP_MS=6U
-CFLAGS  += -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=110U
 endif
 # Junction-probe and avoidance pivots stalled at 15% and latched a motion
 # fault, and still stalled at 20% on the foam mat; goals now ask for 30%.
@@ -392,7 +432,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

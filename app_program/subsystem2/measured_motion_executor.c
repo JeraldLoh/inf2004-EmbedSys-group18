@@ -1,4 +1,8 @@
 #include "measured_motion_executor.h"
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+#include "../project_config/car_trial_tuning.h"
+#include "b2_line_tuning.h"
+#endif
 #include <stddef.h>
 #include <string.h>
 
@@ -8,6 +12,27 @@ static bool reached(uint32_t now, uint32_t deadline)
 static bool newer(uint32_t id, uint32_t old)
 { return id != 0U && (old == 0U || ((id - old) != 0U && (id - old) < 0x80000000UL)); }
 static uint32_t magnitude(int32_t value) { return (uint32_t)(value < 0 ? -(int64_t)value : value); }
+
+const char *measured_motion_detail_name(motion_detail_reason_t reason)
+{
+    switch (reason) {
+    case MOTION_DETAIL_NONE: return "NONE";
+    case MOTION_DETAIL_ENCODER_CAPTURE: return "ENCODER_CAPTURE";
+    case MOTION_DETAIL_MEASUREMENT_QUALITY: return "MEASUREMENT_QUALITY";
+    case MOTION_DETAIL_AUTHORITY_DEADLINE: return "AUTHORITY_DEADLINE";
+    case MOTION_DETAIL_DRIVER_INHIBIT: return "DRIVER_INHIBIT_OR_STOP";
+    case MOTION_DETAIL_COMMAND_EXPIRED: return "LINE_OR_CONTINUOUS_TTL_EXPIRED";
+    case MOTION_DETAIL_GOAL_TIMEOUT: return "GOAL_TIMEOUT";
+    case MOTION_DETAIL_GOAL_ADMISSION: return "GOAL_ADMISSION_EXPIRED";
+    case MOTION_DETAIL_ZERO_OUTPUT_IO: return "ZERO_OUTPUT_IO";
+    case MOTION_DETAIL_OVERSHOOT: return "GOAL_OVERSHOOT";
+    case MOTION_DETAIL_PID_INPUT: return "PID_INPUT_INVALID";
+    case MOTION_DETAIL_NO_PROGRESS: return "NO_WHEEL_PROGRESS";
+    case MOTION_DETAIL_WATCHDOG_ARM: return "WATCHDOG_ARM_OR_STOP";
+    case MOTION_DETAIL_OUTPUT_IO: return "MOTOR_OUTPUT_IO";
+    default: return "UNKNOWN";
+    }
+}
 
 bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *motor,
     drv_encoder_t *encoder, const measured_motion_executor_config_t *c,
@@ -32,7 +57,9 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
         (c->goal_margin_ms > 60000U) || (c->max_goal_mm == 0U) ||
         (c->max_goal_mm > 100000U) ||
         (c->linear_goal_min_speed_mm_s > c->max_speed_mm_s) ||
-        (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s)) { return false; }
+        (c->pivot_goal_min_speed_mm_s > c->max_speed_mm_s) ||
+        (c->pivot_max_effort > 1000U) || (c->linear_sync_slack_um > 50000U) ||
+        (c->pivot_sync_slack_um > 50000U) || (c->linear_hold_per_s > 10U)) { return false; }
     (void)memset(e, 0, sizeof(*e));
     if (!wheel_measurement_init(&e->measurement, &c->measurement)) { return false; }
     for (i = 0U; i < 2U; ++i)
@@ -66,6 +93,7 @@ static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
     if (result != MOTION_OK)
     { (void)drv_motor_stop(e->motor); e->status.authorized = false; }
     e->io.cancel_watchdog(e->io.context);
+    e->status.low_speed_floor_mask = 0U;
     for (i = 0U; i < 2U; ++i)
     {
         wheel_pid_reset(&e->pid[i]); e->ramp_um_s[i] = 0U;
@@ -115,6 +143,26 @@ static void finish_as(measured_motion_executor_t *e, motion_result_code_t code, 
 static void finish(measured_motion_executor_t *e, motion_result_code_t code)
 { finish_as(e, code, code != MOTION_RESULT_COMPLETED); }
 
+static void finish_detail(measured_motion_executor_t *e, motion_result_code_t code,
+    motion_detail_reason_t reason, uint8_t wheel_mask)
+{
+    if (e->status.authorized || e->status.state == MOTION_EXEC_CONTINUOUS ||
+        e->status.state == MOTION_EXEC_GOAL)
+    {
+        ++e->status.detail_sequence;
+        e->status.detail_reason = reason; e->status.detail_result = code;
+        e->status.detail_generation = e->status.generation;
+        e->status.detail_command = e->status.command_id;
+        e->status.detail_wheel_mask = wheel_mask;
+        memcpy(e->status.detail_target_um_s, e->status.target_um_s,
+            sizeof(e->status.detail_target_um_s));
+        memcpy(e->status.detail_speed_um_s, e->status.wheels.speed_um_s,
+            sizeof(e->status.detail_speed_um_s));
+        e->status.detail_speed_valid = e->status.wheels.speed_valid;
+    }
+    finish(e, code);
+}
+
 void measured_motion_executor_pause(measured_motion_executor_t *e)
 {
     if (e != NULL && e->motor != NULL)
@@ -154,19 +202,22 @@ motion_status_t measured_motion_executor_authorize_calibration(measured_motion_e
 {
     motion_status_t result;
     unsigned i;
-    if (e == NULL || e->motor == NULL || limit == 0U || limit > 20000000U ||
+    if (e == NULL || e->motor == NULL || limit == 0U ||
+        (limit > 20000000U && limit != MEASURED_MOTION_NO_RUN_LIMIT) ||
         e->config.max_speed_mm_s > 120U || e->config.max_goal_mm > 1000U ||
         e->config.watchdog_us > 100000U || e->config.period_us > 20000U)
     { return MOTION_INVALID; }
     for (i=0U;i<2U;++i)
     {
-        if (e->config.pid[i].max_effort > 300U ||
+        if (e->config.pid[i].max_effort > 300U || e->config.pivot_max_effort > 450U ||
             (e->config.pid[i].kp_milli==0U && e->config.pid[i].ki_milli==0U &&
              e->config.pid[i].feedforward_milli==0U)) { return MOTION_INVALID; }
     }
     result=authorize(e,generation,true);
     if (result==MOTION_OK)
-    { e->calibration_authorized=true; e->calibration_until_us=now+limit; }
+    { /* calibration_authorized only arms the run deadline below. */
+        e->calibration_authorized = limit != MEASURED_MOTION_NO_RUN_LIMIT;
+        e->calibration_until_us = now+limit; }
     return result;
 }
 #endif
@@ -252,6 +303,10 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     motion_encoder_snapshot_t raw;
     uint32_t now, dt;
     uint32_t desired[2] = {0U, 0U};
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    uint32_t line_target_cap = 0U;
+    uint32_t line_ramp_span = 0U;
+#endif
     int8_t sign[2] = {1, 1};
     int16_t effort[2] = {0, 0};
     bool complete = true;
@@ -260,17 +315,17 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     if (drv_encoder_capture(e->encoder, e->motor, &raw) != MOTION_OK)
     { e->measurement.sample.speed_valid=false; e->measurement.sample.signed_speed_valid=false;
       e->status.wheels=e->measurement.sample;
-      finish(e, MOTION_RESULT_FAULT); return MOTION_UNAVAILABLE; }
+      finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_ENCODER_CAPTURE, 3U); return MOTION_UNAVAILABLE; }
     now = raw.acquired_us;
     dt = e->primed ? now-e->last_step_us : e->config.period_us;
     if (e->primed && dt < e->config.period_us) { return MOTION_OK; }
     if (wheel_measurement_update(&e->measurement, &raw) != MOTION_OK)
     { e->status.wheels=e->measurement.sample;
-      finish(e, MOTION_RESULT_ABORTED); return MOTION_UNAVAILABLE; }
+      finish_detail(e, MOTION_RESULT_ABORTED, MOTION_DETAIL_MEASUREMENT_QUALITY, 3U); return MOTION_UNAVAILABLE; }
     e->last_step_us = now; e->primed = true;
     e->status.wheels = e->measurement.sample;
     if (e->status.authorized && e->calibration_authorized && reached(now,e->calibration_until_us))
-    { finish(e,MOTION_RESULT_TIMEOUT); return MOTION_OK; }
+    { finish_detail(e,MOTION_RESULT_TIMEOUT,MOTION_DETAIL_AUTHORITY_DEADLINE,0U); return MOTION_OK; }
     if (e->status.state != MOTION_EXEC_CONTINUOUS && e->status.state != MOTION_EXEC_GOAL)
     {
         motion_motor_state_t idle;
@@ -279,16 +334,21 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         { finish(e, MOTION_RESULT_CANCELLED); }
         return MOTION_OK;
     }
-    if (!driver_ready(e)) { finish(e, MOTION_RESULT_CANCELLED); return MOTION_INHIBITED; }
+    if (!driver_ready(e)) { finish_detail(e, MOTION_RESULT_CANCELLED, MOTION_DETAIL_DRIVER_INHIBIT, 0U); return MOTION_INHIBITED; }
     if ((e->status.state == MOTION_EXEC_CONTINUOUS && reached(now, e->continuous_until_us)) ||
         (e->status.state == MOTION_EXEC_GOAL && reached(now, e->goal_until_us)))
-    { finish(e, MOTION_RESULT_TIMEOUT); return MOTION_OK; }
+    { finish_detail(e, MOTION_RESULT_TIMEOUT, e->status.state == MOTION_EXEC_GOAL ?
+        MOTION_DETAIL_GOAL_TIMEOUT : MOTION_DETAIL_COMMAND_EXPIRED, 0U); return MOTION_OK; }
     if (e->status.state == MOTION_EXEC_GOAL && !e->goal_started && reached(now, e->admission_until_us))
-    { finish(e, MOTION_RESULT_REJECTED); return MOTION_OK; }
+    { finish_detail(e, MOTION_RESULT_REJECTED, MOTION_DETAIL_GOAL_ADMISSION, 0U); return MOTION_OK; }
     if (e->transition)
     {
         if (drv_motor_apply(e->motor, e->status.generation, 0, 0) != MOTION_OK)
-        { finish(e, MOTION_RESULT_FAULT); return MOTION_IO_ERROR; }
+        { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_ZERO_OUTPUT_IO, 3U); return MOTION_IO_ERROR; }
+        /* Zero output is committed: retire the previous powered interval's
+         * watchdog during the intentional dwell. The nonzero path below
+         * re-arms it before applying motor power. */
+        e->io.cancel_watchdog(e->io.context);
         if (!reached(now, e->transition_until_us) || !e->measurement.sample.speed_valid ||
             e->measurement.sample.speed_um_s[0] > e->config.settle_speed_um_s ||
             e->measurement.sample.speed_um_s[1] > e->config.settle_speed_um_s) { return MOTION_OK; }
@@ -302,6 +362,7 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         if (e->status.state == MOTION_EXEC_GOAL) { e->goal_started = true; }
     }
     if (!e->measurement.sample.speed_valid) { return MOTION_OK; }
+    e->status.low_speed_floor_mask = 0U;
     if (e->status.state == MOTION_EXEC_CONTINUOUS)
     {
         uint32_t cap = e->config.max_speed_mm_s*1000U;
@@ -312,25 +373,84 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         desired[1] = (uint32_t)(speed-correction);
         if (e->continuous.speed_cap_mm_s != 0U && e->continuous.speed_cap_mm_s < cap/1000U)
         { cap = e->continuous.speed_cap_mm_s*1000U; }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        line_target_cap = cap;
+        /* Transfer the progressive inside reduction to the outside wheel:
+         * preserve the requested mean speed until the wheel cap requires
+         * slowing both wheels proportionately for a tight turn. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
+        {
+            unsigned inside = correction > 0 ? 1U : 0U;
+            unsigned outside = 1U - inside;
+            uint32_t strength = magnitude(e->continuous.curvature_u1_m);
+            uint32_t reduction, transfer;
+            if (strength > B2_LINE_FULL_CURVATURE_1_M)
+            { strength = B2_LINE_FULL_CURVATURE_1_M; }
+            reduction = (100U - CAR_TRIAL_LINE_INNER_SPEED_PERCENT) * strength /
+                B2_LINE_FULL_CURVATURE_1_M;
+            transfer = (uint32_t)((uint64_t)desired[inside] * reduction / 100U);
+            desired[inside] -= transfer;
+            desired[outside] += transfer;
+        }
+#endif
         largest = desired[0] > desired[1] ? desired[0] : desired[1];
         if (largest > cap)
         {
             desired[0] = (uint32_t)((uint64_t)desired[0]*cap/largest);
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        /* The operator reports running wide. Reduce the inner target a
+         * further23.5% (V18's15%, then another10%) without more outside speed. This
+         * lowers mean speed in turns; the paired ramp below smooths entry/
+         * exit. Zero-curvature straight, goals and obstacle moves are unchanged. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
+        {
+            unsigned inside = correction > 0 ? 1U : 0U;
+            desired[inside] = (uint32_t)((uint64_t)desired[inside] *
+                B2_LINE_WIDE_TURN_INNER_PERMILLE / 1000U);
+            {
+                uint32_t floor = B2_LINE_MIN_ROLLING_MM_S * 1000U;
+                if (floor > (uint32_t)speed) { floor = (uint32_t)speed; }
+                if (floor > cap) { floor = cap; }
+                if (desired[inside] != 0U && desired[inside] < floor)
+                {
+                    desired[inside] = floor;
+                    e->status.low_speed_floor_mask = (uint8_t)(1U << inside);
+                }
+            }
+        }
+#endif
     }
     else
     {
         if (e->goal.type == MOTION_GOAL_REVERSE) { sign[0] = -1; sign[1] = -1; }
         if (e->goal.type == MOTION_GOAL_PIVOT_LEFT) { sign[0] = -1; }
         if (e->goal.type == MOTION_GOAL_PIVOT_RIGHT) { sign[1] = -1; }
+        /* Car trial 2026-11-02: one wheel finished a straight goal, the other
+         * drove on alone, swung the car round the stopped wheel and stalled
+         * (NO_WHEEL_PROGRESS, target 0/50 or -50/0). */
+        /* Pivots too (a lagging wheel driving alone stalled at effort -282). */
+        bool one_done = false;
+        bool linear_goal = e->goal.type == MOTION_GOAL_FORWARD || e->goal.type == MOTION_GOAL_REVERSE;
+        uint64_t sync_slack = linear_goal ? e->config.linear_sync_slack_um : e->config.pivot_sync_slack_um;
+        if (!linear_goal && sync_slack > e->goal_target_um/2U) { sync_slack = e->goal_target_um/2U; }
+        if (sync_slack != 0U)
+        {
+            for (i = 0U; i < 2U; ++i)
+            {
+                if (e->measurement.sample.travel_um[i]-e->goal_base_um[i]+e->config.tolerance_um >=
+                    e->goal_target_um) { one_done = true; }
+            }
+        }
         for (i = 0U; i < 2U; ++i)
         {
             uint64_t p = e->measurement.sample.travel_um[i]-e->goal_base_um[i];
             uint64_t remain = p < e->goal_target_um ? e->goal_target_um-p : 0U;
             if (p > e->goal_target_um+e->config.overshoot_um)
-            { finish(e, MOTION_RESULT_FAULT); return MOTION_OK; }
-            if (p+e->config.tolerance_um < e->goal_target_um)
+            { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_OVERSHOOT, (uint8_t)(1U << i)); return MOTION_OK; }
+            if (p+e->config.tolerance_um < e->goal_target_um &&
+                !(one_done && remain <= sync_slack))
             {
                 uint64_t slowed = remain*1000000U/500000U;
                 /* Distance commands must keep rolling until the tolerance
@@ -349,7 +469,39 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             }
             if (p > e->goal_target_um+e->config.tolerance_um) { complete = false; }
         }
+        /* Table run 2026-11-03: on straight goals the right wheel ran ~5 mm/s
+         * faster, so the car curved left and the bypass ended left of its
+         * path. Hold the wheels level: the one ahead slows in proportion to
+         * its lead (linear_hold_per_s), at most half its target. */
+        if (linear_goal && e->config.linear_hold_per_s != 0U &&
+            desired[0] != 0U && desired[1] != 0U)
+        {
+            uint64_t p0 = e->measurement.sample.travel_um[0]-e->goal_base_um[0];
+            uint64_t p1 = e->measurement.sample.travel_um[1]-e->goal_base_um[1];
+            unsigned lead = p0 > p1 ? 0U : 1U;
+            uint64_t cut = (p0 > p1 ? p0-p1 : p1-p0)*e->config.linear_hold_per_s;
+            if (cut > desired[lead]/2U) { cut = desired[lead]/2U; }
+            desired[lead] -= (uint32_t)cut;
+        }
     }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    if (e->status.state == MOTION_EXEC_CONTINUOUS &&
+        e->continuous.source == MOTION_SOURCE_LINE &&
+        desired[0] != 0U && desired[1] != 0U &&
+        e->ramp_um_s[0] <= line_target_cap && e->ramp_um_s[1] <= line_target_cap)
+    {
+        /* Move both targets by the same fraction of their remaining change.
+         * At equal initial/final mean speed this changes the turn without
+         * an intervening acceleration/braking pulse. Hard caps and zero/STOP
+         * paths bypass this interpolation. */
+        for (i = 0U; i < 2U; ++i)
+        {
+            uint32_t difference = desired[i] > e->ramp_um_s[i] ?
+                desired[i] - e->ramp_um_s[i] : e->ramp_um_s[i] - desired[i];
+            if (difference > line_ramp_span) { line_ramp_span = difference; }
+        }
+    }
+#endif
     for (i = 0U; i < 2U; ++i)
     {
         uint64_t ramp_delta = (uint64_t)e->config.acceleration_um_s2*dt+e->ramp_remainder[i];
@@ -357,24 +509,70 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         uint16_t duty;
         uint64_t travel = e->measurement.sample.travel_um[i];
         e->ramp_remainder[i] = (uint32_t)(ramp_delta%1000000U);
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+        if (line_ramp_span != 0U)
+        {
+            uint32_t difference = desired[i] > e->ramp_um_s[i] ?
+                desired[i] - e->ramp_um_s[i] : e->ramp_um_s[i] - desired[i];
+            uint32_t advance = step < line_ramp_span ? step : line_ramp_span;
+            uint32_t change = (uint32_t)((uint64_t)difference * advance / line_ramp_span);
+            if (desired[i] > e->ramp_um_s[i]) { e->ramp_um_s[i] += change; }
+            else { e->ramp_um_s[i] -= change; }
+        }
+        else
+#endif
         if (desired[i] == 0U) { e->ramp_um_s[i] = 0U; }
         else if (e->ramp_um_s[i] < desired[i])
         { e->ramp_um_s[i] += (desired[i]-e->ramp_um_s[i] < step) ? desired[i]-e->ramp_um_s[i] : step; }
-        else { e->ramp_um_s[i] = desired[i]; }
+        else
+        {
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+            /* Smooth ordinary line-speed decreases as well as increases.
+             * Zero targets remain immediate above. A newly reduced hard
+             * wheel cap also bypasses smoothing rather than exceeding it.
+             * STOP, expiry and faults use the direct zero-output path. */
+            if (e->status.state == MOTION_EXEC_CONTINUOUS &&
+                e->continuous.source == MOTION_SOURCE_LINE &&
+                e->ramp_um_s[i] <= line_target_cap)
+            {
+                uint32_t difference = e->ramp_um_s[i] - desired[i];
+                e->ramp_um_s[i] -= difference < step ? difference : step;
+            }
+            else
+#endif
+            { e->ramp_um_s[i] = desired[i]; }
+        }
+        /* Car trial 2026-11-02: pivots stalled at the 30% cap (one wheel
+         * stuck at effort 300, NO_WHEEL_PROGRESS). Pivot goals may use
+         * pivot_max_effort; everything else keeps the PID cap. The integral
+         * limit and launch effort get the same headroom: feedforward + P +
+         * a 100 integral only reach ~310 on a stuck wheel at 50 mm/s, so a
+         * higher cap alone is never used (table run 2026-11-03: 268). */
+        {
+            const wheel_pid_config_t *base = &e->config.pid[i];
+            bool pivot = e->status.state == MOTION_EXEC_GOAL &&
+                (e->goal.type == MOTION_GOAL_PIVOT_LEFT || e->goal.type == MOTION_GOAL_PIVOT_RIGHT);
+            uint16_t extra = (pivot && e->config.pivot_max_effort > base->max_effort)
+                ? (uint16_t)(e->config.pivot_max_effort - base->max_effort) : 0U;
+            e->pid[i].config.max_effort = (uint16_t)(base->max_effort + extra);
+            e->pid[i].config.integral_limit = (uint16_t)(base->integral_limit + extra);
+            e->pid[i].config.launch_effort = (uint16_t)(base->launch_effort + extra);
+        }
         if (!wheel_pid_step(&e->pid[i], e->ramp_um_s[i], e->measurement.sample.speed_um_s[i], dt, &duty))
-        { finish(e, MOTION_RESULT_FAULT); return MOTION_UNAVAILABLE; }
+        { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_PID_INPUT, (uint8_t)(1U << i)); return MOTION_UNAVAILABLE; }
         effort[i] = (int16_t)(sign[i]*(int32_t)duty);
         e->status.target_um_s[i] = sign[i]*(int32_t)e->ramp_um_s[i];
         if (travel != e->progress_um[i]) { e->progress_um[i] = travel; e->progress_us[i] = now; }
         if (desired[i] > 0U && duty > 0U && now-e->started_us > e->config.startup_grace_us &&
             now-e->progress_us[i] > e->config.progress_timeout_us)
-        { finish(e, MOTION_RESULT_FAULT); return MOTION_OK; }
+        { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_NO_PROGRESS, (uint8_t)(1U << i)); return MOTION_OK; }
     }
     /* Every nonzero path checks the sticky inhibit in drv_motor_apply under
      * the same IRQ/core lock. Watchdog is always armed BEFORE the commit. */
-    if (!e->io.arm_watchdog(e->io.context, e->config.watchdog_us) ||
-        drv_motor_apply(e->motor, e->status.generation, effort[0], effort[1]) != MOTION_OK)
-    { finish(e, MOTION_RESULT_FAULT); return MOTION_IO_ERROR; }
+    if (!e->io.arm_watchdog(e->io.context, e->config.watchdog_us))
+    { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_WATCHDOG_ARM, 0U); return MOTION_IO_ERROR; }
+    if (drv_motor_apply(e->motor, e->status.generation, effort[0], effort[1]) != MOTION_OK)
+    { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_OUTPUT_IO, 3U); return MOTION_IO_ERROR; }
     if (e->status.state == MOTION_EXEC_GOAL && complete &&
         e->measurement.sample.speed_um_s[0] <= e->config.settle_speed_um_s &&
         e->measurement.sample.speed_um_s[1] <= e->config.settle_speed_um_s)

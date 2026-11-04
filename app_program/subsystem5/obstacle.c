@@ -110,7 +110,12 @@ bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t sid
                                    float side_margin_cm, float pass_cm, int min_turn_deg,
                                    int max_turn_deg) {
     const obstacle_edge_t *e = side == SIDE_RIGHT ? &profile->right : &profile->left;
-    float lateral = b5_fabsf(e->pt.x_cm) + side_margin_cm;
+    // How far the edge sits toward the bypass side (x > 0 is right). An edge
+    // on the other side of the centre needs less than the margin, not more:
+    // car trial 2026-11-02, a bottle 35 deg left passed on its right took the
+    // car 22 cm out where 8 cm was enough.
+    float toward = side == SIDE_RIGHT ? e->pt.x_cm : -e->pt.x_cm;
+    float lateral = toward + side_margin_cm;
     float forward = e->pt.y_cm > 1.0f ? e->pt.y_cm : 1.0f;
     if (lateral < 1.0f) lateral = 1.0f;
 
@@ -123,8 +128,17 @@ bypass_plan_t obstacle_plan_bypass(const obstacle_profile_t *profile, side_t sid
     p.turn_deg = turn;
     p.lateral_cm = lateral;
     p.out_cm = lateral / b5_sinf((float)turn * DEG2RAD);
-    p.pass_cm = pass_cm;
+    // A turn clamped steeper than the geometric angle ends the out leg short
+    // of the obstacle's front: the pass covers that distance too.
+    float short_cm = forward - p.out_cm * b5_cosf((float)turn * DEG2RAD);
+    p.pass_cm = pass_cm + (short_cm > 0.0f ? short_cm : 0.0f);
     return p;
+}
+
+float obstacle_arc_out_cm(const bypass_plan_t *plan, float radius_cm) {
+    float rad = (float)plan->turn_deg * DEG2RAD;
+    float rest = plan->lateral_cm - 2.0f * radius_cm * (1.0f - b5_cosf(rad));
+    return rest > 0.0f ? rest / b5_sinf(rad) : 0.0f;
 }
 
 const char *side_name(side_t s) {

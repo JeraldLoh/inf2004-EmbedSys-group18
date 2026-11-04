@@ -11,13 +11,14 @@ typedef struct {
     drv_encoder_t encoder;
     measured_motion_executor_t executor;
     bool pending, race, watchdog_fail, armed;
-    uint32_t acknowledged;
+    uint32_t acknowledged, watchdog_deadline;
 } fixture_t;
 static bool pending(void *p) { return ((fixture_t *)p)->pending; }
 static bool watchdog(void *p, uint32_t duration) {
     fixture_t *f = p;
     assert(duration == 100000U);
     f->armed = true;
+    f->watchdog_deadline = f->fake.now_us + duration;
     if (f->race) { assert(drv_motor_stop(&f->motor) == MOTION_OK); }
     return !f->watchdog_fail;
 }
@@ -71,6 +72,32 @@ static void start_goal(fixture_t *f,motion_goal_type_t type) {
     assert(measured_motion_executor_goal(&f->executor,&r,f->fake.now_us,1000000U)==MOTION_OK);
     for(i=0U;i<7U;++i) { tick(f,0U,0U); }
     assert(f->executor.goal_started);
+}
+static void transition_watchdog(void) {
+    fixture_t f;
+    motion_continuous_request_t c = {0};
+    motion_goal_request_t g;
+    unsigned i;
+    init(&f);
+    assert(measured_motion_executor_authorize(&f.executor,1U)==MOTION_OK);
+    c.authority_generation=1U; c.command_id=1U; c.speed_mm_s=30;
+    assert(measured_motion_executor_continuous(&f.executor,&c,0U,1000000U)==MOTION_OK);
+    for(i=0U;i<8U;++i) { tick(&f,0U,0U); }
+    assert(f.armed);
+    f.executor.config.reversal_us=200000U;
+    g=request(&f,MOTION_GOAL_PIVOT_LEFT);
+    assert(measured_motion_executor_goal(&f.executor,&g,f.fake.now_us,1000000U)==MOTION_OK);
+    for(i=0U;i<9U;++i) {
+        tick(&f,0U,0U);
+        fake_assert_safe(&f.fake);
+        assert(!f.armed); /* Zero-power dwell must outlive the old 100 ms timer. */
+    }
+    for(i=0U;i<4U;++i) { tick(&f,0U,0U); }
+    assert(f.executor.goal_started && f.armed);
+    /* Freeze the executor: the re-armed deadline still cuts motor power. */
+    f.fake.now_us=f.watchdog_deadline;
+    if(f.armed) { assert(drv_motor_stop(&f.motor)==MOTION_OK); }
+    fake_assert_safe(&f.fake);
 }
 static void measurement(void) {
     wheel_measurement_t m;
@@ -277,7 +304,8 @@ static void result_adapter(void) {
 }
 int main(int argc,char **argv) {
     const char *name=argc>1?argv[1]:"";
-    if(strcmp(name,"measurement")==0) { measurement(); }
+    if(strcmp(name,"transition_watchdog")==0) { transition_watchdog(); }
+    else if(strcmp(name,"measurement")==0) { measurement(); }
     else if(strcmp(name,"pid")==0) { pid(); }
     else if(strcmp(name,"admission")==0) { admission(); }
     else if(strcmp(name,"forward")==0 || strcmp(name,"both_wheels")==0) { finite(MOTION_GOAL_FORWARD,strcmp(name,"both_wheels")==0); }

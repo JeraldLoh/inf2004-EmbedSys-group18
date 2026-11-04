@@ -293,6 +293,14 @@ controller_action_t vehicle_controller_on_motion_result(
         {
             controller->route_lifecycle = ROUTE_LIFECYCLE_CONSUMED;
         }
+        /* The junction pause retired LINE requests from the old authority.
+         * Resume under a fresh generation so Buddy2 can accept new LINE work
+         * while continuing to reject queued pre-junction commands. */
+        controller->authority_generation++;
+        if (controller->authority_generation == 0U)
+        {
+            controller->authority_generation = 1U;
+        }
         controller->mission = MISSION_VERIFY_LINE;
         return make_action(controller, CONTROLLER_ACTION_START_LINE_TRACKING);
     }

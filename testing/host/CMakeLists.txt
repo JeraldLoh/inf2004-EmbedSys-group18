@@ -193,6 +193,7 @@ endforeach()
 add_executable(buddy1_heartbeat_tests
     test_buddy1_heartbeat.c
     ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem1/buddy1_live_status.c
     ../../app_program/subsystem1/buddy1_protocol.c
     ../../app_program/subsystem1/buddy1_diagnostics.c
     ../../app_program/subsystem1/buddy1_binary.c)
@@ -226,6 +227,7 @@ add_test(NAME buddy1_diagnostics_tests COMMAND buddy1_diagnostics_tests)
 # Live Buddy 1 integration: sections merge without stealing producer events.
 add_executable(buddy1_car_tests test_buddy1_car.c
     ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem1/buddy1_live_status.c
     ../../app_program/subsystem1/buddy1_binary.c
     ../../app_program/subsystem1/buddy1_diagnostics.c
     ../../app_program/subsystem1/buddy1_protocol.c)
@@ -249,3 +251,11 @@ else()
  target_compile_options(remote_start_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
 endif()
 add_test(NAME remote_start_tests COMMAND remote_start_tests)
+
+add_executable(buddy1_live_status_tests test_live_status.c ../../app_program/subsystem1/buddy1_live_status.c)
+if(MSVC)
+ target_compile_options(buddy1_live_status_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+ target_compile_options(buddy1_live_status_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_live_status_tests COMMAND buddy1_live_status_tests)

@@ -27,7 +27,7 @@ try{
      const encode=new TextEncoder();
      const binary=new Uint8Array(Buffer.from(readFileSync(new URL('../../build/buddy1-car-host/car.hex',import.meta.url),'utf8').trim(),'hex'));
      const diagnostics=encodeDiagnostics({demo:true,uptime_ms:1000,rejected:1,out_of_range:1,busy:0,last_at_ms:900,section:3,field:5,reason:2,value:-101,min:-100,max:100});
-     for(const [topic,value] of [['heartbeat',{schema:1,demo:true,seq:1}],['telemetry',binary],['diagnostics',diagnostics]]){
+     for(const [topic,value] of [['heartbeat',{schema:1,demo:true,seq:1}],['telemetry',binary],['diagnostics',diagnostics],['live_status',new Uint8Array(Buffer.from(readFileSync(new URL('../../build/buddy1-car-host/car-live.hex',import.meta.url),'utf8').trim(),'hex'))]]){
       const t=mqttString(prefix+'/'+topic),body=value instanceof Uint8Array?value:encode.encode(JSON.stringify(value));
       client.socket.send(packet(0x30,new Uint8Array([...t,...body])));
      }
@@ -36,7 +36,7 @@ try{
    onMessage:message=>{
     try{
      const topic=message.topic.slice(prefix.length+1);model.receive(topic,message.payload,0,message.retained);seen.push(topic);
-     if(seen.length===3){assert.equal(model.status(0),'online');assert.equal(model.telemetry.schema,3);assert.equal(model.telemetry.demo,false);assert.deepEqual(Object.keys(model.telemetry.buddies),['2','3','5']);assert.equal(model.telemetry.buddies[2].left_speed_mm_s,-12);assert.equal(model.telemetry.buddies[2].updated_ms,11);assert.equal(model.telemetry.buddies[3].steering,-100);assert.equal(model.telemetry.buddies[3].updated_ms,22);assert.equal(model.telemetry.buddies[5].front_status,1);assert.equal(model.telemetry.buddies[5].updated_ms,33);assert.equal(model.diagnostics.device.value,-101);assert.equal(model.diagnostics.device.out_of_range,1);clearTimeout(timer);resolve();}
+     if(seen.length===4){assert.equal(model.liveStatus.motion.left_target,-40);assert.equal(model.status(0),'online');assert.equal(model.telemetry.schema,3);assert.equal(model.telemetry.demo,false);assert.deepEqual(Object.keys(model.telemetry.buddies),['2','3','5']);assert.equal(model.telemetry.buddies[2].left_speed_mm_s,-12);assert.equal(model.telemetry.buddies[2].updated_ms,11);assert.equal(model.telemetry.buddies[3].steering,-100);assert.equal(model.telemetry.buddies[3].updated_ms,22);assert.equal(model.telemetry.buddies[5].front_status,1);assert.equal(model.telemetry.buddies[5].updated_ms,33);assert.equal(model.diagnostics.device.value,-101);assert.equal(model.diagnostics.device.out_of_range,1);clearTimeout(timer);resolve();}
     }catch(error){clearTimeout(timer);reject(error);}
    }
   });

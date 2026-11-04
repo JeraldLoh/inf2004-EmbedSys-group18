@@ -18,6 +18,18 @@ typedef struct
      * Zero preserves the original profile; never exceeds the request cap. */
     uint32_t linear_goal_min_speed_mm_s;
     uint32_t pivot_goal_min_speed_mm_s; /* Independent turn candidate, zero by default. */
+    /* Effort cap during pivot goals only, if above the PID cap; 0 = PID cap.
+     * Pivots scrub both wheels sideways and need more than straight driving. */
+    uint16_t pivot_max_effort;
+    /* Straight goals: once one wheel reaches its distance, the other counts
+     * as done within this much, so it never drives on alone (that swings the
+     * car round the stopped wheel and stalls it). 0 = each wheel exact. */
+    uint32_t linear_sync_slack_um;
+    /* The same for pivot goals, capped at half the wheel distance. 0 = off. */
+    uint32_t pivot_sync_slack_um;
+    /* Straight goals: the wheel ahead slows by this many mm/s per mm it
+     * leads (at most half its target), keeping the car straight. 0 = off. */
+    uint32_t linear_hold_per_s;
     /* Set only after real direction/load/STOP/speed/pivot qualification.
      * Test fixtures setting true are NOT physical qualification evidence. */
     bool qualified;
@@ -33,6 +45,17 @@ typedef struct
 
 typedef enum { MOTION_EXEC_DISABLED = 0, MOTION_EXEC_IDLE,
     MOTION_EXEC_CONTINUOUS, MOTION_EXEC_GOAL } measured_motion_executor_state_t;
+
+typedef enum {
+    MOTION_DETAIL_NONE = 0, MOTION_DETAIL_ENCODER_CAPTURE,
+    MOTION_DETAIL_MEASUREMENT_QUALITY, MOTION_DETAIL_AUTHORITY_DEADLINE,
+    MOTION_DETAIL_DRIVER_INHIBIT, MOTION_DETAIL_COMMAND_EXPIRED,
+    MOTION_DETAIL_GOAL_TIMEOUT, MOTION_DETAIL_GOAL_ADMISSION,
+    MOTION_DETAIL_ZERO_OUTPUT_IO, MOTION_DETAIL_OVERSHOOT,
+    MOTION_DETAIL_PID_INPUT, MOTION_DETAIL_NO_PROGRESS,
+    MOTION_DETAIL_WATCHDOG_ARM, MOTION_DETAIL_OUTPUT_IO
+} motion_detail_reason_t;
+const char *measured_motion_detail_name(motion_detail_reason_t reason);
 typedef struct
 {
     measured_motion_executor_state_t state;
@@ -43,6 +66,14 @@ typedef struct
     motion_result_code_t last_stop;
     bool authorized;
     bool terminal_pending;
+    uint8_t low_speed_floor_mask; /* Trial requested floor: bit0=L, bit1=R. */
+    uint32_t detail_sequence, detail_generation, detail_command;
+    motion_detail_reason_t detail_reason;
+    motion_result_code_t detail_result;
+    uint8_t detail_wheel_mask;
+    int32_t detail_target_um_s[2];
+    uint32_t detail_speed_um_s[2];
+    bool detail_speed_valid;
 } measured_motion_executor_status_t;
 
 /* Single task/state owner, or externally serialized. All normal PWM commits
@@ -82,7 +113,9 @@ motion_status_t measured_motion_executor_authorize(measured_motion_executor_t *e
 #if (defined(APP_B2_MOVE_TEST) && APP_B2_MOVE_TEST) || (defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL)
 /* Movement-test or explicit integrated-trial build ONLY. Explicit bounded calibration authority,
  * not production qualification. Hard limits: <=120mm/s, <=30% effort,
- * <=1m goals, watchdog <=100ms and total run <=20s. No config flags changed. */
+ * pivot goals <=45%, <=1m goals, watchdog <=100ms and total run <=20s, or no run limit with
+ * MEASURED_MOTION_NO_RUN_LIMIT. No config flags changed. */
+#define MEASURED_MOTION_NO_RUN_LIMIT UINT32_MAX
 motion_status_t measured_motion_executor_authorize_calibration(measured_motion_executor_t *executor,
     uint32_t generation, uint32_t now_us, uint32_t max_run_us);
 #endif

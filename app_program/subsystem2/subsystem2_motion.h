@@ -37,6 +37,7 @@ typedef struct
     int32_t right_target_mm_s;
     bool speed_valid;
     bool qualified;
+    uint32_t encoder_left_counts,encoder_right_counts,wheel_diameter_mm; /* Active conversion settings, not a live test result. */
 } subsystem2_motion_telemetry_t;
 
 ER subsystem2_motion_init(const b2_trial_io_t *io);

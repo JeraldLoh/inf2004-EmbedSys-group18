@@ -1,5 +1,48 @@
 # `testing` branch: first whole-car build
 
+## Trial run limit removed - 2 November 2026
+
+`CAR_RUN=1 CAR_B2_TRIAL=1` no longer stops after 15 s. The supervisor limit is
+`CAR_RUN_LIMIT_MS=0` (no limit) and Buddy 2's trial authority uses
+`MEASURED_MOTION_NO_RUN_LIMIT`, so it does not expire either. A run now ends on
+GP21 STOP, a controller stop (obstacle failure, fault) or reset. Buddy 2's
+2b634db also turns off the 3 s no-black stop in this build (both sensors white
+can mean the line is centred), so a car that has really left the line keeps
+going until GP21. The 30% effort cap, 100 ms watchdog, command lifetimes and manual START
+are unchanged. Normal `CAR_RUN` keeps its 60 s limit and qualification gate.
+Older "15s" statements below are historical. Buddy 2 tests 158/158 and host
+suites 19/19 pass; CAR_RUN, B5_RUN and the trial image build without warnings.
+
+## Current ownership correction - Buddy 3 restored
+
+Buddy3 source is restored exactly to pre-publication testing641ad74, including
+its original steering build settings; the added trial curve memory and barcode
+raw-sample extension are removed. The user's scope is now Buddy2-only edits.
+Buddy5's latest testing67ae87a changes are preserved. See
+testing/subsystem2/B2_SCOPE_RESTORE_2026-11-02.md for the exact rollback scope.
+Older V5 steering/memory descriptions below are historical and superseded.
+No automated suites were run for this correction, per the user's request.
+
+## Current Buddy 2 publication - 2 November 2026
+
+At the operator's request, testing now receives the Buddy 2 measured drivers,
+calibration, executor, diagnostic images and required shared integration work.
+The active firmware sources match the restored V5 baseline reported following
+the line in three of four attempts:50mm/s, HIGH=black, steer12..90/ramp6ms,
+200ms fading memory, junction-pause fix, and NO outside-wheel speed boost.
+Later V6-V9 tuning commits are retained in history but reverted in the active
+firmware. Generated UF2 files remain local; source and build recipes are tracked.
+
+Use CAR_RUN=1 CAR_B2_TRIAL=1 for the bounded offline B2/B3/B5 trial. Normal
+production qualification remains false. This publication does not resolve the
+known line-sensor interpretation/recovery concerns or post-junction line
+authority resumption bug. Cross-subsystem trial changes need owner review.
+See testing/subsystem2/B2_INTEGRATED_STATUS_2026-11-02.md for current limits.
+Automated suites were not rerun for this publication, per the user's request.
+Remote main is unchanged. The earlier sections below are chronological history;
+their local-only, prerequisite-gating and older test-count statements are not
+the current publication status.
+
 ## Local integrated B2 trial (2 November 2026)
 
 The fresh local testing clone includes published Buddy-2be5b250 (v6 hardware
@@ -9,8 +52,8 @@ manual START,15s cap and30% effort/100ms watchdog. Production-qualified remains
 false; default CAR_RUN remains blocked. This offline first trial covers B2,
 B3 and B5 plus controller, not live Buddy1 network or Buddy4 terrain.
 See [trial guide](testing/integration/B2_INTEGRATED_TRIAL_GUIDE.md).
-Integrated changes are local for hardware testing; remote testing/main were
-not pushed by this task. Earlier integration notes below retain their history.
+These integrated changes were initially local for hardware testing and are now
+published to testing at the operator's request. Main remains unchanged.
 
 
 **Base:** `main` at `ceab57b` (2026-10-28).
@@ -135,7 +178,7 @@ GP20 hold + release = start    GP21 = STOP (Buddy 2 interrupt, at once)    60 s 
 | Power per 100 mm/s | 133 (150 mm/s gives 20% power), a guess | `motion_executor_default_config()` |
 | Lowest power for goals / power cap | 15% / 35% | same |
 | Line cruise / barcode speed | 150 / 100 mm/s | `controller_line_default_config()` |
-| Avoidance move speed / timeout | 100 mm/s / 4 s | `b5_motion_default_config()` |
+| Avoidance move / line-search speed | 50 / 50 mm/s (2026-11-02, matches trial cruise); time limit set by Buddy 2's executor | `b5_motion_default_config()` |
 
 ## 3. What each buddy needs to do
 

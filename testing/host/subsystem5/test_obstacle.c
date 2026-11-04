@@ -141,6 +141,17 @@ static void plan_clears_the_edge(void) {
     CHECK_NEAR(r.out_cm, l.out_cm, 1e-4);
 }
 
+static void plan_off_centre_edge_needs_less(void) {
+    // Obstacle left of the path: its right edge is 7 cm left of the car.
+    // Passing on the right only needs margin - 7.
+    obstacle_profile_t p = obstacle_build_profile(12.0f, edge_dir(40.0f, 14.0f, true),
+                                                  edge_dir(30.0f, 14.0f, true));
+    bypass_plan_t r = obstacle_plan_bypass(&p, SIDE_RIGHT, 15.0f, 20.0f, 60, 75);
+    CHECK_NEAR(r.lateral_cm, 15.0f - 7.0f, 0.01);
+    bypass_plan_t l = obstacle_plan_bypass(&p, SIDE_LEFT, 15.0f, 20.0f, 60, 75);
+    CHECK_NEAR(l.lateral_cm, 15.0f + 14.0f * 0.64279f, 0.01); // 14 sin 40 + margin
+}
+
 static void plan_clamps_turn(void) {
     // Far, narrow obstacle: geometric angle ~5 deg, clamped up to the minimum.
     obstacle_profile_t far = obstacle_build_profile(200.0f, edge_dir(1.0f, 200.0f, true),
@@ -153,6 +164,16 @@ static void plan_clamps_turn(void) {
     obstacle_profile_t wide = obstacle_build_profile(5.0f, edge_dir(80.0f, 5.0f, true),
                                                      edge_dir(-80.0f, 5.0f, true));
     CHECK_INT(obstacle_plan_bypass(&wide, SIDE_RIGHT, 15.0f, 30.0f, 20, 75).turn_deg, 75);
+}
+
+static void arc_out_leg_covers_the_rest(void) {
+    bypass_plan_t p = {.side = SIDE_LEFT, .turn_deg = 60, .lateral_cm = 20.0f, .pass_cm = 30.0f};
+    // Two R=9 arcs of 60 deg give 2 * 9 * (1 - cos 60) = 9 cm sideways;
+    // the straight leg covers the other 11 cm at 60 deg: 11 / sin 60.
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 9.0f), 11.0f / 0.86603f, 0.05);
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 0.0f), 20.0f / 0.86603f, 0.05); // pivots
+    p.lateral_cm = 5.0f;                                                // arcs alone are enough
+    CHECK_NEAR(obstacle_arc_out_cm(&p, 9.0f), 0.0f, 1e-6);
 }
 
 static void plan_angle_matches_libm(void) {
@@ -187,6 +208,8 @@ void run_obstacle_tests(void) {
     RUN(choose_shorter_detour);
     RUN(choose_tie_breaks_on_clearance);
     RUN(plan_clears_the_edge);
+    RUN(plan_off_centre_edge_needs_less);
     RUN(plan_clamps_turn);
+    RUN(arc_out_leg_covers_the_rest);
     RUN(plan_angle_matches_libm);
 }
