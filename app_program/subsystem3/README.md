@@ -17,6 +17,7 @@ Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
 | GP0 | Right line sensor, digital D0 (also UART0 TX: use USB console, `CRASH_REPORT=0`) |
 | GP7 | Left line sensor, digital D0 |
 | GP26 / ADC0 | Barcode sensor, analogue A0 |
+| GP28 / ADC2 | Left line sensor, analogue A0, `LINE_PID=1` only (isolate the VBAT-sense jumper) |
 
 ## Files
 
@@ -24,6 +25,7 @@ Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
 |---|---|---|
 | `drv_ir.c/.h` | Pico | GPIO, ADC and microsecond timer access |
 | `line_follow.c/.h` | Pico + host | Filter, steering, junction detection, probe, reacquire |
+| `line_pid.c/.h` | Pico + host | Opt-in PID steering from the left line sensor's analogue output |
 | `barcode_sensor.c/.h` | Pico + host | ADC to black/white: calibration, hysteresis, adaptation |
 | `barcode_decoder.c/.h` | Pico + host | Full Code 39 (A-Z, 0-9), both directions, validated |
 | `barcode_map.c/.h` | Pico + host | Letter-to-command map, set at run time with `MAP` over MQTT |
@@ -49,6 +51,37 @@ Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
   sensor now"): sweep the sensor over black and white for 3 s. Line following
   runs throughout. Until it succeeds barcodes are ignored and every junction
   uses the probe; `subsystem3_barcode_calibrated()` says which.
+
+## Line PID (opt-in, `LINE_PID=1`)
+
+Not run on the car yet. Build with `make ... CAR_RUN=1 LINE_PID=1`
+(image `..._carrun_linepid.uf2`; may be combined with the default CAR_RUN
+trial flags).
+
+- Wiring: no extra sensor. Add one wire from the LEFT line module's **A0**
+  pin to GP28; its D0 stays on GP7 (the module drives both at once). The
+  module must run from 3.3 V, or A0 can exceed the ADC's 3.3 V limit.
+  Using the right module instead: `-DLINE_PID_LEFT_EDGE=0`.
+  Module reads lower on black: `-DLINE_PID_BLACK_IS_HIGH=0`.
+- The PID holds the left sensor half on the tape's left edge, so the car runs
+  a few mm right of where the digital steering holds it. The right sensor
+  stays on white; junction crossbars still read both black.
+- Calibration: in the same 3 s "sweep now" window as the barcode, also slide
+  the car sideways across the tape. Prints `[S3] Line PID OK: white W black B`
+  or `FAILED ... using digital steering`.
+- The PID steers only in CENTRED / STEER_LEFT / STEER_RIGHT. Junctions,
+  probe, reacquire and line loss still come from the digital sensors.
+  If calibration fails or an ADC read fails, the digital steering is used.
+- Gains (x100, edit the defaults in `line_pid.h`): `LINE_PID_KP_X100` 25,
+  `LINE_PID_KI_X100` 0, `LINE_PID_KD_X100` 0, `LINE_PID_I_LIMIT` 30.
+  Kp 80 with Kd 300 weaved on a straight (2026-11-04): the edge spans only
+  ~5 mm, so small gains already steer hard. D uses the smoothed error over
+  `LINE_PID_D_WINDOW_MS` (10 ms), so ADC noise does not make it twitch.
+  Tune Kp first (Ki = Kd = 0) until it follows but weaves, then Kd until the
+  weave stops, then a little Ki only if it sits off the edge on curves.
+- `S3_DEBUG_RAW=1` adds a `[S3 PID] adc= dark= err= cal=` line every 100 ms.
+- Host tests: `line_pid_host_tests` and `line_pid_integral_host_tests` in
+  `testing/host`.
 
 ## Demo day: setting the barcode letters over MQTT
 

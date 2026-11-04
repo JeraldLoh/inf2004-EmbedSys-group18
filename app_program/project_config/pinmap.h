@@ -17,6 +17,7 @@ enum
     PIN_LINE_LEFT = 7,
     PIN_LINE_RIGHT = 0,
     PIN_BARCODE_ADC = 26,    /* ADC0 */
+    PIN_LINE_ANALOGUE = 28,  /* ADC2, LINE_PID=1 only: left line module A0 */
     PIN_IMU_SDA = 2,   /* I2C1, Grove 2 / Maker port */
     PIN_IMU_SCL = 3,
     PIN_SONAR_TRIGGER = 16,
@@ -28,7 +29,8 @@ enum
 
 enum
 {
-    BARCODE_ADC_CHANNEL = 0  /* GP26 = ADC input 0 */
+    BARCODE_ADC_CHANNEL = 0, /* GP26 = ADC input 0 */
+    LINE_ANALOGUE_ADC_CHANNEL = 2  /* GP28 = ADC input 2 */
 };
 
 #endif

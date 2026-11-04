@@ -202,6 +202,19 @@ endif
 TEST_SUFFIX := _carrun_table
 endif
 
+# Buddy 3 line PID: the left line module's A0 pin, wired to GP28 (ADC2),
+# steers with a PID along the tape's left edge. Off by default: needs that wire.
+LINE_PID ?= 0
+ifneq ($(filter $(LINE_PID),0 1),$(LINE_PID))
+$(error LINE_PID must be 0 or 1)
+endif
+ifeq ($(LINE_PID),1)
+ifneq ($(CAR_RUN),1)
+$(error LINE_PID=1 requires CAR_RUN=1)
+endif
+TEST_SUFFIX := $(TEST_SUFFIX)_linepid
+endif
+
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
 CIRCUIT_TEST ?= 0
 ifneq ($(filter $(CIRCUIT_TEST),0 1),$(CIRCUIT_TEST))
@@ -369,6 +382,10 @@ CFLAGS  += -DAPP_CAR_RUN=$(CAR_RUN) -DAPP_CAR_MQTT=$(CAR_MQTT)
 CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
+CFLAGS  += -DAPP_S3_LINE_PID=$(LINE_PID)
+# Buddy 3 raw sensor prints every 100 ms (line, barcode, and line PID).
+S3_DEBUG_RAW ?= 0
+CFLAGS  += -DS3_DEBUG_RAW=$(S3_DEBUG_RAW)
 ifeq ($(CAR_MQTT),1)
 # The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
 # The radio service shares core 0, so keep it below the car's control tasks
@@ -432,7 +449,7 @@ endif
 # before any recipe executes.
 ################################################################################
 
-PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)
+PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-linepid$(LINE_PID)-s3debug$(S3_DEBUG_RAW)
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))
