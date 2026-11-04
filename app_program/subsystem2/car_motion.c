@@ -116,6 +116,14 @@ bool car_motion_continuous(car_motion_t *m,
         if (converted.curvature_u1_m > limit) { converted.curvature_u1_m = limit; }
         if (converted.curvature_u1_m < -limit) { converted.curvature_u1_m = -limit; }
     }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    /* Slightly slow line-follow bends after the hold-command deadband.
+     * Preserve curvature, straight cruise, and obstacle motion requests. */
+    if (r->source == MOTION_SOURCE_LINE && converted.curvature_u1_m != 0 &&
+        converted.speed_mm_s > 0 &&
+        (uint32_t)converted.speed_mm_s <= m->executor.config.max_speed_mm_s)
+    { converted.speed_mm_s = (int32_t)((int64_t)converted.speed_mm_s * 90 / 100); }
+#endif
     if (m->next_command == UINT32_MAX)
     { return car_motion_record_rejection(m,CAR_REJECT_ID,MOTION_STATE,r->source,r->command_id,r->authority_generation); }
     if (!authority(m, r->authority_generation,us))

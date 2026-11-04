@@ -41,7 +41,25 @@ int main(int argc,char **argv) {
     fixture_t f; unsigned i; assert(argc==2); init(&f);
     /* Buddy 3 treats both-white as centred, not evidence of line loss. */
     assert(CONTROLLER_LINE_LOST_MS == 0U);
-    if(strcmp(argv[1],"normal")==0) {
+    if(strcmp(argv[1],"bend_speed")==0) {
+        motion_continuous_request_t r={1U,1U,MOTION_SOURCE_LINE,60,0,100U,0U,150U};
+        int32_t curves[5]={0,2800000,-2800000,5600000,-5600000};
+        assert(car_motion_enable_trial(&f.car,15000000U));
+        for(i=0U;i<5U;++i) {
+            r.command_id=i+1U; r.curvature_u1_m=curves[i];
+            assert(car_motion_continuous(&f.car,&r,0U,0U));
+            assert(f.car.executor.continuous.speed_mm_s==(i<3U?60:54));
+            if(i<3U) { assert(f.car.executor.continuous.curvature_u1_m==0); }
+            else { assert(f.car.executor.continuous.curvature_u1_m==(i==3U?-4:4)); }
+        }
+        r.command_id=6U; r.source=MOTION_SOURCE_OBSTACLE;
+        assert(car_motion_continuous(&f.car,&r,0U,0U));
+        assert(f.car.executor.continuous.speed_mm_s==60);
+        r.source=MOTION_SOURCE_LINE; r.command_id=7U; r.speed_mm_s=-1;
+        assert(!car_motion_continuous(&f.car,&r,0U,0U));
+        r.command_id=8U; r.speed_mm_s=(int32_t)f.car.executor.config.max_speed_mm_s+1;
+        assert(!car_motion_continuous(&f.car,&r,0U,0U));
+    } else if(strcmp(argv[1],"normal")==0) {
         assert(!line(&f,1U) && !f.car.executor.status.authorized); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"bounds")==0) {
         assert(!car_motion_enable_trial(&f.car,0U));
