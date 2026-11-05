@@ -7,6 +7,7 @@
  *   GP0         right line sensor, digital D0
  *   GP7         left line sensor, digital D0
  *   GP26/ADC0   barcode sensor, analogue A0
+ *   GP28/ADC2   left line sensor, analogue A0 (LINE_PID=1 only)
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -18,6 +19,7 @@
 #define S3_PIN_LINE_LEFT ((UINT)PIN_LINE_LEFT)
 #define S3_PIN_BARCODE_ADC ((UINT)PIN_BARCODE_ADC)
 #define S3_BARCODE_ADC_CHANNEL BARCODE_ADC_CHANNEL
+#define S3_LINE_ADC_CHANNEL LINE_ANALOGUE_ADC_CHANNEL
 
 /* GPIO level the line module's D0 outputs when it is over BLACK.
  * Most TCRT5000/LM393 boards give HIGH on black (no reflection) and light
@@ -39,6 +41,7 @@
 ER drv_ir_init(void);
 void drv_ir_read_line(bool *left_black, bool *right_black);
 ER drv_ir_read_barcode(uint16_t *raw);   /* 12-bit, 0..4095 */
+ER drv_ir_read_line_analogue(uint16_t *raw);  /* GP28, 12-bit, 0..4095 */
 bool drv_ir_read_barcode_digital(void);  /* D0 pin, true = black */
 uint32_t drv_ir_now_us(void);            /* free-running 1 MHz timer */
 

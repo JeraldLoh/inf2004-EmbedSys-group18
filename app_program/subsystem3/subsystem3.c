@@ -34,6 +34,11 @@
  * set the black/white thresholds, while line following carries on. Until a
  * calibration succeeds every sample reads white, so no barcode is decoded.
  *
+ * LINE PID (LINE_PID=1 builds only): the left line module's A0 output, wired
+ * to GP28, steers with a PID (line_pid.c) along the tape's left edge. It is
+ * calibrated in the same sweep as the barcode: slide the car sideways across
+ * the tape. If that calibration fails, the digital steering below is used.
+ *
  * Started only by the CAR_RUN startup (vehicle_controller/car_run_target.c).
  */
 #include "subsystem3.h"
@@ -41,6 +46,18 @@
 #include "barcode_sensor.h"
 #include "barcode_decoder.h"
 #include "barcode_edges.h"
+
+#ifndef APP_S3_LINE_PID
+#define APP_S3_LINE_PID 0
+#endif
+#if APP_S3_LINE_PID
+#include "line_pid.h"
+#if S3_BARCODE_USE_EDGES
+#error "LINE_PID=1 calibrates in the ADC barcode sweep: needs S3_BARCODE_USE_EDGES=0"
+#endif
+LOCAL line_pid_t s3_pid;          /* written only by s3_task */
+LOCAL uint16_t s3_pid_raw;
+#endif
 #if APP_CAR_MQTT
 #include "../subsystem1/buddy1_bridge.h"
 static b1_s3_telemetry s3_wifi;
@@ -140,6 +157,10 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
                   (INT)S3_CALIBRATION_MS);
         barcode_sensor_reset(bar);   /* barcodes ignored until it succeeds */
         barcode_decoder_reset(decoder);
+#if APP_S3_LINE_PID
+        tm_printf((UB *)"[S3] Line PID: also slide the car sideways across the tape\n");
+        line_pid_calibrate_start(&s3_pid);   /* digital steering until it succeeds */
+#endif
         s3_barcode_ready = FALSE;
         active = true;
 #if APP_CAR_MQTT
@@ -155,12 +176,27 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
     {
         barcode_sensor_calibrate_sample(bar, raw);
     }
+#if APP_S3_LINE_PID
+    line_pid_calibrate_sample(&s3_pid, s3_pid_raw);
+#endif
     if ((now_ms - start_ms) < S3_CALIBRATION_MS)
     {
         return true;
     }
 
     active = false;
+#if APP_S3_LINE_PID
+    if (line_pid_calibrate_finish(&s3_pid))
+    {
+        tm_printf((UB *)"[S3] Line PID OK: white %d black %d\n",
+                  (INT)s3_pid.white_level, (INT)s3_pid.black_level);
+    }
+    else
+    {
+        tm_printf((UB *)"[S3] Line PID calibration FAILED: white %d black %d, using digital steering\n",
+                  (INT)s3_pid.white_level, (INT)s3_pid.black_level);
+    }
+#endif
     if (barcode_sensor_calibrate_finish(bar))
     {
         s3_barcode_ready = TRUE;
@@ -303,11 +339,17 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #if S3_DEBUG_RAW
     uint32_t last_debug_ms = 0U;
 #endif
+#if APP_S3_LINE_PID
+    bool pid_raw_ok = false;
+#endif
 
     (void)stacd;
     (void)exinf;
 
     line_follow_reset(&line);
+#if APP_S3_LINE_PID
+    line_pid_init(&s3_pid);   /* digital steering until calibrated */
+#endif
     barcode_decoder_reset(&decoder);
 #if !S3_BARCODE_USE_EDGES
     barcode_sensor_reset(&bar);   /* reads white until calibrated */
@@ -326,6 +368,10 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
         /* ---- Line ---- */
         drv_ir_read_line(&left_black, &right_black);
+#if APP_S3_LINE_PID
+        /* A failed read uses digital steering for this sample only. */
+        pid_raw_ok = (drv_ir_read_line_analogue(&s3_pid_raw) == E_OK);
+#endif
 
         if (s3_probe_step(&line, now_ms) == S3_PROBE_RUNNING)
         {
@@ -337,6 +383,29 @@ LOCAL void s3_task(INT stacd, void *exinf)
         {
             (void)line_follow_update(&line, left_black, right_black, now_ms);
             s3_steer_value = line_follow_steer(&line, now_ms);
+#if APP_S3_LINE_PID
+            /* PID steers only while plainly following. Junction, reacquire
+             * and line loss keep the digital behaviour. */
+            switch ((line_state_t)line.status.state)
+            {
+                case LINE_STATE_CENTRED:
+                case LINE_STATE_STEER_LEFT:
+                case LINE_STATE_STEER_RIGHT:
+                    if (s3_pid.calibrated && pid_raw_ok)
+                    {
+                        /* On a bend the sensor runs off the edge; the
+                         * digital ramp then takes over if it steers harder. */
+                        s3_steer_value = line_pid_blend(
+                            line_pid_step(&s3_pid, s3_pid_raw, now_ms),
+                            s3_steer_value,
+                            line_pid_saturated(&s3_pid, s3_pid_raw));
+                    }
+                    break;
+                default:
+                    line_pid_reset(&s3_pid);
+                    break;
+            }
+#endif
         }
 
         if (line_follow_take_junction(&line, &junction, now_ms))
@@ -465,6 +534,12 @@ LOCAL void s3_task(INT stacd, void *exinf)
                       (INT)left_black, (INT)right_black, (INT)s3_steer_value,
                       (INT)raw, (INT)barcode_sensor_darkness(raw),
                       (INT)bar.threshold_low, (INT)bar.threshold_high);
+#endif
+#if APP_S3_LINE_PID
+            tm_printf((UB *)"[S3 PID] adc=%d dark=%d err=%d cal=%d\n",
+                      (INT)s3_pid_raw, (INT)line_pid_darkness(s3_pid_raw),
+                      (INT)line_pid_error(&s3_pid, s3_pid_raw),
+                      (INT)s3_pid.calibrated);
 #endif
         }
 #endif

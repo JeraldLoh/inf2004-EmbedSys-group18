@@ -59,7 +59,7 @@ EXPORT void drv_ir_read_line(bool *left_black, bool *right_black)
     }
 }
 
-EXPORT ER drv_ir_read_barcode(uint16_t *raw)
+LOCAL ER read_adc(W channel, uint16_t *raw)
 {
     UW value = 0U;
     SZ asize = 0;
@@ -70,13 +70,25 @@ EXPORT ER drv_ir_read_barcode(uint16_t *raw)
         return E_PAR;
     }
     /* For the ADC device, "start" is the channel number and size is 1. */
-    er = tk_srea_dev(adc_dd, S3_BARCODE_ADC_CHANNEL, &value, 1, &asize);
+    er = tk_srea_dev(adc_dd, channel, &value, 1, &asize);
     if (er < E_OK)
     {
         return er;
     }
     *raw = (uint16_t)(value & 0x0FFFU);
     return E_OK;
+}
+
+EXPORT ER drv_ir_read_barcode(uint16_t *raw)
+{
+    return read_adc(S3_BARCODE_ADC_CHANNEL, raw);
+}
+
+/* GP28 is switched to analogue mode by DEVCONF_ADC_PIN_INIT_2, which is TRUE
+ * only in LINE_PID=1 images. */
+EXPORT ER drv_ir_read_line_analogue(uint16_t *raw)
+{
+    return read_adc(S3_LINE_ADC_CHANNEL, raw);
 }
 
 EXPORT bool drv_ir_read_barcode_digital(void)

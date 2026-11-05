@@ -55,6 +55,31 @@ endif()
 add_test(NAME perception_math_host_tests
          COMMAND perception_math_host_tests)
 
+# Buddy 3 line PID: P+D gains, then again with P+I. Gains are pinned here,
+# not taken from the car's tuning defaults in line_pid.h.
+add_executable(line_pid_host_tests
+    test_line_pid.c
+    ../../app_program/subsystem3/line_pid.c
+)
+target_compile_definitions(line_pid_host_tests PRIVATE
+    LINE_PID_KP_X100=80 LINE_PID_KI_X100=0 LINE_PID_KD_X100=300)
+add_executable(line_pid_integral_host_tests
+    test_line_pid.c
+    ../../app_program/subsystem3/line_pid.c
+)
+target_compile_definitions(line_pid_integral_host_tests PRIVATE
+    LINE_PID_KP_X100=80 LINE_PID_KI_X100=100 LINE_PID_KD_X100=0)
+
+foreach(line_pid_test line_pid_host_tests line_pid_integral_host_tests)
+    if(MSVC)
+        target_compile_options(${line_pid_test} PRIVATE /W4 /WX /UNDEBUG)
+    else()
+        target_compile_options(${line_pid_test} PRIVATE
+            -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    endif()
+    add_test(NAME ${line_pid_test} COMMAND ${line_pid_test})
+endforeach()
+
 add_executable(obstacle_avoidance_host_tests
     subsystem5/test_main.c
     subsystem5/test_range.c
