@@ -236,7 +236,7 @@ static void run_world(world_t *w, rig_t *r, av_state_t until, uint32_t max_ms)
     av_t av;
     av_config_t cfg;
     av_platform_t p = {w, w_now, w_servo, w_measure, w_stop, w_turn, w_fwd, w_rev,
-        w_search, w_resume, w_done, NULL, w_line, NULL};
+        w_search, w_resume, w_done, NULL, w_line, NULL, NULL};
     bool left_monitor = false;
 
     av_config_default(&cfg);

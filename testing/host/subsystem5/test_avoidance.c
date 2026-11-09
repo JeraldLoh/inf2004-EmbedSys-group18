@@ -68,6 +68,16 @@ typedef struct {
     int line_on_bypass_turn;   // ...during this bypass turn (1-based); 0 = off
     bool line_when_aligned;    // ...once the return leg's align drive and turn are done
     int forward_never_done;    // this bypass forward drive (1-based) never finishes; 0 = off
+    // Side face of the obstacle on the pass leg (bypass forward 2): seen by
+    // the servo turned >= 60 deg toward the obstacle for side_face_ms after
+    // the leg starts. 0 cm = no face.
+    float side_face_cm;
+    uint32_t side_face_ms;
+    int late_on_forward;       // late obstacle only blocks during this bypass forward; 0 = any
+    bool odometry;             // motion_travelled_cm reports 10 cm/s of forward drive
+    uint32_t forward_start;
+    float forward_cm[8];
+    float pass_side_cm, pass_depth_cm; // from the last PASS_CLEAR event
     int bypass_turns;
     bool bypassing;
 
@@ -121,7 +131,14 @@ static range_reading_t s_measure(void *ctx) {
     }
     int rel = 90 + servo_left_offset(s);
     int world = rel + s->heading;
-    if (in_blob(&s->late_obstacle, rel)) return (range_reading_t){RANGE_OK, s->late_obstacle.cm};
+    if (s->side_face_cm > 0.0f && s->bypassing && s->forwards == 2 &&
+        s->t - s->forward_start < s->side_face_ms) {
+        int toward_obstacle = s->last_bypass == SIDE_LEFT ? -servo_left_offset(s) : servo_left_offset(s);
+        if (toward_obstacle >= 60) return (range_reading_t){RANGE_OK, s->side_face_cm};
+    }
+    if (in_blob(&s->late_obstacle, rel) &&
+        (s->late_on_forward == 0 || s->forwards == s->late_on_forward))
+        return (range_reading_t){RANGE_OK, s->late_obstacle.cm};
     if (in_blob(&s->obstacle, world) &&
         !(s->visible_under_cm > 0.0f && s->obstacle.cm >= s->visible_under_cm))
         return (range_reading_t){RANGE_OK, s->obstacle.cm};
@@ -159,6 +176,8 @@ static void s_turn(void *ctx, float deg) {
 static void s_forward(void *ctx, float cm) {
     sim_t *s = ctx;
     s->forwards++;
+    if (s->forwards <= 8) s->forward_cm[s->forwards - 1] = cm;
+    s->forward_start = s->t;
     s->refused = s->refuse_kind == 2;
     start_motion(s, s->forward_ms_per_cm != 0U ? (uint32_t)(cm * (float)s->forward_ms_per_cm)
                                                : s->forward_ms);
@@ -194,6 +213,12 @@ static void s_resume(void *ctx) {
 }
 
 static bool s_failed(void *ctx) { return ((sim_t *)ctx)->refused; }
+
+static float s_travelled(void *ctx) {
+    sim_t *s = ctx;
+    if (!s->odometry) return -1.0f;
+    return (float)(s->t - s->forward_start) / 100.0f;
+}
 
 static bool s_done(void *ctx) {
     sim_t *s = ctx;
@@ -233,6 +258,10 @@ static void s_event(void *ctx, const av_event_t *e) {
         if (s->late_obstacle.cm > 0.0f) s->late_obstacle.present = true;
     }
     if (e->type == AV_EVT_BYPASS_RETURN) s->turns_since_return = 0;
+    if (e->type == AV_EVT_PASS_CLEAR) {
+        s->pass_side_cm = e->side_cm;
+        s->pass_depth_cm = e->depth_cm;
+    }
 }
 
 static av_platform_t platform_for(sim_t *s) {
@@ -251,6 +280,7 @@ static av_platform_t platform_for(sim_t *s) {
         .motion_failed = s_failed,
         .line_detected = s_line,
         .on_event = s_event,
+        .motion_travelled_cm = s_travelled,
     };
     return p;
 }
@@ -1245,6 +1275,124 @@ static void align_drive_timeout_fails_safe(void) {
     CHECK(s.last_reason != NULL && strcmp(s.last_reason, "line align timed out") == 0);
 }
 
+// pass_watch_side: the pass leg watches the obstacle's side with the servo
+// at 70 deg toward it, and ends a computed distance after the side opens up.
+// Forward drives take 50 ms per cm here so a longer leg really lasts longer.
+static void sim_setup_pass(sim_t *s, av_t *av, bool return_from_side) {
+    sim_defaults(s, 0);
+    s->cfg.pass_watch_side = true;
+    s->cfg.pass_beside_cm = 30.0f;
+    s->cfg.pass_max_extra_cm = 40.0f;
+    s->cfg.pass_clear_margin_cm = 8.0f;
+    s->cfg.pass_guard_every = 3;
+    s->cfg.return_from_side = return_from_side;
+    s->forward_ms_per_cm = 50U;
+    s->odometry = true;
+    av_platform_t p = platform_for(s);
+    CHECK(av_init(av, &s->cfg, &p));
+    s->obstacle = (blob_t){80, 100, 12.0f, true};
+}
+
+static bool near(float a, float b, float tol) { return a > b - tol && a < b + tol; }
+
+static void pass_config_checked(void) {
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(!c.pass_watch_side && !c.return_from_side); // off unless the build turns it on
+    c.pass_watch_side = true;
+    CHECK(av_config_check(&c) != NULL); // pass_beside_cm unset
+    c.pass_beside_cm = 30.0f;
+    CHECK(av_config_check(&c) == NULL);
+    c.pass_guard_every = -1;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+static void pass_ends_after_back_corner(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, false);
+    s.side_face_cm = 16.0f; // ~15 cm square to the car
+    s.side_face_ms = 1500;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 1);
+    CHECK_INT(av_metrics(&av)->pass_clear, 1);
+    CHECK_INT(av_metrics(&av)->pass_capped, 0);
+    CHECK_INT(s.forwards, 4); // out, pass (stopped at the corner), past the corner, back
+    CHECK(near(s.forward_cm[1], s.last_plan.pass_cm + 40.0f, 0.01f)); // watched leg may run long
+    // Past the corner: the ray's lead ahead of square (16 cos 70) + 8 cm margin.
+    CHECK(near(s.forward_cm[2], 16.0f * 0.342f + 8.0f, 0.2f));
+    CHECK(near(s.pass_side_cm, 16.0f * 0.9397f, 0.2f));
+    CHECK(s.pass_depth_cm > 0.0f && s.pass_depth_cm < 20.0f); // seen ~1.5 s at 10 cm/s
+    CHECK(near(s.forward_cm[3], s.last_plan.out_cm, 0.01f)); // return mirrors the out leg
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    CHECK_INT(av_metrics(&av)->failures, 0);
+    check_hygiene(&s);
+}
+
+static void pass_capped_when_side_never_opens(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, true);
+    s.side_face_cm = 16.0f;
+    s.side_face_ms = 600000; // longer than the capped leg
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 0);
+    CHECK_INT(av_metrics(&av)->pass_capped, 1);
+    CHECK_INT(s.forwards, 3);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+static void pass_without_side_face_runs_capped(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, true);
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 0);
+    CHECK_INT(av_metrics(&av)->pass_capped, 1);
+    // Nothing measured: the return leg still mirrors the out leg.
+    CHECK(near(s.forward_cm[2], s.last_plan.out_cm, 0.01f));
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+// The car drifted out: the side face is further than planned, so the return
+// drive is longer than the out leg (within 1.5x).
+static void return_leg_sized_from_side_distance(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, true);
+    s.side_face_cm = 26.0f;
+    s.side_face_ms = 1500;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 1);
+    float out = s.last_plan.out_cm;
+    CHECK(s.forward_cm[3] > out + 1.0f);
+    CHECK(s.forward_cm[3] <= 1.5f * out + 0.01f);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+static void pass_still_guards_ahead(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, false);
+    s.side_face_cm = 16.0f;
+    s.side_face_ms = 600000;
+    s.late_obstacle = (blob_t){85, 95, 4.0f, false};
+    s.late_obstacle.cm = 4.0f;
+    s.late_on_forward = 2;
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    uint32_t end = s.t + 30000;
+    while (count_events(&s, AV_EVT_EMERGENCY_STOP) == 0 && (int32_t)(s.t - end) < 0) {
+        av_tick(&av);
+        s.t += TICK_MS;
+    }
+    CHECK_INT(count_events(&s, AV_EVT_EMERGENCY_STOP), 1);
+    CHECK_INT(s.forwards, 2); // stopped on the watched pass leg
+    s.late_obstacle.cm = 0.0f; // gone for good: the re-planned bypass completes
+    s.late_obstacle.present = false;
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(av_metrics(&av)->failures, 0);
+}
+
 // Straightening up beside the obstacle is not past it: keep going.
 static void line_ignored_beside_obstacle(void) {
     sim_t s;
@@ -1439,6 +1587,12 @@ void run_avoidance_tests(void) {
     RUN(shallow_crossing_hands_over_at_once);
     RUN(line_during_turn_is_not_aligned);
     RUN(align_drive_timeout_fails_safe);
+    RUN(pass_config_checked);
+    RUN(pass_ends_after_back_corner);
+    RUN(pass_capped_when_side_never_opens);
+    RUN(pass_without_side_face_runs_capped);
+    RUN(return_leg_sized_from_side_distance);
+    RUN(pass_still_guards_ahead);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);

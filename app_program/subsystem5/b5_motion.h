@@ -73,6 +73,8 @@ typedef struct
     bool arc_started;
     uint32_t arc_ms;                    /* length of the arc in progress */
     motion_result_code_t last_result;   /* of the last finished goal */
+    int32_t travelled_mm;               /* current/last goal, from its results */
+    bool travelled_valid;               /* Buddy 2 reported odometry for it */
 } b5_motion_t;
 
 /* All seven set, or all NULL. */
@@ -98,5 +100,8 @@ void b5_motion_service(b5_motion_t *motion, uint32_t now_ms);
 bool b5_motion_done(const b5_motion_t *motion);
 bool b5_motion_failed(const b5_motion_t *motion);
 bool b5_motion_line_seen(const b5_motion_t *motion);
+/* Distance covered by the current (or just stopped) goal, as Buddy 2 last
+ * reported it. False until a result with valid odometry arrives. */
+bool b5_motion_travelled_mm(const b5_motion_t *motion, int32_t *mm);
 
 #endif

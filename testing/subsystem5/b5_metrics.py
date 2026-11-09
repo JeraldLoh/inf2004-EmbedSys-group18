@@ -5,7 +5,8 @@ here):
 
   [B5 RESULT] n=3 outcome=REJOINED ms=9120 scan_ms=2410 ahead_mm=181 width_mm=96
       edges=both centre_x_mm=-4 side=LEFT lclear_mm=4000 rclear_mm=612
-      aligned=1 backoffs=0 reverses=0 reacq=0 reason=""
+      aligned=1 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=152 depth_mm=98
+      reason=""
 
 Usage:
   python b5_metrics.py run.log                 # summary from the log alone
@@ -94,6 +95,14 @@ def main(argv):
                       grade_high(rate, RATE_BANDS)))
         aligned = sum(1 for r in rejoined if r.get("aligned") == "1")
         print(f"rejoins that ran the line-align step: {aligned}/{len(rejoined)}")
+        passes = [r.get("pass", "off") for r in bypassed]
+        if any(p != "off" for p in passes):
+            print(f"pass legs ended by the side sonar: {passes.count('clear')}/{len(passes)}"
+                  f" (capped {passes.count('cap')})")
+        depths = [num(r, "depth_mm") for r in bypassed if num(r, "depth_mm") is not None]
+        if depths:
+            print(f"measured depth (lower bound): mean {sum(depths) / len(depths):.0f} mm,"
+                  f" range {min(depths)}..{max(depths)} mm (n={len(depths)})")
 
     # Time to bypass: detection -> back on the line, for successful bypasses.
     if rejoined:

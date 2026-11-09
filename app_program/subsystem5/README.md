@@ -145,3 +145,15 @@ move): `../../testing/subsystem5/bench_firmware/README.md`.
   and plan fields are filled from the avoidance events, so the dashboard's
   Profile / Decision / Bypass plan rows and the added obstacle rows show
   real values. Groups are cleared at each new encounter and on reset.
+- Pass leg side watch (`pass_watch_side`, `return_from_side`; off in
+  `av_config_default()`, on in `CAR_RUN`): on the leg beside the obstacle
+  the servo turns fully (70 deg) toward it. The leg may run up to
+  `pass_max_extra_cm` past the planned length; once the side face (under
+  `pass_beside_cm` square to the car) opens up, the car stops, drives the
+  ray's lead plus `pass_clear_margin_cm`, then turns back
+  (`AV_EVT_PASS_CLEAR`). Never seeing it open: capped, as before. Every
+  `pass_guard_every` side pings a centre ping keeps the collision guard.
+  Buddy 2's goal `travelled_mm` gives the obstacle depth (a lower bound),
+  and the measured side distance sizes the return drive (pivots only,
+  0.5..1.5 x the out leg). `[B5 RESULT]` adds `pass=`, `side_mm=`,
+  `depth_mm=`.

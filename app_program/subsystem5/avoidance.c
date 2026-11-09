@@ -127,6 +127,12 @@ const char *av_config_check(const av_config_t *c) {
     if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
     if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
         return "line_align_min_deg must be within 0..89";
+    if (c->pass_watch_side) {
+        if (!(c->pass_beside_cm > 0.0f)) return "pass_beside_cm must be > 0";
+        if (!(c->pass_max_extra_cm >= 0.0f)) return "pass_max_extra_cm must be >= 0";
+        if (!(c->pass_clear_margin_cm >= 0.0f)) return "pass_clear_margin_cm must be >= 0";
+        if (c->pass_guard_every < 0) return "pass_guard_every must be >= 0";
+    }
     return NULL;
 }
 
@@ -310,6 +316,7 @@ static void start_coarse(av_t *a) {
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
     a->align_step = 0;
+    a->pass_phase = 0;
     enter(a, AV_STATE_COARSE_SCAN);
 }
 
@@ -352,11 +359,24 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->off_line = false;
     a->heading_deg = 0;
     a->choice.side = SIDE_NONE;
+    a->pass_seen = false;
+    a->depth_cm = -1.0f;
     av_event_t e = event_of(AV_EVT_OBSTACLE_DETECTED);
     e.point.angle_deg = a->cfg.center_deg;
     e.point.reading = r;
     emit(a, now, &e);
     start_coarse(a);
+}
+
+// Something blocks the way ahead mid-manoeuvre: stop and re-plan from here.
+static void emergency_stop(av_t *a, uint32_t now, range_reading_t r) {
+    a->hw.motion_stop(a->hw.ctx);
+    a->metrics.emergency_stops++;
+    av_event_t e = event_of(AV_EVT_EMERGENCY_STOP);
+    e.point.angle_deg = a->cfg.center_deg;
+    e.point.reading = r;
+    emit(a, now, &e);
+    start_coarse(a); // re-plan from here; off_line is kept so a clear path leads to reacquire
 }
 
 // Collision guard while driving. Returns true if it stopped the robot.
@@ -366,14 +386,7 @@ static bool guard_tripped(av_t *a, uint32_t now) {
     take_result_t t = take(a, now, a->cfg.center_deg, &r);
     if (t == TAKE_ABORTED) return true;
     if (t != TAKE_READY || !is_blocked(r, a->cfg.emergency_stop_cm)) return false;
-
-    a->hw.motion_stop(a->hw.ctx);
-    a->metrics.emergency_stops++;
-    av_event_t e = event_of(AV_EVT_EMERGENCY_STOP);
-    e.point.angle_deg = a->cfg.center_deg;
-    e.point.reading = r;
-    emit(a, now, &e);
-    start_coarse(a); // re-plan from here; off_line is kept so a clear path leads to reacquire
+    emergency_stop(a, now, r);
     return true;
 }
 
@@ -796,6 +809,7 @@ static bool rejoin_if_line(av_t *a, uint32_t now) {
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    a->pass_phase = 0;
     if (driving && start_align(a, now)) return true;
     rejoin_line(a, now);
     return true;
@@ -826,6 +840,104 @@ static void on_align(av_t *a, uint32_t now) {
     }
 }
 
+// ---- Pass leg: watch the obstacle's side (cfg.pass_watch_side) ----
+
+static float travelled_cm(const av_t *a) {
+    return a->hw.motion_travelled_cm != NULL ? a->hw.motion_travelled_cm(a->hw.ctx) : -1.0f;
+}
+
+// Servo angle looking at the obstacle beside the car: fully toward it.
+static int pass_servo(const av_t *a) {
+    return servo_toward(a, opposite(a->plan.side), a->cfg.fine_half_range_deg);
+}
+
+// Mean of the side hits as a point (car frame: x square to the car, y ahead).
+static point2_t pass_hit_point(const av_t *a) {
+    float mean = a->pass_hit_sum_cm / (float)a->pass_hits;
+    return obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)pass_servo(a)), mean);
+}
+
+static void start_pass(av_t *a) {
+    a->pass_phase = a->cfg.pass_watch_side ? 1 : 0;
+    a->pass_seen = false;
+    a->pass_readings = 0;
+    a->pass_hits = 0;
+    a->pass_hit_sum_cm = 0.0f;
+    a->pass_seen_at_cm = -1.0f;
+}
+
+// One reading per call, side mostly, with a forward collision ping after
+// every pass_guard_every side pings. The ray points ahead of square, so it
+// leaves the face before the car is level with the back corner: once it
+// opens up, drive that lead plus pass_clear_margin_cm, then turn back.
+static void pass_watch(av_t *a, uint32_t now) {
+    int every = a->cfg.pass_guard_every;
+    bool forward = every > 0 && a->cfg.emergency_stop_cm > 0.0f &&
+                   a->pass_readings % (every + 1) == every;
+    int angle = forward ? a->cfg.center_deg : pass_servo(a);
+    range_reading_t r;
+    if (take(a, now, angle, &r) != TAKE_READY) return;
+    a->pass_readings++;
+    if (forward) {
+        if (is_blocked(r, a->cfg.emergency_stop_cm)) emergency_stop(a, now, r);
+        return;
+    }
+    if (r.status == RANGE_FAULT) return;
+
+    float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : range_effective_cm(r, a->cfg.max_range_cm);
+    point2_t pt = obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)angle), cm);
+    float square = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
+    if (square < a->cfg.pass_beside_cm) {
+        if (!a->pass_seen) a->pass_seen_at_cm = travelled_cm(a);
+        a->pass_seen = true;
+        a->pass_hits++;
+        a->pass_hit_sum_cm += cm;
+        return;
+    }
+    if (!a->pass_seen) return; // not reached the face yet (or missed it): keep going
+
+    float at = travelled_cm(a);
+    a->hw.motion_stop(a->hw.ctx);
+    point2_t hit = pass_hit_point(a);
+    a->side_cm = hit.x_cm < 0.0f ? -hit.x_cm : hit.x_cm;
+    // A lower bound: the face may already have been beside the ray when the
+    // leg started.
+    a->depth_cm = (a->pass_seen_at_cm >= 0.0f && at >= a->pass_seen_at_cm)
+                      ? at - a->pass_seen_at_cm : -1.0f;
+    float extra = (hit.y_cm > 0.0f ? hit.y_cm : 0.0f) + a->cfg.pass_clear_margin_cm;
+    a->metrics.pass_clear++;
+    a->pass_phase = 2;
+    a->hw.motion_forward(a->hw.ctx, extra);
+    a->deadline = now + drive_timeout_ms(a, extra);
+    av_event_t e = event_of(AV_EVT_PASS_CLEAR);
+    e.side = a->plan.side;
+    e.side_cm = a->side_cm;
+    e.depth_cm = a->depth_cm;
+    emit(a, now, &e);
+}
+
+// Leaving the pass leg. With return_from_side, the return drive covers the
+// measured sideways offset (edge position + side distance) rather than
+// mirroring the out leg, so drift on the way out is undone.
+static void finish_pass(av_t *a) {
+    if (a->pass_phase == 1) a->metrics.pass_capped++;
+    a->pass_phase = 0;
+    if (!a->cfg.return_from_side || !a->pass_seen || a->pass_hits == 0 ||
+        a->cfg.turn_radius_cm > 0.0f)
+        return;
+    point2_t hit = pass_hit_point(a);
+    a->side_cm = hit.x_cm < 0.0f ? -hit.x_cm : hit.x_cm;
+    const obstacle_edge_t *e = a->plan.side == SIDE_RIGHT ? &a->profile.right : &a->profile.left;
+    float toward = a->plan.side == SIDE_RIGHT ? e->pt.x_cm : -e->pt.x_cm;
+    float lateral = toward + a->side_cm;
+    point2_t unit = obstacle_polar_to_xy((float)a->plan.turn_deg, 1.0f);
+    float sin_turn = -unit.x_cm;
+    if (lateral <= 0.0f || sin_turn <= 0.0f) return;
+    float cm = lateral / sin_turn;
+    float lo = 0.5f * a->plan.out_cm, hi = 1.5f * a->plan.out_cm;
+    a->legs[LEG_RETURN_DRIVE].cm = cm < lo ? lo : (cm > hi ? hi : cm);
+}
+
 static void on_bypass(av_t *a, uint32_t now) {
     if (a->align_step != 0) {
         on_align(a, now);
@@ -848,8 +960,13 @@ static void on_bypass(av_t *a, uint32_t now) {
     }
 
     if (!a->leg_active) {
-        a->hw.motion_forward(a->hw.ctx, a->legs[i].cm);
-        a->deadline = now + drive_timeout_ms(a, a->legs[i].cm);
+        float cm = a->legs[i].cm;
+        if (i == LEG_PASS) {
+            start_pass(a);
+            if (a->pass_phase == 1) cm += a->cfg.pass_max_extra_cm;
+        }
+        a->hw.motion_forward(a->hw.ctx, cm);
+        a->deadline = now + drive_timeout_ms(a, cm);
         a->leg_active = true;
         return;
     }
@@ -858,6 +975,7 @@ static void on_bypass(av_t *a, uint32_t now) {
         return;
     }
     if (a->hw.motion_done(a->hw.ctx)) {
+        if (i == LEG_PASS) finish_pass(a);
         a->leg_active = false;
         a->leg_idx++;
         return;
@@ -868,7 +986,11 @@ static void on_bypass(av_t *a, uint32_t now) {
         return;
     }
     if (rejoin_if_line(a, now)) return;
-    guard_tripped(a, now);
+    if (a->pass_phase == 1) {
+        pass_watch(a, now);
+    } else {
+        guard_tripped(a, now);
+    }
 }
 
 static void on_reacquire(av_t *a, uint32_t now) {
@@ -995,6 +1117,7 @@ void av_reset(av_t *a) {
     a->body_settling = false;
     a->leg_active = false;
     a->align_step = 0;
+    a->pass_phase = 0;
     a->confirm_count = 0;
     a->fault_streak = 0;
     a->off_line = false;

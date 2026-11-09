@@ -29,6 +29,14 @@ static uint32_t b5_wifi_at;
 /* Crossings shallower than this hand over at once (avoidance.c). The return
  * leg crosses at the bypass turn, 60..75 deg; the pass leg runs along it. */
 #define B5_LINE_ALIGN_MIN_DEG 20
+/* Pass leg side watch (avoidance.c). The car centre passes ~15 cm outside
+ * the edge (bypass_side_margin_cm), so a face square to the car under 30 cm
+ * is the obstacle. Rear clearance ~ half the car length plus a margin. One
+ * forward collision ping after every 3 side pings (~1.2 s at 50 mm/s). */
+#define B5_PASS_BESIDE_CM 30.0f
+#define B5_PASS_MAX_EXTRA_CM 40.0f
+#define B5_PASS_CLEAR_MARGIN_CM 8.0f
+#define B5_PASS_GUARD_EVERY 3
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -213,6 +221,13 @@ static bool cb_line_detected(void *ctx)
     return b5_motion_line_seen(&motion);
 }
 
+static float cb_motion_travelled(void *ctx)
+{
+    int32_t mm;
+    (void)ctx;
+    return b5_motion_travelled_mm(&motion, &mm) ? (float)mm / 10.0f : -1.0f;
+}
+
 /* ---------------------------------------------------------------------------
  * Per-encounter result line (Week 10 metrics evidence)
  *
@@ -224,6 +239,8 @@ static bool cb_line_detected(void *ctx)
 
 static bool enc_profile;   /* this encounter built a profile */
 static bool enc_aligned;   /* the rejoin turned along the line first */
+static bool enc_pass_clear; /* the side sonar ended the pass leg */
+static uint32_t enc_capped0; /* pass_capped at detection */
 static uint32_t rejoined_count;
 static uint32_t cleared_count;
 static uint32_t aborted_count;
@@ -264,6 +281,18 @@ static void print_result(const char *outcome, uint32_t ms, const char *reason)
     }
     tm_printf((UB*)" aligned=%d backoffs=%d reverses=%d reacq=%d",
         enc_aligned ? 1 : 0, av.backoffs, av.reverses, av.reacquire_attempts);
+    tm_printf((UB*)" pass=%s side_mm=", !av.cfg.pass_watch_side ? "off" :
+        (enc_pass_clear ? "clear" : ((m->pass_capped != enc_capped0) ? "cap" : "-")));
+    if (enc_pass_clear) { tm_printf((UB*)"%d", cm_to_mm(av.side_cm)); }
+    else { tm_printf((UB*)"-"); }
+    if (enc_pass_clear && (av.depth_cm >= 0.0f))
+    {
+        tm_printf((UB*)" depth_mm=%d", cm_to_mm(av.depth_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" depth_mm=-");
+    }
     tm_printf((UB*)" reason=\"%s\"\n", (reason != NULL) ? reason : "");
     tm_printf((UB*)"[B5 TOTALS] detections=%lu rejoined=%lu cleared=%lu failed=%lu aborted=%lu left=%lu right=%lu estops=%lu\n",
         (unsigned long)m->detections, (unsigned long)rejoined_count,
@@ -279,6 +308,11 @@ static void result_on_event(const av_event_t *e)
         case AV_EVT_OBSTACLE_DETECTED:
             enc_profile = false;
             enc_aligned = false;
+            enc_pass_clear = false;
+            enc_capped0 = av_metrics(&av)->pass_capped;
+            break;
+        case AV_EVT_PASS_CLEAR:
+            enc_pass_clear = true;
             break;
         case AV_EVT_PROFILE_READY:
             enc_profile = true;
@@ -434,6 +468,10 @@ static void cb_on_event(void *ctx, const av_event_t *e)
         case AV_EVT_LINE_ALIGN:
             tm_printf((UB*)"[B5] line crossed at %d deg: centring, then turning along it\n",
                 e->heading_deg);
+            break;
+        case AV_EVT_PASS_CLEAR:
+            tm_printf((UB*)"[B5] passed the back corner: side %d mm, depth %d mm (-10 = unknown)\n",
+                cm_to_mm(e->side_cm), (e->depth_cm >= 0.0f) ? cm_to_mm(e->depth_cm) : -10);
             break;
         case AV_EVT_FAILED:
             tm_printf((UB*)"[B5] FAILED: %s\n", e->reason);
@@ -662,6 +700,7 @@ EXPORT ER subsystem5_init(void)
         cb_motion_turn, cb_motion_forward, cb_motion_reverse,
         cb_motion_search_line, cb_motion_resume, cb_motion_done,
         cb_motion_failed, cb_line_detected, cb_on_event,
+        cb_motion_travelled,
     };
     T_CTSK ctsk = {0};
     controller_junction_config_t junction;
@@ -687,6 +726,14 @@ EXPORT ER subsystem5_init(void)
         controller_junction_default_config(&junction);
         cfg.line_align_cm = (float)junction.approach_mm / 10.0f;
         cfg.line_align_min_deg = B5_LINE_ALIGN_MIN_DEG;
+        /* Pass leg ends once the side sonar sees the back corner go by;
+         * the return drive covers the measured sideways offset. */
+        cfg.pass_watch_side = true;
+        cfg.pass_beside_cm = B5_PASS_BESIDE_CM;
+        cfg.pass_max_extra_cm = B5_PASS_MAX_EXTRA_CM;
+        cfg.pass_clear_margin_cm = B5_PASS_CLEAR_MARGIN_CM;
+        cfg.pass_guard_every = B5_PASS_GUARD_EVERY;
+        cfg.return_from_side = true;
     }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);

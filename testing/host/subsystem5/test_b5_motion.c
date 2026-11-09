@@ -18,6 +18,8 @@ static struct
     motion_continuous_request_t last_request;
     bool have_result;
     motion_result_code_t result;
+    int32_t travelled_mm;
+    bool odometry_valid;
     int halts;
     bool line;
     int reacquires;
@@ -52,6 +54,8 @@ static bool fake_goal_result(goal_id_t goal_id, motion_goal_result_t *result)
     memset(result, 0, sizeof(*result));
     result->goal_id = goal_id;
     result->code = f.result;
+    result->travelled_mm = f.travelled_mm;
+    result->odometry_valid = f.odometry_valid;
     return true;
 }
 
@@ -319,6 +323,27 @@ static void test_search_arcs_toward_the_line(void)
     assert(f.continuous == 3 && b5_motion_done(&m));
 }
 
+/* The pass leg reads how far the current goal has gone, and still can just
+ * after stopping it; a new goal starts from unknown again. */
+static void test_travelled_distance(void)
+{
+    int32_t mm = -1;
+
+    setup();
+    b5_motion_straight(&m, 400, false, 0U);
+    b5_motion_service(&m, 0U);
+    b5_motion_service(&m, 10U);
+    assert(!b5_motion_travelled_mm(&m, &mm));   /* no odometry reported yet */
+    f.odometry_valid = true;
+    f.travelled_mm = 123;
+    b5_motion_service(&m, 20U);
+    assert(b5_motion_travelled_mm(&m, &mm) && mm == 123);
+    b5_motion_stop(&m);
+    assert(b5_motion_travelled_mm(&m, &mm) && mm == 123);
+    b5_motion_straight(&m, 100, false, 30U);
+    assert(!b5_motion_travelled_mm(&m, &mm));
+}
+
 static void test_line_seen(void)
 {
     setup();
@@ -343,6 +368,7 @@ int main(void)
     test_stop_halts_and_clears();
     test_search_arcs_toward_the_line();
     test_line_seen();
+    test_travelled_distance();
     puts("b5 motion host tests: PASS");
     return 0;
 }

@@ -52,6 +52,7 @@ typedef enum {
     AV_EVT_LINE_REACQUIRED,
     AV_EVT_FAILED,
     AV_EVT_LINE_ALIGN,     // line crossed on a drive leg: centring on it, then turning along it
+    AV_EVT_PASS_CLEAR,     // side sonar saw the obstacle's back corner go by on the pass leg
 } av_event_type_t;
 
 typedef struct {
@@ -67,6 +68,8 @@ typedef struct {
     const bypass_plan_t *plan;         // BYPASS_START
     uint32_t duration_ms;              // LINE_REACQUIRED: detection -> back on line
     const char *reason;                // FAILED, OBSTACLE_CLEARED
+    float side_cm;                     // PASS_CLEAR: car centre to the obstacle's side face
+    float depth_cm;                    // PASS_CLEAR: obstacle depth along the pass; < 0 unknown
 } av_event_t;
 
 // Integration surface. Everything except on_event is required.
@@ -96,6 +99,10 @@ typedef struct {
 
     // Optional: telemetry / logging hook (Buddy 1).
     void (*on_event)(void *ctx, const av_event_t *event);
+
+    // Optional: distance covered so far by the current forward/reverse
+    // command, from wheel odometry; < 0 when unknown. NULL: depth unknown.
+    float (*motion_travelled_cm)(void *ctx);
 } av_platform_t;
 
 typedef struct {
@@ -146,6 +153,19 @@ typedef struct {
     // at the crossing angle.
     float line_align_cm;
     int line_align_min_deg; // shallower crossings hand over at once
+
+    // Pass leg watches the obstacle's side with the servo turned fully toward
+    // it: the leg may run up to pass_max_extra_cm longer, and ends once the
+    // side opens up (the back corner went by) plus pass_clear_margin_cm.
+    // Off: the fixed pass leg, as planned from the front scan.
+    bool pass_watch_side;
+    float pass_beside_cm;       // side face closer than this (square to the car) = still beside
+    float pass_max_extra_cm;
+    float pass_clear_margin_cm; // rear of the car past the corner before turning back
+    int pass_guard_every;       // a forward collision ping after this many side pings; 0 = none
+    // Return drive sized from the measured side distance instead of
+    // mirroring the out leg (pivot turns only; within 0.5..1.5 x out leg).
+    bool return_from_side;
 } av_config_t;
 
 typedef struct {
@@ -170,6 +190,8 @@ typedef struct {
     uint32_t last_encounter_ms; // detection -> back on line
     uint32_t max_encounter_ms;
     uint64_t total_encounter_ms;
+    uint32_t pass_clear;  // pass leg ended by the side sonar
+    uint32_t pass_capped; // pass leg ran to its cap without seeing the side open
 } av_metrics_t;
 
 // Treat as opaque; defined here only so callers can allocate it statically.
@@ -230,6 +252,14 @@ typedef struct {
     bool reverse_issued;
     bool search_started;
     int align_step; // 0 none, 1 driving onto the line, 2 turning along it
+    int pass_phase; // 0 off, 1 watching the side, 2 driving past the corner
+    bool pass_seen;       // side face seen at least once this pass
+    int pass_readings;
+    int pass_hits;
+    float pass_hit_sum_cm; // radial side readings that hit, for their mean
+    float pass_seen_at_cm; // odometry at the first hit; < 0 unknown
+    float side_cm;         // measured car centre to side face; valid if pass_seen
+    float depth_cm;        // obstacle depth along the pass; < 0 unknown
 
     bool off_line;
     int rescans;

@@ -40,6 +40,7 @@ whether the rejoin turned along the line) and a `[B5 TOTALS]` line.
 | S5-M02 | Width estimation error | Same runs; measure the obstacle face with a ruler (`true_width_mm`). Only `edges=both` results count | Not run |
 | S5-M03 | Direction selection success | Block one side with a box inside the bypass clearance (`blocked_side`); vary left/right between runs | Not run |
 | S5-M04 | Line reacquisition | `outcome=REJOINED` over every encounter that chose a side; `aligned=1` shows the car turned along the line first | Not run |
+| S5-M06 | Pass-leg side watch | Boxes 10 cm and 30 cm deep on the line. `pass=clear` expected; compare `depth_mm` (a lower bound) with a ruler; the car should turn back just past the back corner and return close to the line | Not run |
 | S5-M05 | Time to bypass | `ms=` of the REJOINED lines (detection to line follow); graded on the worst run | Not run |
 
 ```
