@@ -26,6 +26,9 @@ static uint32_t b5_wifi_at;
 #define B5_SERVO_MAX_US 2500U
 #define B5_PENDING_MAX 8U
 #define B5_STATUS_PERIOD_MS 1000U
+/* Crossings shallower than this hand over at once (avoidance.c). The return
+ * leg crosses at the bypass turn, 60..75 deg; the pass leg runs along it. */
+#define B5_LINE_ALIGN_MIN_DEG 20
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -210,13 +213,205 @@ static bool cb_line_detected(void *ctx)
     return b5_motion_line_seen(&motion);
 }
 
+/* ---------------------------------------------------------------------------
+ * Per-encounter result line (Week 10 metrics evidence)
+ *
+ * One "[B5 RESULT]" line when an encounter ends, plus running totals, so a
+ * logged run gives detection, width, side choice, rejoin and bypass time
+ * without reading the whole trace. testing/subsystem5/b5_metrics.py turns a
+ * log of these lines into the metrics table.
+ * ------------------------------------------------------------------------- */
+
+static bool enc_profile;   /* this encounter built a profile */
+static bool enc_aligned;   /* the rejoin turned along the line first */
+static uint32_t rejoined_count;
+static uint32_t cleared_count;
+static uint32_t aborted_count;
+
+static int cm_to_mm(float cm)
+{
+    return (int)(cm * 10.0f + ((cm < 0.0f) ? -0.5f : 0.5f));
+}
+
+static const char *edges_name(const obstacle_profile_t *p)
+{
+    if (p->left.found && p->right.found) { return "both"; }
+    if (p->left.found) { return "left_only"; }
+    if (p->right.found) { return "right_only"; }
+    return "none";
+}
+
+static void print_result(const char *outcome, uint32_t ms, const char *reason)
+{
+    const av_metrics_t *m = av_metrics(&av);
+    const obstacle_profile_t *p = av_profile(&av);
+
+    tm_printf((UB*)"[B5 RESULT] n=%lu outcome=%s ms=%lu scan_ms=%lu",
+        (unsigned long)m->detections, outcome, (unsigned long)ms,
+        (unsigned long)(enc_profile ? m->last_scan_ms : 0U));
+    if (enc_profile && (p != NULL))
+    {
+        tm_printf((UB*)" ahead_mm=%d width_mm=%d edges=%s centre_x_mm=%d",
+            cm_to_mm(p->distance_cm), cm_to_mm(p->width_cm), edges_name(p),
+            cm_to_mm(p->center.x_cm));
+        tm_printf((UB*)" side=%s lclear_mm=%d rclear_mm=%d",
+            side_name(av.choice.side), cm_to_mm(av.choice.left_clear_cm),
+            cm_to_mm(av.choice.right_clear_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=-");
+    }
+    tm_printf((UB*)" aligned=%d backoffs=%d reverses=%d reacq=%d",
+        enc_aligned ? 1 : 0, av.backoffs, av.reverses, av.reacquire_attempts);
+    tm_printf((UB*)" reason=\"%s\"\n", (reason != NULL) ? reason : "");
+    tm_printf((UB*)"[B5 TOTALS] detections=%lu rejoined=%lu cleared=%lu failed=%lu aborted=%lu left=%lu right=%lu estops=%lu\n",
+        (unsigned long)m->detections, (unsigned long)rejoined_count,
+        (unsigned long)cleared_count, (unsigned long)m->failures,
+        (unsigned long)aborted_count, (unsigned long)m->bypass_left,
+        (unsigned long)m->bypass_right, (unsigned long)m->emergency_stops);
+}
+
+static void result_on_event(const av_event_t *e)
+{
+    switch (e->type)
+    {
+        case AV_EVT_OBSTACLE_DETECTED:
+            enc_profile = false;
+            enc_aligned = false;
+            break;
+        case AV_EVT_PROFILE_READY:
+            enc_profile = true;
+            break;
+        case AV_EVT_LINE_ALIGN:
+            enc_aligned = true;
+            break;
+        case AV_EVT_LINE_REACQUIRED:
+            rejoined_count++;
+            print_result("REJOINED", e->duration_ms, NULL);
+            break;
+        case AV_EVT_OBSTACLE_CLEARED:
+            if (!av.off_line)   /* off the line it goes on to the line search */
+            {
+                cleared_count++;
+                print_result("CLEARED", e->time_ms - av.t_detect, e->reason);
+            }
+            break;
+        case AV_EVT_FAILED:
+            print_result("FAILED", e->time_ms - av.t_detect, e->reason);
+            break;
+        default:
+            break;
+    }
+}
+
+#if APP_CAR_MQTT
+/* ---------------------------------------------------------------------------
+ * Section 5 profile / decision / plan (docs/protocol/BINARY_TELEMETRY.md)
+ *
+ * Each group is marked valid only if every value fits its field; nothing is
+ * clamped except free range, which saturates at the sonar's 400 cm no-echo
+ * value. Cleared when a new encounter starts or avoidance is reset.
+ * ------------------------------------------------------------------------- */
+
+static bool fits(float v, float lo, float hi)
+{
+    return isfinite(v) && (v >= lo) && (v <= hi);
+}
+
+static void wifi_profile(const obstacle_profile_t *p)
+{
+    const float lo = -6553.6f, hi = 6553.5f;   /* 17-bit signed mm, in cm */
+    b5_wifi.profile_valid = 0U;
+    if ((p == NULL) || !fits(p->distance_cm, 0.0f, 6553.5f) ||
+        !fits(p->width_cm, 0.0f, 6553.5f) ||
+        !fits(p->center.x_cm, lo, hi) || !fits(p->center.y_cm, lo, hi) ||
+        !fits(p->left.angle_deg, -512.0f, 511.5f) || !fits(p->left.pt.x_cm, lo, hi) ||
+        !fits(p->left.pt.y_cm, lo, hi) ||
+        !fits(p->right.angle_deg, -512.0f, 511.5f) || !fits(p->right.pt.x_cm, lo, hi) ||
+        !fits(p->right.pt.y_cm, lo, hi))
+    {
+        return;
+    }
+    b5_wifi.ahead_mm = (uint32_t)cm_to_mm(p->distance_cm);
+    b5_wifi.width_mm = (uint32_t)cm_to_mm(p->width_cm);
+    b5_wifi.centre_x_mm = cm_to_mm(p->center.x_cm);
+    b5_wifi.centre_y_mm = cm_to_mm(p->center.y_cm);
+    b5_wifi.left_found = p->left.found ? 1U : 0U;
+    b5_wifi.left_angle_halfdeg = (int32_t)(p->left.angle_deg * 2.0f +
+        ((p->left.angle_deg < 0.0f) ? -0.5f : 0.5f));
+    b5_wifi.left_x_mm = cm_to_mm(p->left.pt.x_cm);
+    b5_wifi.left_y_mm = cm_to_mm(p->left.pt.y_cm);
+    b5_wifi.right_found = p->right.found ? 1U : 0U;
+    b5_wifi.right_angle_halfdeg = (int32_t)(p->right.angle_deg * 2.0f +
+        ((p->right.angle_deg < 0.0f) ? -0.5f : 0.5f));
+    b5_wifi.right_x_mm = cm_to_mm(p->right.pt.x_cm);
+    b5_wifi.right_y_mm = cm_to_mm(p->right.pt.y_cm);
+    b5_wifi.profile_valid = 1U;
+}
+
+static uint32_t room_mm(float cm)
+{
+    if (!isfinite(cm) || (cm <= 0.0f)) { return 0U; }
+    return (cm >= 400.0f) ? 4000U : (uint32_t)cm_to_mm(cm);
+}
+
+static void wifi_plan(const bypass_plan_t *plan)
+{
+    b5_wifi.plan_valid = 0U;
+    if ((plan == NULL) || (plan->turn_deg < 1) || (plan->turn_deg > 89) ||
+        !fits(plan->out_cm, 0.0f, 6553.5f) || !fits(plan->pass_cm, 0.0f, 6553.5f) ||
+        !fits(plan->lateral_cm, 0.0f, 6553.5f))
+    {
+        return;
+    }
+    b5_wifi.turn_deg = (uint32_t)plan->turn_deg;
+    b5_wifi.diagonal_mm = (uint32_t)cm_to_mm(plan->out_cm);
+    b5_wifi.alongside_mm = (uint32_t)cm_to_mm(plan->pass_cm);
+    b5_wifi.offset_mm = (uint32_t)cm_to_mm(plan->lateral_cm);
+    b5_wifi.plan_valid = 1U;
+}
+
+/* Where the encounter is, every snapshot. Fields whose range is narrower
+ * than the current config (fine_offset_deg is 0..10) are left at 0. */
+static void wifi_progress(void)
+{
+    b5_wifi.leg = (av_state(&av) == AV_STATE_BYPASS) ? (uint32_t)av.leg_idx : 0U;
+    b5_wifi.leg_active = av.leg_active ? 1U : 0U;
+    b5_wifi.rescans = (av.rescans <= 3) ? (uint32_t)av.rescans : 3U;
+    b5_wifi.reverses = (av.reverses <= 3) ? (uint32_t)av.reverses : 3U;
+    b5_wifi.reacquire_attempts = (av.reacquire_attempts <= 3) ?
+        (uint32_t)av.reacquire_attempts : 3U;
+    b5_wifi.coarse_index = (av.coarse_idx <= 7) ? (uint32_t)av.coarse_idx : 7U;
+    b5_wifi.turn_magnitude_deg = ((av.turn_mag >= 0) && (av.turn_mag <= 70)) ?
+        (uint32_t)av.turn_mag : 0U;
+    b5_wifi.refining = av.refining ? 1U : 0U;
+}
+
+static void wifi_clear_encounter(void)
+{
+    b5_wifi.decision_valid = 0U;
+    b5_wifi.profile_valid = 0U;
+    b5_wifi.plan_valid = 0U;
+}
+#endif
+
 static void cb_on_event(void *ctx, const av_event_t *e)
 {
     (void)ctx;
 #if APP_CAR_MQTT
     if(e->type==AV_EVT_OBSTACLE_DETECTED){++b5_wifi.encounter;b5_wifi.decision_valid=0;}
     if(e->type==AV_EVT_DECISION){b5_wifi.decision_valid=1;b5_wifi.side=e->side;}
+    if (e->type == AV_EVT_OBSTACLE_DETECTED) { wifi_clear_encounter(); }
+    if (e->type == AV_EVT_PROFILE_READY) { wifi_profile(e->profile); }
+    if ((e->type == AV_EVT_DECISION) && (e->choice != NULL))
+    {
+        b5_wifi.left_room_mm = room_mm(e->choice->left_clear_cm);
+        b5_wifi.right_room_mm = room_mm(e->choice->right_clear_cm);
+    }
+    if (e->type == AV_EVT_BYPASS_START) { wifi_plan(e->plan); }
 #endif
+    result_on_event(e);
     switch (e->type)
     {
         case AV_EVT_OBSTACLE_DETECTED:
@@ -235,6 +430,10 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             break;
         case AV_EVT_EMERGENCY_STOP:
             tm_printf((UB*)"[B5] emergency stop\n");
+            break;
+        case AV_EVT_LINE_ALIGN:
+            tm_printf((UB*)"[B5] line crossed at %d deg: centring, then turning along it\n",
+                e->heading_deg);
             break;
         case AV_EVT_FAILED:
             tm_printf((UB*)"[B5] FAILED: %s\n", e->reason);
@@ -370,9 +569,16 @@ static void subsystem5_task(INT stacd, void *exinf)
         now_armed = avoidance_armed(armed);
         if (!now_armed && armed)
         {
+            if ((av_state(&av) != AV_STATE_MONITOR) && (av_state(&av) != AV_STATE_FAILED))
+            {
+                /* Run stopped mid-encounter: count it, so detections add up. */
+                aborted_count++;
+                print_result("ABORTED", cb_now_ms(NULL) - av.t_detect, "AUTO ended");
+            }
             av_reset(&av);              /* back to MONITOR for the next run */
 #if APP_CAR_MQTT
             b5_wifi.front_status=4;b5_wifi.last_status=4;b5_wifi.decision_valid=0;
+            wifi_clear_encounter();
 #endif
             b5_bridge_init(&bridge);
         }
@@ -406,7 +612,9 @@ static void subsystem5_task(INT stacd, void *exinf)
                 b5_wifi.profiles_complete=m->profiles_complete;b5_wifi.profiles_partial=m->profiles_partial;
                 b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
                 b5_wifi.max_encounter_ms=m->max_encounter_ms;
-                /* No event stream/profile/plan API is exported by this hookup. */
+                wifi_progress();
+                /* Profile, decision and plan are filled from the avoidance
+                 * events (cb_on_event); no event stream is exported. */
                 const bool bypass=av_state(&av)==AV_STATE_BYPASS;
                 b1_live_bypass live={.at_ms=at,.fast=0,.active=bypass,
                     .backing_off=av_state(&av)==AV_STATE_REVERSE && av.backing_off,.segment=bypass?(uint32_t)av.leg_idx:0,
@@ -456,6 +664,7 @@ EXPORT ER subsystem5_init(void)
         cb_motion_failed, cb_line_detected, cb_on_event,
     };
     T_CTSK ctsk = {0};
+    controller_junction_config_t junction;
     ER er;
     ID id;
 
@@ -469,6 +678,16 @@ EXPORT ER subsystem5_init(void)
     }
 
     av_config_default(&cfg); /* servo 20/90/160: free mount, see avoidance.c */
+    if (has_motion())
+    {
+        /* Rejoin: centre the turning point on the line and turn along it
+         * before handing over (avoidance.c line_align_cm). The same line
+         * sensors-to-axle distance the controller drives before a junction
+         * pivot, so one measurement sets both. */
+        controller_junction_default_config(&junction);
+        cfg.line_align_cm = (float)junction.approach_mm / 10.0f;
+        cfg.line_align_min_deg = B5_LINE_ALIGN_MIN_DEG;
+    }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);
     if (er != E_OK)

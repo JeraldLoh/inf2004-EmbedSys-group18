@@ -124,3 +124,24 @@ if it is too close to see a way past it reverses and scans again. Detection is a
 
 Component bench tests (sensor and servo on their own, Pico SDK, wheels never
 move): `../../testing/subsystem5/bench_firmware/README.md`.
+
+### Line rejoin, result lines and telemetry
+
+- Rejoin alignment (`line_align_cm`, `line_align_min_deg` in `av_config_t`):
+  when a line sensor sees the line on a straight bypass leg crossing at
+  20 deg or more, the car stops, drives `line_align_cm` so the turning
+  centre is over the line, pivots to the line direction, then hands over
+  (`AV_EVT_LINE_ALIGN`, still the BYPASS mission). If the line is no longer
+  seen after the turn, the normal line search runs. A line seen mid-pivot or
+  during the search is handed over at once, as before. Off (0) in
+  `av_config_default()`; `CAR_RUN` sets it from the controller's
+  `approach_mm` (line sensors to axle), so one measurement covers junctions
+  and the rejoin.
+- `[B5 RESULT]` / `[B5 TOTALS]` console lines at the end of every encounter
+  (rejoined, cleared, failed, or aborted when AUTO ends);
+  `../../testing/subsystem5/b5_metrics.py` turns a log into the page 8
+  metrics table (`../../testing/subsystem5/TEST_LOG.md`, S5-M01..M05).
+- `CAR_MQTT`: the section 5 profile, decision (free range past each edge)
+  and plan fields are filled from the avoidance events, so the dashboard's
+  Profile / Decision / Bypass plan rows and the added obstacle rows show
+  real values. Groups are cleared at each new encounter and on reset.

@@ -51,13 +51,14 @@ typedef enum {
     AV_EVT_REACQUIRE_START,
     AV_EVT_LINE_REACQUIRED,
     AV_EVT_FAILED,
+    AV_EVT_LINE_ALIGN,     // line crossed on a drive leg: centring on it, then turning along it
 } av_event_type_t;
 
 typedef struct {
     av_event_type_t type;
     uint32_t time_ms;
     scan_point_t point;                // DETECTED, SCAN_POINT, EMERGENCY_STOP (servo angle)
-    int heading_deg;                   // SCAN_POINT: car heading vs line direction, + = left
+    int heading_deg;                   // SCAN_POINT, LINE_ALIGN: car heading vs line direction, + = left
     float direction_deg;               // SCAN_POINT: heading + servo, vs scan start, + = left
     side_t side;                       // DECISION, BYPASS_START, REACQUIRE_START
     int attempt;                       // RESCAN, REVERSING, REACQUIRE_START
@@ -138,6 +139,13 @@ typedef struct {
     uint32_t reacquire_timeout_ms; // per search attempt
     int max_reacquire_attempts;
     int max_consecutive_faults;
+
+    // Line seen on a drive leg past the obstacle: drive this far (line
+    // sensors to the turning centre) so the car turns about the line, then
+    // pivot to the line direction before handing over. 0 hands over at once,
+    // at the crossing angle.
+    float line_align_cm;
+    int line_align_min_deg; // shallower crossings hand over at once
 } av_config_t;
 
 typedef struct {
@@ -221,6 +229,7 @@ typedef struct {
     bool leg_active;
     bool reverse_issued;
     bool search_started;
+    int align_step; // 0 none, 1 driving onto the line, 2 turning along it
 
     bool off_line;
     int rescans;

@@ -124,6 +124,9 @@ const char *av_config_check(const av_config_t *c) {
     if (c->motion_timeout_ms == 0 || c->reacquire_timeout_ms == 0) return "timeouts must be > 0";
     if (c->max_reacquire_attempts < 1) return "max_reacquire_attempts must be >= 1";
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
+    if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
+    if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
+        return "line_align_min_deg must be within 0..89";
     return NULL;
 }
 
@@ -306,6 +309,7 @@ static void start_coarse(av_t *a) {
     a->shift_cm = 0.0f; // a fresh scan measures from here
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
+    a->align_step = 0;
     enter(a, AV_STATE_COARSE_SCAN);
 }
 
@@ -758,26 +762,75 @@ static void rejoin_line(av_t *a, uint32_t now) {
     emit(a, now, &e);
 }
 
+// Line crossed while driving straight at heading_deg: stop has already been
+// sent. Drive line_align_cm so the turning centre is over the line, then
+// pivot to the line direction (on_align). Returns false when alignment is off
+// or the crossing is shallow enough to hand over at once.
+static bool start_align(av_t *a, uint32_t now) {
+    if (a->cfg.line_align_cm <= 0.0f || abs(a->heading_deg) < a->cfg.line_align_min_deg)
+        return false;
+    a->align_step = 1;
+    a->hw.motion_forward(a->hw.ctx, a->cfg.line_align_cm);
+    a->deadline = now + drive_timeout_ms(a, a->cfg.line_align_cm);
+    av_event_t e = event_of(AV_EVT_LINE_ALIGN);
+    e.heading_deg = a->heading_deg;
+    emit(a, now, &e);
+    return true;
+}
+
 // Past the obstacle (the pass leg onward: drives and turns, or the search)
 // and a sensor sees the line: hand straight to line following, at whatever
 // angle. Car trial 2026-11-02: driving on to straighten up first carried the
-// car past the line it had just found.
+// car past the line it had just found. With line_align_cm set, a crossing
+// seen on a drive leg (heading known exactly) is first turned along the line.
 static bool rejoin_if_line(av_t *a, uint32_t now) {
+    if (a->align_step != 0) return false; // the line is expected; on_align decides
     // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
     // is still the straighten-up beside the obstacle: only the drive counts.
     bool past = a->state == AV_STATE_REACQUIRE ||
                 (a->state == AV_STATE_BYPASS &&
                  (a->leg_idx > LEG_PASS || (a->leg_idx == LEG_PASS && a->leg_active)));
     if (!past || !a->hw.line_detected(a->hw.ctx)) return false;
+    bool driving = a->state == AV_STATE_BYPASS && a->leg_active;
     a->hw.motion_stop(a->hw.ctx);
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    if (driving && start_align(a, now)) return true;
     rejoin_line(a, now);
     return true;
 }
 
+// Centring on the line, then turning along it. If the sensors no longer see
+// the line once aligned, the normal line search takes over.
+static void on_align(av_t *a, uint32_t now) {
+    if (a->align_step == 1) {
+        if (motion_failed(a)) {
+            fail_motion(a, now);
+        } else if (a->hw.motion_done(a->hw.ctx)) {
+            a->align_step = 2;
+            turn_to(a, now, 0); // av_tick() waits for the turn before calling back
+        } else if (time_reached(now, a->deadline)) {
+            a->metrics.motion_timeouts++;
+            fail(a, now, "line align timed out");
+        } else {
+            guard_tripped(a, now);
+        }
+        return;
+    }
+    a->align_step = 0;
+    if (a->hw.line_detected(a->hw.ctx)) {
+        rejoin_line(a, now);
+    } else {
+        start_reacquire(a);
+    }
+}
+
 static void on_bypass(av_t *a, uint32_t now) {
+    if (a->align_step != 0) {
+        on_align(a, now);
+        return;
+    }
     if (a->leg_idx >= LEG_COUNT) {
         start_reacquire(a);
         return;
@@ -941,6 +994,7 @@ void av_reset(av_t *a) {
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    a->align_step = 0;
     a->confirm_count = 0;
     a->fault_streak = 0;
     a->off_line = false;

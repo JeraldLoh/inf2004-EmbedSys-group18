@@ -66,6 +66,8 @@ typedef struct {
     bool line_on_return_leg;   // line sensors see the line during the return drive
     int line_on_forward;       // ...during this bypass forward leg (1-based); 0 = off
     int line_on_bypass_turn;   // ...during this bypass turn (1-based); 0 = off
+    bool line_when_aligned;    // ...once the return leg's align drive and turn are done
+    int forward_never_done;    // this bypass forward drive (1-based) never finishes; 0 = off
     int bypass_turns;
     bool bypassing;
 
@@ -198,6 +200,8 @@ static bool s_done(void *ctx) {
     if (!s->motion_active) return true;
     if (s->bypass_never_done && s->bypassing) return false;
     if (s->turns_never_done && s->turns > 0) return false;
+    if (s->forward_never_done != 0 && s->bypassing && s->forwards == s->forward_never_done)
+        return false;
     return (int32_t)(s->t - s->motion_end) >= 0;
 }
 
@@ -208,6 +212,8 @@ static bool s_line(void *ctx) {
         s->motion_active && (int32_t)(s->t - s->turn_end) >= 0) return true;
     if (s->line_on_bypass_turn != 0 && s->bypassing && s->bypass_turns == s->line_on_bypass_turn &&
         s->motion_active && (int32_t)(s->t - s->turn_end) < 0) return true;
+    if (s->line_when_aligned && s->bypassing && s->forwards == 4 && s->heading == 0 &&
+        (int32_t)(s->t - s->motion_end) >= 0) return true;
     if (s->line_never || !s->searching) return false;
     if (s->line_on_search != 0 && s->searches != s->line_on_search) return false;
     return s->t - s->search_start >= s->line_after_ms;
@@ -1146,6 +1152,99 @@ static void line_during_return_turn_rejoins_at_once(void) {
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
+// line_align_cm set (CAR_RUN): a line crossed on the return drive is not
+// handed over at the crossing angle. The car drives on to put its turning
+// centre over the line, pivots to the line direction, then hands over.
+static void sim_setup_align(sim_t *s, av_t *av) {
+    sim_defaults(s, 0);
+    s->cfg.line_align_cm = 5.0f;
+    s->cfg.line_align_min_deg = 15;
+    av_platform_t p = platform_for(s);
+    CHECK(av_init(av, &s->cfg, &p));
+    s->obstacle = (blob_t){80, 100, 12.0f, true};
+}
+
+static void align_config_checked(void) {
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.line_align_cm == 0.0f); // off unless the build turns it on
+    c.line_align_cm = 5.0f;
+    c.line_align_min_deg = 15;
+    CHECK(av_config_check(&c) == NULL);
+    c.line_align_cm = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+    c.line_align_cm = 5.0f;
+    c.line_align_min_deg = 90;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+static void line_on_return_leg_aligns_before_handover(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_align(&s, &av);
+    s.line_on_return_leg = true;
+    s.line_when_aligned = true;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 4); // out, pass, back (cut short), align
+    CHECK_INT(s.heading, 0);  // turned along the line before handing over
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(s.resumes, 1);
+    CHECK_INT(count_events(&s, AV_EVT_LINE_ALIGN), 1);
+    CHECK(first_event(&s, AV_EVT_LINE_ALIGN) < first_event(&s, AV_EVT_LINE_REACQUIRED));
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    CHECK_INT(av_metrics(&av)->failures, 0);
+    check_hygiene(&s);
+}
+
+static void align_without_line_falls_back_to_search(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_align(&s, &av);
+    s.line_on_return_leg = true; // seen at the crossing, lost after the turn
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 4);
+    CHECK_INT(s.heading, 0);
+    CHECK_INT(s.searches, 1);
+    CHECK_INT(count_events(&s, AV_EVT_LINE_ALIGN), 1);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    CHECK_INT(av_metrics(&av)->failures, 0);
+}
+
+// Seen on the pass leg the car is already along the line: no align.
+static void shallow_crossing_hands_over_at_once(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_align(&s, &av);
+    s.line_on_forward = 2;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 2);
+    CHECK_INT(count_events(&s, AV_EVT_LINE_ALIGN), 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+// Mid-pivot the heading is unknown, so the old hand-over still applies.
+static void line_during_turn_is_not_aligned(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_align(&s, &av);
+    s.line_on_bypass_turn = 3;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.forwards, 2);
+    CHECK_INT(count_events(&s, AV_EVT_LINE_ALIGN), 0);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+static void align_drive_timeout_fails_safe(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_align(&s, &av);
+    s.line_on_return_leg = true;
+    s.forward_never_done = 4; // the align drive
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 60000));
+    CHECK_INT(count_events(&s, AV_EVT_LINE_ALIGN), 1);
+    CHECK(s.last_reason != NULL && strcmp(s.last_reason, "line align timed out") == 0);
+}
+
 // Straightening up beside the obstacle is not past it: keep going.
 static void line_ignored_beside_obstacle(void) {
     sim_t s;
@@ -1334,6 +1433,12 @@ void run_avoidance_tests(void) {
     RUN(line_found_while_passing);
     RUN(line_during_return_turn_rejoins_at_once);
     RUN(line_ignored_beside_obstacle);
+    RUN(align_config_checked);
+    RUN(line_on_return_leg_aligns_before_handover);
+    RUN(align_without_line_falls_back_to_search);
+    RUN(shallow_crossing_hands_over_at_once);
+    RUN(line_during_turn_is_not_aligned);
+    RUN(align_drive_timeout_fails_safe);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);
