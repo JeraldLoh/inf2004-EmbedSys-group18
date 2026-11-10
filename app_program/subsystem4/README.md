@@ -208,8 +208,33 @@ attitude alone:
 - Full-width hump: roll 0, so the pitch term alone gives h. When the caster
   crosses, the pitch term gives the caster's height.
 
-Buddy 4 reports the larger of the peak raised height and the integral. On
-long ramps the integral wins, on humps the attitude. Pitch and roll come
+Each hump is classified when it ends. If the roll term (track × sin roll)
+is at least half the pitch term (caster_arm × sin pitch), **one wheel** was
+raised. The height is then **track × sin(peak roll)** alone: exact with the
+other wheel and the caster on the floor, and independent of the caster arm
+and of speed changes on the ramp (which read as pitch). The first car run
+showed why this matters: 4° of pitch on the right-wheel ramp made the
+combined formula read 13 mm for 10. Otherwise (**full width**) Buddy 4
+reports the larger of the peak raised height and the integral: on long
+ramps the integral wins, on humps the attitude.
+
+**Hump width.** The height is also recorded against distance travelled:
+one sample per 5 mm of odometry, a 128-sample ring (640 mm, 256 bytes) that
+also keeps the approach before the episode. The ring is smoothed over
+3 samples. At the end of a hump:
+
+- the height is the mean of the samples within 90% of the top;
+- the width is extrapolated to the floor from the 25% and 75% crossings,
+  **1.5 × w25 − 0.5 × w75**. This is exact for straight ramp faces (wedge,
+  trapezoid, triangle). A rounded bump with long shallow feet reads about
+  15% short.
+
+The width replaces the episode path in the hump's length field (cm). If
+the ramp edges fall outside the 640 mm, the path is reported instead. Host
+simulation, 10 mm × 195 mm under one wheel at 60 mm/s: height 9–10 mm,
+width 180–200 mm. Over 20 noise seeds the width rms error is 4–7 mm at
+15 mg vibration and 8–12 mm at 30 mg. Width depends on Buddy 2's odometry
+being right: check the `path` figure against a measured run. Pitch and roll come
 from a second 140 ms smoothing, so vibration does not inflate the peak.
 Measure `S4_CASTER_ARM_MM` (drive axle centre to the caster's floor contact)
 and `S4_TRACK_MM` (tyre centre to tyre centre). On the one-sided ramp, a 10%

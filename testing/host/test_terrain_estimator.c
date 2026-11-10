@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "s4_shared.h"
@@ -44,6 +45,7 @@ typedef struct
     int valid_humps;
     unsigned last_height_mm;
     unsigned last_len_cm;
+    unsigned last_width_mm;     /* profile width estimate, 0 = none */
     unsigned final_terrain;
     int32_t final_height_um;
 } result_t;
@@ -143,7 +145,7 @@ static result_t drive(const drive_t *d)
     s4_est_t est;
     s4_input_t in;
     s4_events_t ev;
-    result_t r = {0, 0, 0U, 0U, 0U, 0};
+    result_t r = {0, 0, 0U, 0U, 0U, 0U, 0};
     double axle = -300.0, odom_frac = 0.0, t = 0.0, speed = 0.0;
     double brake_t = -1.0;
     double seconds = d->seconds;
@@ -199,6 +201,7 @@ static result_t drive(const drive_t *d)
                 }
                 r.last_height_mm = s4_get(hump, S4_HU_HEIGHT_SHIFT, S4_HU_HEIGHT_WIDTH);
                 r.last_len_cm = s4_get(hump, S4_HU_LEN_SHIFT, S4_HU_LEN_WIDTH);
+                r.last_width_mm = est.last_width_mm;
             }
         }
         axle += speed * 0.020;
@@ -209,18 +212,24 @@ static result_t drive(const drive_t *d)
     return r;
 }
 
-static void expect_one_hump(const drive_t *d, const char *what)
+/* One valid hump, height 10 +/- 2 mm, and (width_tol_mm > 0) a width of
+   195 +/- width_tol_mm, also published as the length field in cm. */
+static void expect_one_hump(const drive_t *d, const char *what, unsigned width_tol_mm)
 {
     result_t r = drive(d);
+    int width_err = (int)r.last_width_mm - (int)HUMP_W_MM;
 
     if (r.humps != 1 || r.valid_humps != 1 ||
         r.last_height_mm < 8U || r.last_height_mm > 12U ||
-        r.final_terrain != TERRAIN_LEVEL)
+        r.final_terrain != TERRAIN_LEVEL ||
+        ((width_tol_mm > 0U) &&
+         ((r.last_width_mm == 0U) || (abs(width_err) > (int)width_tol_mm) ||
+          (r.last_len_cm != (r.last_width_mm + 5U) / 10U))))
     {
         fprintf(stderr, "FAIL %s arm=%.0f front=%d v=%.0f shape=%d: humps=%d valid=%d h=%u "
-                "len=%u terrain=%u\n", what, d->caster_mm, d->caster_front, d->speed_mm_s,
-                d->shape, r.humps, r.valid_humps, r.last_height_mm, r.last_len_cm,
-                r.final_terrain);
+                "width=%u len=%u terrain=%u\n", what, d->caster_mm, d->caster_front,
+                d->speed_mm_s, d->shape, r.humps, r.valid_humps, r.last_height_mm,
+                r.last_width_mm, r.last_len_cm, r.final_terrain);
         assert(0);
     }
 }
@@ -256,7 +265,12 @@ static void test_one_sided_ramp(void)
             for (c = 0U; c < 3U; c++)
             {
                 drive_t d = {arms[a], 0, speeds[b], shapes[c], RAMP_RIGHT, 15.0, 0.0, -1.0, 0.0};
-                expect_one_hump(&d, "right-wheel ramp");
+                /* Width: straight faces 195 +/- 20 mm at the car's 60 mm/s
+                   (+/- 25 at 110). A rounded (cosine) bump reads short by
+                   design (long shallow feet), so only its height is checked. */
+                unsigned tol = (shapes[c] == SHAPE_COSINE) ? 0U
+                    : ((speeds[b] <= 60.0) ? 20U : 25U);
+                expect_one_hump(&d, "right-wheel ramp", tol);
             }
         }
     }
@@ -264,11 +278,12 @@ static void test_one_sided_ramp(void)
         drive_t left = {130.0, 0, 60.0, SHAPE_TRAPEZOID, RAMP_LEFT, 15.0, 0.0, -1.0, 0.0};
         drive_t front = {130.0, 1, 60.0, SHAPE_TRAPEZOID, RAMP_RIGHT, 15.0, 0.0, -1.0, 0.0};
         drive_t rough = {130.0, 0, 60.0, SHAPE_TRAPEZOID, RAMP_RIGHT, 30.0, 0.0, -1.0, 0.0};
-        expect_one_hump(&left, "left-wheel ramp");
-        expect_one_hump(&front, "caster in front");
-        expect_one_hump(&rough, "30 mg vibration");
+        expect_one_hump(&left, "left-wheel ramp", 20U);
+        expect_one_hump(&front, "caster in front", 20U);
+        expect_one_hump(&rough, "30 mg vibration", 20U);
     }
-    puts("PASS 10 mm ramp under one wheel: 21 cases, one valid 8..12 mm result each");
+    puts("PASS 10 mm x 195 mm ramp under one wheel: 21 cases, height 8..12 mm, "
+         "straight-faced width 195 +/- 20 mm (60 mm/s)");
 }
 
 static void test_full_width_hump(void)
@@ -279,7 +294,7 @@ static void test_full_width_hump(void)
     for (a = 0U; a < 3U; a++)
     {
         drive_t d = {arms[a], 0, 60.0, SHAPE_TRAPEZOID, RAMP_FULL, 15.0, 0.0, -1.0, 0.0};
-        expect_one_hump(&d, "full-width hump");
+        expect_one_hump(&d, "full-width hump", 0U);   /* caster crossing: no width */
     }
     puts("PASS 10 mm full-width hump (wheels then caster): one valid 8..12 mm result");
 }

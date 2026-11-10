@@ -147,6 +147,21 @@ LOCAL void s4_log_event(s4_event_msg_t msg)
                                   S4_HU_LEN_WIDTH),
                       s4_get(msg, S4_EV_PAYLOAD_SHIFT + S4_HU_VALID_SHIFT, 1U)
                           ? "valid" : "INVALID");
+            /* How it was measured: compare with a ruler, tune S4_TRACK_MM /
+               S4_CASTER_ARM_MM from the matching term. */
+            tm_printf((UB *)"[B4]   %s: roll peak %d.%d deg -> track x sin = %d.%02d mm, "
+                      "pitch term %d.%02d mm | width %d mm (%s), path %d mm\n",
+                      s4_est.last_one_sided ? "one wheel (height from roll)"
+                                            : "full width (height from pitch)",
+                      (INT)(s4_est.last_peak_roll_ddeg / 10),
+                      (INT)(s4_est.last_peak_roll_ddeg % 10),
+                      (INT)(s4_est.last_roll_h_um10 / 100U),
+                      (INT)(s4_est.last_roll_h_um10 % 100U),
+                      (INT)(s4_est.last_pitch_h_um10 / 100U),
+                      (INT)(s4_est.last_pitch_h_um10 % 100U),
+                      (INT)s4_est.last_width_mm,
+                      (s4_est.last_width_mm > 0U) ? "profile 25/75% fit" : "no fit: cm = path",
+                      (INT)s4_est.last_path_mm);
             break;
         case S4_EV_COLLISION:
             tm_printf((UB *)"[B4] collision on %s side, %d mg\n",

@@ -67,7 +67,7 @@ No field uses a reserved "invalid" code.
 | Peak height | 0..255 mm | 8 | bits 7..0 |
 | Uncertainty | 0..63 mm | 6 | bits 13..8, saturating |
 | Peak \|pitch\| | 0..63° | 6 | bits 19..14 |
-| Path length | 0..255 cm | 8 | bits 27..20 |
+| Hump width (path driven if the profile fit fails) | 0..255 cm | 8 | bits 27..20 |
 | Valid | 0/1 | 1 | bit 28 |
 | Result counter | 0..7, wraps | 3 | bits 31..29; change means a new result |
 

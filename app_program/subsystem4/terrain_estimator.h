@@ -120,6 +120,10 @@ typedef struct
 
 #define S4_MAX_EVENTS 6U
 
+/* Hump width profile: a sample every 5 mm of travel, 128 samples (640 mm). */
+#define S4_PROF_STEP_MM 5U
+#define S4_PROF_N 128U   /* power of two: the ring index survives the wrap */
+
 /* Why the last level calibration failed (s4_est_t.cal_fail_reason). */
 enum
 {
@@ -176,6 +180,29 @@ typedef struct
     uint32_t path_um;
     int16_t peak_pitch_ddeg;
     int32_t peak_raise_um;     /* highest raised wheel seen this episode */
+    int32_t peak_roll_h_um;    /* peak track x sin|roll|: one wheel raised */
+    int32_t peak_pitch_h_um;   /* peak caster_arm x sin|pitch|: axle raised */
+    int16_t peak_roll_ddeg;
+
+    /* Height-vs-distance profile for the hump width: one sample (the mean
+       over the step) per S4_PROF_STEP_MM of travel, 0.5 mm units, ring of
+       S4_PROF_N (640 mm). Includes the approach before the episode began. */
+    uint8_t prof_roll[S4_PROF_N];    /* track x sin|roll| */
+    uint8_t prof_raise[S4_PROF_N];   /* raised height (both terms) */
+    uint32_t prof_acc_um;            /* travel since the last sample */
+    uint16_t prof_sum_roll;
+    uint16_t prof_sum_raise;
+    uint16_t prof_total;             /* samples pushed, mod 65536 */
+    uint16_t prof_ep_start;          /* prof_total when the episode began */
+    uint8_t prof_sum_n;
+    uint8_t prof_count;              /* valid samples in the ring, <= S4_PROF_N */
+
+    /* Details of the last published hump (console diagnostics). */
+    uint16_t last_width_mm;          /* 0: no profile estimate, path used */
+    uint16_t last_path_mm;
+    uint16_t last_roll_h_um10;       /* track x sin(peak roll), 0.01 mm */
+    uint16_t last_pitch_h_um10;      /* caster_arm x sin(peak pitch), 0.01 mm */
+    int16_t last_peak_roll_ddeg;
 
     /* Saturating millisecond timers. */
     uint16_t state_ms;
@@ -197,6 +224,7 @@ typedef struct
     unsigned int cal_active : 1;
     unsigned int cal_retries : 3;
     unsigned int cal_fail_reason : 2;   /* S4_CALFAIL_* of the last failure */
+    unsigned int last_one_sided : 1;    /* last hump: one wheel (roll) */
     unsigned int mag_cal_active : 1;
     unsigned int mag_calibrated : 1;
     unsigned int heading_valid : 1;

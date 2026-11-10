@@ -744,6 +744,211 @@ static int32_t raised_um(const s4_est_t *est, bool climb_only)
                       ((int64_t)est->cfg.track_mm * 500 * imu_sin_q15(roll))) / 32768);
 }
 
+/* Height of one raised wheel above the other: track x sin|roll| (um). With
+   the other wheel and the caster on the floor this is the ramp height,
+   independent of the caster arm and of speeding up or braking. */
+static int32_t roll_height_um(const s4_est_t *est, int32_t roll_ddeg)
+{
+    return (int32_t)(((int64_t)est->cfg.track_mm * 1000 * imu_sin_q15(abs32(roll_ddeg))) / 32768);
+}
+
+/* Height of the drive axle above the caster: caster_arm x sin|pitch| (um). */
+static int32_t pitch_height_um(const s4_est_t *est, int32_t pitch_ddeg)
+{
+    return (int32_t)(((int64_t)est->cfg.caster_arm_mm * 1000 *
+                      imu_sin_q15(abs32(pitch_ddeg))) / 32768);
+}
+
+static uint32_t half_mm_units(int32_t um)
+{
+    int32_t v = (um + 250) / 500;
+    return (uint32_t)clamp32(v, 0, 255);
+}
+
+/*
+ * Record the height profile against distance: one sample per 5 mm of travel
+ * (the mean of the 20 ms samples in that step), from the smoothed angles:
+ * their extra lag delays both ramp faces alike, so it cancels in the width,
+ * and host simulation gave a third less width error than the fast angles.
+ * Running all the time, so the approach before an episode is kept.
+ */
+static void profile_step(s4_est_t *est, int32_t ds_um)
+{
+    const uint32_t step_um = S4_PROF_STEP_MM * 1000U;
+    uint32_t roll = half_mm_units(roll_height_um(est, smooth_roll(est)));
+    uint32_t raise = half_mm_units(
+        pitch_height_um(est, smooth_pitch(est)) + roll_height_um(est, smooth_roll(est)) / 2);
+    unsigned pushed = 0U;
+
+    if (ds_um == 0)
+    {
+        return;
+    }
+    if (est->prof_sum_n < 255U)
+    {
+        est->prof_sum_roll = (uint16_t)(est->prof_sum_roll + roll);
+        est->prof_sum_raise = (uint16_t)(est->prof_sum_raise + raise);
+        est->prof_sum_n++;
+    }
+    est->prof_acc_um += (uint32_t)abs32(ds_um);
+    while ((est->prof_acc_um >= step_um) && (pushed < S4_PROF_N))
+    {
+        unsigned idx = est->prof_total & (S4_PROF_N - 1U);
+        est->prof_roll[idx] = (uint8_t)(est->prof_sum_roll / est->prof_sum_n);
+        est->prof_raise[idx] = (uint8_t)(est->prof_sum_raise / est->prof_sum_n);
+        est->prof_total++;
+        if (est->prof_count < S4_PROF_N)
+        {
+            est->prof_count++;
+        }
+        est->prof_acc_um -= step_um;
+        pushed++;
+    }
+    if (pushed > 0U)
+    {
+        est->prof_sum_roll = 0U;
+        est->prof_sum_raise = 0U;
+        est->prof_sum_n = 0U;
+    }
+}
+
+/* Profile sample k of the ring, 0 = oldest valid one. */
+static uint32_t profile_raw(const s4_est_t *est, const uint8_t *buf, unsigned k)
+{
+    return buf[(unsigned)(est->prof_total - est->prof_count + k) & (S4_PROF_N - 1U)];
+}
+
+/* Centred 3-sample sum (15 mm of travel) for 1 <= k <= count - 2: averages
+   out vibration, which otherwise lifts the peak and narrows the width, and
+   leaves straight ramp faces unchanged. Units: 0.5 mm x 3. */
+static uint32_t profile_at(const s4_est_t *est, const uint8_t *buf, unsigned k)
+{
+    return profile_raw(est, buf, k - 1U) + profile_raw(est, buf, k) +
+        profile_raw(est, buf, k + 1U);
+}
+
+/*
+ * Hump width and height from the profile (3-sample smoothed).
+ *
+ * Height: the mean of the samples within 90% of the highest one, so
+ * vibration does not lift it; on a plateau that is the plateau height.
+ *
+ * Width: the distances between the up and down crossings of 25% and 75% of
+ * that height (interpolated between samples). For straight ramp faces the
+ * width at height y falls linearly with y, so extrapolating to the floor:
+ *   width = 1.5 x w25 - 0.5 x w75
+ * which is exact for a wedge, trapezoid or triangle profile. The filter lag
+ * delays both faces alike, so it cancels. A rounded bump with long shallow
+ * feet reads short (a raised-cosine bump about 17%). Host simulation, 10 mm
+ * x 195 mm ramp under one wheel, 20 seeds: width rms error 4 to 7 mm at
+ * 15 mg vibration, 8 to 12 mm at 30 mg (a least-squares face fit was no
+ * better and less robust at 30 mg).
+ *
+ * False when the hump's edges are outside the stored 640 mm or the peak is
+ * below 3 mm.
+ */
+static bool profile_width_mm(
+    const s4_est_t *est,
+    const uint8_t *buf,
+    uint32_t *width_mm,
+    int32_t *peak_um)
+{
+    unsigned count = est->prof_count;
+    unsigned since = (uint16_t)(est->prof_total - est->prof_ep_start);
+    unsigned first;
+    unsigned k;
+    unsigned peak_k;
+    uint32_t peak = 0U;
+    uint32_t top_sum = 0U;
+    uint32_t top_n = 0U;
+    int32_t left[2];
+    int32_t right[2];
+    unsigned level;
+    int32_t width256;
+
+    if ((since == 0U) || (since > count) || (count < 3U))
+    {
+        return false;
+    }
+    first = count - since;
+    if (first < 1U)
+    {
+        first = 1U;   /* profile_at needs a neighbour on each side */
+    }
+    peak_k = first;
+    for (k = first; k + 1U < count; k++)
+    {
+        uint32_t v = profile_at(est, buf, k);
+        if (v > peak)
+        {
+            peak = v;
+            peak_k = k;
+        }
+    }
+    if (peak < 18U)   /* below 3 mm (0.5 mm x 3 units): no usable shape */
+    {
+        return false;
+    }
+    for (k = first; k + 1U < count; k++)
+    {
+        uint32_t v = profile_at(est, buf, k);
+        if (10U * v >= 9U * peak)
+        {
+            top_sum += v;
+            top_n++;
+        }
+    }
+    *peak_um = (int32_t)((top_sum * 500U + (top_n * 3U) / 2U) / (top_n * 3U));
+    peak = top_sum / top_n;   /* fit and crossings relative to this height */
+
+    for (level = 0U; level < 2U; level++)
+    {
+        int32_t target = (int32_t)peak * (level == 0U ? 1 : 3);   /* x4 scale */
+        bool found = false;
+
+        for (k = peak_k; k > 1U; k--)
+        {
+            int32_t below = 4 * (int32_t)profile_at(est, buf, k - 1U);
+            int32_t above = 4 * (int32_t)profile_at(est, buf, k);
+            if (below < target)
+            {
+                left[level] = (int32_t)(k - 1U) * 256 +
+                    ((target - below) * 256) / ((above > below) ? (above - below) : 1);
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            return false;
+        }
+        found = false;
+        for (k = peak_k; k + 2U < count; k++)
+        {
+            int32_t above = 4 * (int32_t)profile_at(est, buf, k);
+            int32_t below = 4 * (int32_t)profile_at(est, buf, k + 1U);
+            if (below < target)
+            {
+                right[level] = (int32_t)k * 256 +
+                    ((above - target) * 256) / ((above > below) ? (above - below) : 1);
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            return false;
+        }
+    }
+    width256 = (3 * (right[0] - left[0]) - (right[1] - left[1])) / 2;
+    if (width256 <= 0)
+    {
+        return false;
+    }
+    *width_mm = (uint32_t)((width256 * (int32_t)S4_PROF_STEP_MM + 128) / 256);
+    return true;
+}
+
 static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
 {
     uint32_t peak_mm;
@@ -751,8 +956,11 @@ static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
     uint32_t path_mm;
     uint32_t uncertainty;
     uint32_t residual_limit;
+    uint32_t width_mm = 0U;
+    int32_t profile_peak_um = 0;
     uint32_t word = 0U;
     bool valid;
+    bool one_sided;
 
     if (!est->in_episode)
     {
@@ -776,9 +984,49 @@ static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
             peak_mm = raised_mm;
         }
     }
+    /*
+     * One wheel raised (ramp under one side): roll carries the height,
+     * track x sin(roll), and the pitch term is only half of it. Using roll
+     * alone needs no caster arm and ignores speed changes on the ramp, which
+     * read as pitch. A full-width hump has almost no roll. Classify by which
+     * term dominates: one-sided if the roll height is at least half the
+     * pitch height (theory: roll = 2 x pitch one-sided, roll ~ 0 full width).
+     */
+    one_sided = (2 * est->peak_roll_h_um) >= est->peak_pitch_h_um;
+    if (one_sided && est->saw_descent)
+    {
+        peak_mm = (uint32_t)((est->peak_roll_h_um + 500) / 1000);
+    }
     residual_mm = (uint32_t)(abs32(est->height_um) / 1000);
     path_mm = est->path_um / 1000U;
+    /* The profile (15 mm averaged) gives the width and a steadier peak
+       height than the 20 ms smoothed peak, which vibration inflates. For a
+       full-width hump the distance integral still wins on a long ramp. */
+    if (profile_width_mm(est, one_sided ? est->prof_roll : est->prof_raise,
+                         &width_mm, &profile_peak_um))
+    {
+        if (est->saw_descent)
+        {
+            uint32_t integral_mm = (est->peak_um > 0) ?
+                (uint32_t)((est->peak_um + 500) / 1000) : 0U;
+            peak_mm = (uint32_t)((profile_peak_um + 500) / 1000);
+            if (!one_sided && (integral_mm > peak_mm))
+            {
+                peak_mm = integral_mm;
+            }
+        }
+    }
+    else
+    {
+        width_mm = 0U;
+    }
     residual_limit = (peak_mm / 2U > 10U) ? (peak_mm / 2U) : 10U;
+    est->last_width_mm = (uint16_t)min_u32(width_mm, UINT16_MAX);
+    est->last_path_mm = (uint16_t)min_u32(path_mm, UINT16_MAX);
+    est->last_roll_h_um10 = (uint16_t)min_u32((uint32_t)est->peak_roll_h_um / 10U, UINT16_MAX);
+    est->last_pitch_h_um10 = (uint16_t)min_u32((uint32_t)est->peak_pitch_h_um / 10U, UINT16_MAX);
+    est->last_peak_roll_ddeg = est->peak_roll_ddeg;
+    est->last_one_sided = one_sided ? 1U : 0U;
 
     uncertainty = (uint32_t)est->cfg.base_uncertainty_mm + residual_mm + (path_mm / 100U);
     if (est->used_fallback)
@@ -802,8 +1050,10 @@ static void finish_episode(s4_est_t *est, bool aborted, s4_events_t *events)
     word = s4_put(word, S4_HU_PITCH_SHIFT, S4_HU_PITCH_WIDTH,
                   min_u32((uint32_t)(est->peak_pitch_ddeg + 5) / 10U,
                           S4_MASK(S4_HU_PITCH_WIDTH)));
+    /* Length field: the hump width from the profile, else the path driven. */
     word = s4_put(word, S4_HU_LEN_SHIFT, S4_HU_LEN_WIDTH,
-                  min_u32(path_mm / 10U, S4_MASK(S4_HU_LEN_WIDTH)));
+                  min_u32(((width_mm > 0U) ? (width_mm + 5U) : path_mm) / 10U,
+                          S4_MASK(S4_HU_LEN_WIDTH)));
     word = s4_put(word, S4_HU_VALID_SHIFT, 1U, valid ? 1U : 0U);
     word = s4_put(word, S4_HU_SEQ_SHIFT, S4_HU_SEQ_WIDTH, est->hump_seq);
     est->words[S4_W_HUMP] = word;
@@ -823,6 +1073,10 @@ static void begin_episode(s4_est_t *est)
     est->peak_um = (est->height_um > 0) ? est->height_um : 0;
     est->peak_pitch_ddeg = (int16_t)abs32(smooth_pitch(est));
     est->peak_raise_um = raised_um(est, false);
+    est->peak_roll_h_um = roll_height_um(est, smooth_roll(est));
+    est->peak_pitch_h_um = pitch_height_um(est, smooth_pitch(est));
+    est->peak_roll_ddeg = (int16_t)abs32(smooth_roll(est));
+    est->prof_ep_start = est->prof_total;
 }
 
 /*
@@ -970,6 +1224,7 @@ static void terrain_step(
             est->used_fallback = 1U;
         }
     }
+    profile_step(est, ds_um);
     est->state_ms = add_sat_u16(est->state_ms, dt_ms);
     if (est->in_episode)
     {
@@ -984,9 +1239,21 @@ static void terrain_step(
         }
         {
             int32_t g = raised_um(est, false);
+            int32_t roll = smooth_roll(est);
+            int32_t roll_h = roll_height_um(est, roll);
+            int32_t pitch_h = pitch_height_um(est, pitch);
             if (g > est->peak_raise_um)
             {
                 est->peak_raise_um = g;
+            }
+            if (roll_h > est->peak_roll_h_um)
+            {
+                est->peak_roll_h_um = roll_h;
+                est->peak_roll_ddeg = (int16_t)abs32(roll);
+            }
+            if (pitch_h > est->peak_pitch_h_um)
+            {
+                est->peak_pitch_h_um = pitch_h;
             }
         }
     }
