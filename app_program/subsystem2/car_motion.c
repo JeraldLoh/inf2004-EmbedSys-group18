@@ -94,6 +94,12 @@ bool car_motion_continuous(car_motion_t *m,
     int64_t curvature;
     uint32_t life;
     motion_status_t status;
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    bool carrying_bend = false;
+#if !defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID
+    int32_t fresh_bend = 0;
+#endif
+#endif
     if (m == NULL || r == NULL) { return false; }
     life = r->expires_ms-r->created_ms;
     if (r->source != MOTION_SOURCE_LINE && r->source != MOTION_SOURCE_OBSTACLE)
@@ -106,8 +112,39 @@ bool car_motion_continuous(car_motion_t *m,
     converted = *r;
     curvature = -(int64_t)r->curvature_u1_m;
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-    if (r->source == MOTION_SOURCE_LINE)
+#if !defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID
+    /* A PID steering value near +/-20 is a real correction. In that
+     * build, preserve it rather than applying the digital hold heuristic. */
+    if (r->source == MOTION_SOURCE_LINE && r->speed_mm_s > 0)
+    {
+        int64_t raw_curvature = curvature;
+        uint32_t age = ms - m->last_bend_ms;
+        fresh_bend = b2_line_shape_curvature(raw_curvature);
+        if (raw_curvature > B2_LINE_HOLD_DEADBAND_U1_M &&
+            fresh_bend < B2_LINE_MIN_DETECTED_CURVATURE_U1_M)
+        { fresh_bend = B2_LINE_MIN_DETECTED_CURVATURE_U1_M; }
+        else if (raw_curvature < -B2_LINE_HOLD_DEADBAND_U1_M &&
+            fresh_bend > -B2_LINE_MIN_DETECTED_CURVATURE_U1_M)
+        { fresh_bend = -B2_LINE_MIN_DETECTED_CURVATURE_U1_M; }
+        curvature = fresh_bend;
+        /* Buddy3's same-side hold can bridge a brief both-white gap.
+         * It must never refresh the age of the last strong correction. */
+        if (age < B2_LINE_BEND_CARRY_MS &&
+            m->executor.status.state == MOTION_EXEC_CONTINUOUS &&
+            m->executor.status.generation == r->authority_generation &&
+            m->executor.continuous.source == MOTION_SOURCE_LINE &&
+            (int32_t)(m->executor.continuous_until_us - us) > 0 &&
+            ((raw_curvature == B2_LINE_HOLD_DEADBAND_U1_M && m->last_bend_curvature > 0) ||
+             (raw_curvature == -B2_LINE_HOLD_DEADBAND_U1_M && m->last_bend_curvature < 0)))
+        {
+            curvature = (int64_t)m->last_bend_curvature * (B2_LINE_BEND_CARRY_MS - age) /
+                (2U * B2_LINE_BEND_CARRY_MS);
+            carrying_bend = true;
+        }
+    }
+    else if (r->source == MOTION_SOURCE_LINE)
     { curvature = b2_line_shape_curvature(curvature); }
+#endif
 #endif
     /* Nearest whole 1/m, symmetric rounding; INT32_MIN handled in int64. */
     converted.curvature_u1_m = (int32_t)((curvature + (curvature < 0 ? -500000 : 500000))/1000000);
@@ -117,12 +154,27 @@ bool car_motion_continuous(car_motion_t *m,
         if (converted.curvature_u1_m < -limit) { converted.curvature_u1_m = -limit; }
     }
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-    /* Slightly slow line-follow bends after the hold-command deadband.
-     * Preserve curvature, straight cruise, and obstacle motion requests. */
-    if (r->source == MOTION_SOURCE_LINE && converted.curvature_u1_m != 0 &&
+    /* Tight bends need more time for the measured wheel-speed split to
+     * develop. Set the bend speed before splitting it into wheel targets. */
+    uint32_t line_request_max = m->executor.config.max_speed_mm_s;
+    if (m->executor.config.qualified && line_request_max < B2_LINE_FAST_STRAIGHT_MM_S)
+    { line_request_max = B2_LINE_FAST_STRAIGHT_MM_S; }
+    if (r->source == MOTION_SOURCE_LINE &&
+        (converted.curvature_u1_m != 0 || carrying_bend) &&
         converted.speed_mm_s > 0 &&
-        (uint32_t)converted.speed_mm_s <= m->executor.config.max_speed_mm_s)
-    { converted.speed_mm_s = (int32_t)((int64_t)converted.speed_mm_s * 90 / 100); }
+        (uint32_t)converted.speed_mm_s <= line_request_max)
+    {
+        int32_t turn = converted.curvature_u1_m;
+        uint32_t strength = (uint32_t)(turn < 0 ? -turn : turn);
+        if (strength > B2_LINE_FULL_CURVATURE_1_M)
+        { strength = B2_LINE_FULL_CURVATURE_1_M; }
+        uint32_t bend_cap = B2_LINE_BEND_ENTRY_MM_S -
+            (B2_LINE_BEND_ENTRY_MM_S - B2_LINE_BEND_TIGHT_MM_S) *
+            strength / B2_LINE_FULL_CURVATURE_1_M;
+        bend_cap = (bend_cap * B2_LINE_BEND_SPEED_SCALE_10000 + 5000U) / 10000U;
+        if ((uint32_t)converted.speed_mm_s > bend_cap)
+        { converted.speed_mm_s = (int32_t)bend_cap; }
+    }
 #endif
     if (m->next_command == UINT32_MAX)
     { return car_motion_record_rejection(m,CAR_REJECT_ID,MOTION_STATE,r->source,r->command_id,r->authority_generation); }
@@ -133,6 +185,13 @@ bool car_motion_continuous(car_motion_t *m,
         (r->expires_ms-ms)*1000U);
     if (status != MOTION_OK)
     { return car_motion_record_rejection(m,CAR_REJECT_EXECUTOR,status,r->source,r->command_id,r->authority_generation); }
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL && (!defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID)
+    if (!carrying_bend)
+    {
+        m->last_bend_curvature = fresh_bend;
+        m->last_bend_ms = ms;
+    }
+#endif
     ++m->accepted; return true;
 }
 

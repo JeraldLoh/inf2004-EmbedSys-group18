@@ -222,6 +222,19 @@ motion_status_t measured_motion_executor_authorize_calibration(measured_motion_e
 }
 #endif
 
+static uint32_t continuous_wheel_limit_mm_s(const measured_motion_executor_t *e,
+    const motion_continuous_request_t *request)
+{
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+    if (e->config.qualified && request->source == MOTION_SOURCE_LINE &&
+        request->curvature_u1_m == 0 && e->config.max_speed_mm_s < B2_LINE_FAST_STRAIGHT_MM_S)
+    { return B2_LINE_FAST_STRAIGHT_MM_S; }
+#else
+    (void)request;
+#endif
+    return e->config.max_speed_mm_s;
+}
+
 motion_status_t measured_motion_executor_continuous(measured_motion_executor_t *e,
     const motion_continuous_request_t *r, uint32_t now, uint32_t ttl)
 {
@@ -231,7 +244,7 @@ motion_status_t measured_motion_executor_continuous(measured_motion_executor_t *
     if (e->status.terminal_pending || e->status.state == MOTION_EXEC_GOAL) { return MOTION_STATE; }
     if (!newer(r->command_id, e->last_command_id)) { return MOTION_STALE; }
     if (ttl == 0U || ttl > 1000000U || r->speed_mm_s < 0 ||
-        (uint32_t)r->speed_mm_s > e->config.max_speed_mm_s ||
+        (uint32_t)r->speed_mm_s > continuous_wheel_limit_mm_s(e, r) ||
         magnitude(r->curvature_u1_m) > 2000U/e->config.track_width_mm)
     { return MOTION_INVALID; }
     if (e->status.state != MOTION_EXEC_CONTINUOUS)
@@ -306,6 +319,7 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
     uint32_t line_target_cap = 0U;
     uint32_t line_ramp_span = 0U;
+    uint32_t line_ramp_multiplier = 1U;
 #endif
     int8_t sign[2] = {1, 1};
     int16_t effort[2] = {0, 0};
@@ -365,7 +379,7 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     e->status.low_speed_floor_mask = 0U;
     if (e->status.state == MOTION_EXEC_CONTINUOUS)
     {
-        uint32_t cap = e->config.max_speed_mm_s*1000U;
+        uint32_t cap = continuous_wheel_limit_mm_s(e, &e->continuous)*1000U;
         int64_t speed = (int64_t)e->continuous.speed_mm_s*1000;
         int64_t correction = speed*e->continuous.curvature_u1_m*e->config.track_width_mm/2000;
         uint32_t largest;
@@ -400,13 +414,15 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             desired[1] = (uint32_t)((uint64_t)desired[1]*cap/largest);
         }
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-        /* The operator reports running wide. Reduce the inner target a
-         * further23.5% (V18's15%, then another10%) without more outside speed. This
-         * lowers mean speed in turns; the paired ramp below smooths entry/
-         * exit. Zero-curvature straight, goals and obstacle moves are unchanged. */
+        /* Tune the inside and outside targets independently after the
+         * paired cap, preserving the inside target when the boost is capped. */
         if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
         {
             unsigned inside = correction > 0 ? 1U : 0U;
+            unsigned outside = 1U - inside;
+            uint32_t boosted = (uint32_t)((uint64_t)desired[outside] *
+                B2_LINE_OUTSIDE_SPEED_PERCENT / 100U);
+            desired[outside] = boosted < cap ? boosted : cap;
             desired[inside] = (uint32_t)((uint64_t)desired[inside] *
                 B2_LINE_WIDE_TURN_INNER_PERMILLE / 1000U);
             {
@@ -494,6 +510,15 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
          * At equal initial/final mean speed this changes the turn without
          * an intervening acceleration/braking pulse. Hard caps and zero/STOP
          * paths bypass this interpolation. */
+        int64_t desired_split = (int64_t)desired[0] - desired[1];
+        int64_t current_split = (int64_t)e->ramp_um_s[0] - e->ramp_um_s[1];
+        /* Catch up when the requested wheel split grows in the direction
+         * of the bend. Use the normal rate when unwinding toward straight. */
+        if ((desired_split > 0 && desired_split > current_split) ||
+            (desired_split < 0 && desired_split < current_split))
+        {
+            line_ramp_multiplier = B2_LINE_BEND_ENTRY_RAMP_MULTIPLIER;
+        }
         for (i = 0U; i < 2U; ++i)
         {
             uint32_t difference = desired[i] > e->ramp_um_s[i] ?
@@ -514,7 +539,15 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         {
             uint32_t difference = desired[i] > e->ramp_um_s[i] ?
                 desired[i] - e->ramp_um_s[i] : e->ramp_um_s[i] - desired[i];
-            uint32_t advance = step < line_ramp_span ? step : line_ramp_span;
+            uint64_t bend_step = (uint64_t)step * line_ramp_multiplier;
+            /* Lead with inside-wheel deceleration when tightening. Keep the
+             * existing paired rate for the outside wheel and for bend exit. */
+            if (line_ramp_multiplier > 1U &&
+                desired[i] < desired[1U-i] && desired[i] < e->ramp_um_s[i])
+            {
+                bend_step *= B2_LINE_INSIDE_DECEL_MULTIPLIER;
+            }
+            uint32_t advance = bend_step < line_ramp_span ? (uint32_t)bend_step : line_ramp_span;
             uint32_t change = (uint32_t)((uint64_t)difference * advance / line_ramp_span);
             if (desired[i] > e->ramp_um_s[i]) { e->ramp_um_s[i] += change; }
             else { e->ramp_um_s[i] -= change; }
@@ -557,6 +590,25 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
             e->pid[i].config.max_effort = (uint16_t)(base->max_effort + extra);
             e->pid[i].config.integral_limit = (uint16_t)(base->integral_limit + extra);
             e->pid[i].config.launch_effort = (uint16_t)(base->launch_effort + extra);
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
+            if (e->config.qualified && e->status.state == MOTION_EXEC_CONTINUOUS &&
+                e->continuous.source == MOTION_SOURCE_LINE &&
+                e->continuous.curvature_u1_m == 0 &&
+                e->ramp_um_s[i] > e->config.max_speed_mm_s * 1000U &&
+                base->max_effort < B2_LINE_FAST_STRAIGHT_MAX_EFFORT)
+            {
+                e->pid[i].config.max_effort = B2_LINE_FAST_STRAIGHT_MAX_EFFORT;
+            }
+            if (e->status.state == MOTION_EXEC_CONTINUOUS &&
+                e->continuous.source == MOTION_SOURCE_LINE &&
+                ((i == 0U && e->continuous.curvature_u1_m > 0) ||
+                 (i == 1U && e->continuous.curvature_u1_m < 0)) &&
+                e->ramp_um_s[i] > e->ramp_um_s[1U-i] &&
+                base->max_effort < B2_LINE_OUTSIDE_MAX_EFFORT)
+            {
+                e->pid[i].config.max_effort = B2_LINE_OUTSIDE_MAX_EFFORT;
+            }
+#endif
         }
         if (!wheel_pid_step(&e->pid[i], e->ramp_um_s[i], e->measurement.sample.speed_um_s[i], dt, &duty))
         { finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_PID_INPUT, (uint8_t)(1U << i)); return MOTION_UNAVAILABLE; }

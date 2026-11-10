@@ -202,16 +202,17 @@ endif
 TEST_SUFFIX := _carrun_table
 endif
 
-# Skip the 3 s barcode sweep at start-up (bench testing other subsystems).
-# Barcodes are then ignored and the junction fallback policy applies.
-NO_BARCODE_CAL ?= 0
-ifneq ($(filter $(NO_BARCODE_CAL),0 1),$(NO_BARCODE_CAL))
-$(error NO_BARCODE_CAL must be 0 or 1)
+# Buddy 3 line PID: the left line module's A0 pin, wired to GP28 (ADC2),
+# steers with a PID along the tape's left edge. Off by default: needs that wire.
+LINE_PID ?= 0
+ifneq ($(filter $(LINE_PID),0 1),$(LINE_PID))
+$(error LINE_PID must be 0 or 1)
 endif
-ifeq ($(NO_BARCODE_CAL),1)
+ifeq ($(LINE_PID),1)
 ifneq ($(CAR_RUN),1)
-$(error NO_BARCODE_CAL=1 requires CAR_RUN=1)
+$(error LINE_PID=1 requires CAR_RUN=1)
 endif
+TEST_SUFFIX := $(TEST_SUFFIX)_linepid
 endif
 
 # Full circuit diagnosis: sensing + individually confirmed actuator pulses.
