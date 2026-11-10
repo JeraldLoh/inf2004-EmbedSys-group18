@@ -39,10 +39,11 @@ static uint32_t b5_wifi_at;
 #define B5_PASS_GUARD_EVERY 3
 /* Car trial 2026-11-10: side readings were 44-74 cm at 70 deg (41+ cm
  * square), never under the fixed 30 cm, so the pass never saw the face.
- * Also count out to the planned side distance + 20 cm, and look nearly
- * square (85 deg; the servo turns almost 0..180) for a firmer echo. */
+ * Also count out to the planned side distance + 20 cm, and look closer to
+ * square for a firmer echo. 85 deg (servo 5/175) left the servo stuck at
+ * its end stop; 75 deg (15/165) stays clear of it. */
 #define B5_PASS_BESIDE_SLACK_CM 20.0f
-#define B5_PASS_SIDE_DEG 85
+#define B5_PASS_SIDE_DEG 75
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -628,6 +629,9 @@ static void subsystem5_task(INT stacd, void *exinf)
                 print_result("ABORTED", cb_now_ms(NULL) - av.t_detect, "AUTO ended");
             }
             av_reset(&av);              /* back to MONITOR for the next run */
+            /* A run can stop with the servo turned fully aside (side watch):
+             * bring it back to centre rather than leaving it at the stop. */
+            cb_servo_set(NULL, av.cfg.center_deg);
 #if APP_CAR_MQTT
             b5_wifi.front_status=4;b5_wifi.last_status=4;b5_wifi.decision_valid=0;
             wifi_clear_encounter();
