@@ -1418,7 +1418,7 @@ static void pass_counts_a_drifted_face_with_slack(void) {
     s.side_face_ms = 1500;
     CHECK(run_encounter(&s, &av));
     CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 0); // fixed 30 cm: never beside
-    CHECK_INT(av_metrics(&av)->pass_capped, 1);
+    CHECK_INT(av_metrics(&av)->pass_unseen, 1);        // so it ends at the planned length
 
     sim_defaults(&s, 0);
     s.cfg.pass_watch_side = true;
