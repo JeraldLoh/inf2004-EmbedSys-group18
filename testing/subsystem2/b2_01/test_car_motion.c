@@ -233,7 +233,7 @@ static void stop_and_ids(void) {
 static void deadline(void) {
     fixture_t f;
     motion_goal_request_t g={1U,0U,MOTION_SOURCE_OBSTACLE,MOTION_GOAL_FORWARD,1000,0,30U,4000U};
-    motion_continuous_request_t r={1U,0U,MOTION_SOURCE_LINE,30,0,0U,0U,150U};
+    motion_continuous_request_t r={1U,0U,MOTION_SOURCE_LINE,30,0,0U,0U,150U,false};
     init(&f,true);
     r.authority_generation=f.controller.controller.authority_generation;
     assert(!car_motion_continuous(&f.motion,&r,150U,0U));

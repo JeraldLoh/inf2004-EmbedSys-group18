@@ -55,9 +55,15 @@ typedef struct
     uint16_t threshold_high;  /* darkness above this -> black */
     bool calibrated;
     bool black;
+    bool fixed;               /* fixed thresholds: no adaptation */
 } barcode_sensor_t;
 
 void barcode_sensor_reset(barcode_sensor_t *sensor);
+
+/* Skip calibration: use these darkness thresholds as-is (low < high).
+ * Adaptation is off, so wide black areas (line tape) cannot drift them. */
+void barcode_sensor_set_fixed(barcode_sensor_t *sensor,
+                              uint16_t threshold_low, uint16_t threshold_high);
 
 /* Feed raw samples during a calibration sweep (over both black and white). */
 void barcode_sensor_calibrate_sample(barcode_sensor_t *sensor, uint16_t raw);

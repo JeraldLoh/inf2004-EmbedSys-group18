@@ -60,6 +60,23 @@ void barcode_sensor_reset(barcode_sensor_t *sensor)
     sensor->threshold_high = 0U;
     sensor->calibrated = false;
     sensor->black = false;
+    sensor->fixed = false;
+}
+
+void barcode_sensor_set_fixed(barcode_sensor_t *sensor,
+                              uint16_t threshold_low, uint16_t threshold_high)
+{
+    if ((sensor == NULL) || (threshold_low >= threshold_high))
+    {
+        return;
+    }
+    sensor->white_level = threshold_low;
+    sensor->black_level = threshold_high;
+    sensor->threshold_low = threshold_low;
+    sensor->threshold_high = threshold_high;
+    sensor->calibrated = true;
+    sensor->black = false;
+    sensor->fixed = true;
 }
 
 void barcode_sensor_calibrate_sample(barcode_sensor_t *sensor, uint16_t raw)
@@ -112,6 +129,7 @@ bool barcode_sensor_is_black(barcode_sensor_t *sensor, uint16_t raw)
 #if BARCODE_ADAPT
     /* Only learn from samples that are clearly black or clearly white, so
      * the half-covered samples at bar edges do not drag the levels inward. */
+    if (!sensor->fixed)
     {
         uint16_t old_black = sensor->black_level;
         uint16_t old_white = sensor->white_level;

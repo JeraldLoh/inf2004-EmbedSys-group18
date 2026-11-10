@@ -124,6 +124,25 @@ const char *av_config_check(const av_config_t *c) {
     if (c->motion_timeout_ms == 0 || c->reacquire_timeout_ms == 0) return "timeouts must be > 0";
     if (c->max_reacquire_attempts < 1) return "max_reacquire_attempts must be >= 1";
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
+    if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
+    if (!(c->strip_extra_cm >= 0.0f)) return "strip_extra_cm must be >= 0";
+    if (!(c->return_extra_cm >= 0.0f)) return "return_extra_cm must be >= 0";
+    if (c->sweep_max_deg < 0 || c->sweep_max_deg > 60) return "sweep_max_deg must be within 0..60";
+    if (c->sweep_max_deg > 0 && (c->sweep_step_deg < 1 || c->sweep_step_deg > c->sweep_max_deg))
+        return "sweep_step_deg must be within 1..sweep_max_deg";
+    if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
+        return "line_align_min_deg must be within 0..89";
+    if (c->pass_watch_side) {
+        if (!(c->pass_beside_cm > 0.0f)) return "pass_beside_cm must be > 0";
+        if (!(c->pass_max_extra_cm >= 0.0f)) return "pass_max_extra_cm must be >= 0";
+        if (!(c->pass_clear_margin_cm >= 0.0f)) return "pass_clear_margin_cm must be >= 0";
+        if (c->pass_guard_every < 0) return "pass_guard_every must be >= 0";
+        if (!(c->pass_beside_slack_cm >= 0.0f)) return "pass_beside_slack_cm must be >= 0";
+        if (c->pass_side_deg < 0 || c->pass_side_deg > 90 ||
+            !angle_ok(c->center_deg - c->pass_side_deg) ||
+            !angle_ok(c->center_deg + c->pass_side_deg))
+            return "pass_side_deg must be 0..90 and within the servo's 0..180";
+    }
     return NULL;
 }
 
@@ -306,6 +325,8 @@ static void start_coarse(av_t *a) {
     a->shift_cm = 0.0f; // a fresh scan measures from here
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
+    a->align_step = 0;
+    a->pass_phase = 0;
     enter(a, AV_STATE_COARSE_SCAN);
 }
 
@@ -332,6 +353,8 @@ static void next_edge_stage(av_t *a, side_t just_done) {
 static void start_reacquire(av_t *a) {
     a->reacquire_attempts = 0;
     a->search_started = false;
+    a->sweep_idx = 0;
+    a->sweep_done = a->cfg.sweep_max_deg <= 0;
     enter(a, AV_STATE_REACQUIRE);
 }
 
@@ -348,11 +371,26 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->off_line = false;
     a->heading_deg = 0;
     a->choice.side = SIDE_NONE;
+    a->pass_seen = false;
+    a->depth_cm = -1.0f;
+    a->have_prev = false;
+    a->prev_backed_cm = 0.0f;
     av_event_t e = event_of(AV_EVT_OBSTACLE_DETECTED);
     e.point.angle_deg = a->cfg.center_deg;
     e.point.reading = r;
     emit(a, now, &e);
     start_coarse(a);
+}
+
+// Something blocks the way ahead mid-manoeuvre: stop and re-plan from here.
+static void emergency_stop(av_t *a, uint32_t now, range_reading_t r) {
+    a->hw.motion_stop(a->hw.ctx);
+    a->metrics.emergency_stops++;
+    av_event_t e = event_of(AV_EVT_EMERGENCY_STOP);
+    e.point.angle_deg = a->cfg.center_deg;
+    e.point.reading = r;
+    emit(a, now, &e);
+    start_coarse(a); // re-plan from here; off_line is kept so a clear path leads to reacquire
 }
 
 // Collision guard while driving. Returns true if it stopped the robot.
@@ -362,14 +400,7 @@ static bool guard_tripped(av_t *a, uint32_t now) {
     take_result_t t = take(a, now, a->cfg.center_deg, &r);
     if (t == TAKE_ABORTED) return true;
     if (t != TAKE_READY || !is_blocked(r, a->cfg.emergency_stop_cm)) return false;
-
-    a->hw.motion_stop(a->hw.ctx);
-    a->metrics.emergency_stops++;
-    av_event_t e = event_of(AV_EVT_EMERGENCY_STOP);
-    e.point.angle_deg = a->cfg.center_deg;
-    e.point.reading = r;
-    emit(a, now, &e);
-    start_coarse(a); // re-plan from here; off_line is kept so a clear path leads to reacquire
+    emergency_stop(a, now, r);
     return true;
 }
 
@@ -440,6 +471,23 @@ static void on_coarse(av_t *a, uint32_t now) {
 
     bool gone = center.status != RANGE_FAULT &&
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
+    // Also after a plain reverse (no side found): car trial 2026-11-10 later,
+    // reversed 10 cm, lost the obstacle, resumed and met it again, twice.
+    if (gone && !a->off_line && (a->backoffs > 0 || a->reverses > 0) && a->have_prev) {
+        // Car trial 2026-11-10: backed off from a narrow obstacle seen at
+        // 13 cm, rescanned, no longer saw it (51 cm), resumed and met it
+        // again. Backing off moves the car, not the obstacle: plan from
+        // where it was last seen, moved back by the back-off.
+        gone = false;
+        a->scan_base = a->prev_base;
+        a->ahead_cm = a->prev_ahead_cm + a->prev_backed_cm;
+        near_cm = a->ahead_cm;
+    } else if (!gone) {
+        a->have_prev = true;
+        a->prev_ahead_cm = a->ahead_cm;
+        a->prev_base = a->scan_base;
+        a->prev_backed_cm = 0.0f;
+    }
     if (!gone) {
         a->nearest_cm = near_cm;
         for (int i = 0; i < 2; i++) {
@@ -601,7 +649,7 @@ static void plan_legs(av_t *a) {
     a->legs[LEG_RETURN_TURN].forward = false;
     a->legs[LEG_RETURN_TURN].heading_deg = o - s * t;
     a->legs[LEG_RETURN_DRIVE].forward = true;
-    a->legs[LEG_RETURN_DRIVE].cm = a->plan.out_cm;
+    a->legs[LEG_RETURN_DRIVE].cm = a->plan.out_cm + a->cfg.return_extra_cm;
     a->legs[6].forward = false;
     a->legs[6].heading_deg = 0; // line direction
     a->leg_idx = 0;
@@ -616,6 +664,38 @@ static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
     av_event_t e = event_of(AV_EVT_REVERSING);
     e.attempt = attempt;
     emit(a, now, &e);
+}
+
+// Car trial 2026-11-10: the reading just past the left edge went through a
+// gap (39 cm) while the wider one beyond it read 19 cm; the car chose left
+// and its pivot met the blocker at 3 cm. Any coarse reading beyond the edge
+// that lies inside the strip the bypass drives through blocks that side.
+static bool strip_blocked(av_t *a, uint32_t now, side_t side) {
+    const obstacle_edge_t *e = side == SIDE_LEFT ? &a->profile.left : &a->profile.right;
+    if (!e->found) return false;
+    float edge_x = e->pt.x_cm < 0.0f ? -e->pt.x_cm : e->pt.x_cm;
+    float strip = edge_x + a->cfg.bypass_side_margin_cm + a->cfg.strip_extra_cm;
+    for (int i = 0; i < a->cfg.coarse_points; i++) {
+        range_reading_t r = a->coarse[i].reading;
+        if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue; // no echo: open
+        float dir = scan_left_offset_deg(&a->geom, (float)a->coarse[i].angle_deg);
+        bool beyond = side == SIDE_LEFT ? dir > e->angle_deg : dir < e->angle_deg;
+        if (!beyond) continue;
+        float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
+        point2_t pt = obstacle_polar_to_xy(dir, cm);
+        pt.y_cm += a->shift_cm; // the scan may be reused after a back-off
+        float x = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
+        bool toward = side == SIDE_LEFT ? pt.x_cm <= 0.0f : pt.x_cm >= 0.0f;
+        // Outside the obstacle sideways (not its own corner), inside the strip.
+        if (toward && x > edge_x && x < strip && pt.y_cm > 0.0f) {
+            av_event_t ev = event_of(AV_EVT_SIDE_BLOCKED);
+            ev.side = side;
+            ev.point = a->coarse[i];
+            emit(a, now, &ev);
+            return true;
+        }
+    }
+    return false;
 }
 
 static void on_decide(av_t *a, uint32_t now) {
@@ -653,8 +733,13 @@ static void on_decide(av_t *a, uint32_t now) {
     pe.profile = &a->profile;
     emit(a, now, &pe);
 
-    a->choice = obstacle_choose_side(&a->profile, a->edge[EDGE_LEFT].clear_cm,
-                                     a->edge[EDGE_RIGHT].clear_cm, a->cfg.min_clearance_cm);
+    float left_clear = a->edge[EDGE_LEFT].clear_cm;
+    float right_clear = a->edge[EDGE_RIGHT].clear_cm;
+    if (a->cfg.strip_extra_cm > 0.0f) {
+        if (strip_blocked(a, now, SIDE_LEFT)) left_clear = 0.0f;
+        if (strip_blocked(a, now, SIDE_RIGHT)) right_clear = 0.0f;
+    }
+    a->choice = obstacle_choose_side(&a->profile, left_clear, right_clear, a->cfg.min_clearance_cm);
     av_event_t de = event_of(AV_EVT_DECISION);
     de.side = a->choice.side;
     de.profile = &a->profile;
@@ -724,6 +809,7 @@ static void on_reverse(av_t *a, uint32_t now) {
     if (motion_failed(a)) {
         fail_motion(a, now);
     } else if (a->hw.motion_done(a->hw.ctx)) {
+        a->prev_backed_cm += a->reverse_by_cm; // backing off or reversing
         if (a->backing_off) {
             // Plan from the scan already taken, moved back by the reverse.
             // Car trial 2026-11-02: rescanning from further away lost a
@@ -758,26 +844,209 @@ static void rejoin_line(av_t *a, uint32_t now) {
     emit(a, now, &e);
 }
 
+// Line crossed while driving straight at heading_deg: stop has already been
+// sent. Drive line_align_cm so the turning centre is over the line, then
+// pivot to the line direction (on_align). Returns false when alignment is off
+// or the crossing is shallow enough to hand over at once.
+static bool start_align(av_t *a, uint32_t now) {
+    if (a->cfg.line_align_cm <= 0.0f || abs(a->heading_deg) < a->cfg.line_align_min_deg)
+        return false;
+    a->align_step = 1;
+    a->hw.motion_forward(a->hw.ctx, a->cfg.line_align_cm);
+    a->deadline = now + drive_timeout_ms(a, a->cfg.line_align_cm);
+    av_event_t e = event_of(AV_EVT_LINE_ALIGN);
+    e.heading_deg = a->heading_deg;
+    emit(a, now, &e);
+    return true;
+}
+
 // Past the obstacle (the pass leg onward: drives and turns, or the search)
 // and a sensor sees the line: hand straight to line following, at whatever
 // angle. Car trial 2026-11-02: driving on to straighten up first carried the
-// car past the line it had just found.
+// car past the line it had just found. With line_align_cm set, a crossing
+// seen on a drive leg (heading known exactly) is first turned along the line.
 static bool rejoin_if_line(av_t *a, uint32_t now) {
+    if (a->align_step != 0) return false; // the line is expected; on_align decides
+    // Car trial 2026-11-10: the line turned up while still beside the
+    // obstacle and the car rejoined there. Watching the side, the corner
+    // (or the cap) decides when the pass ends.
+    if (a->pass_phase == 1) return false;
     // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
     // is still the straighten-up beside the obstacle: only the drive counts.
     bool past = a->state == AV_STATE_REACQUIRE ||
                 (a->state == AV_STATE_BYPASS &&
                  (a->leg_idx > LEG_PASS || (a->leg_idx == LEG_PASS && a->leg_active)));
     if (!past || !a->hw.line_detected(a->hw.ctx)) return false;
+    bool driving = a->state == AV_STATE_BYPASS && a->leg_active;
     a->hw.motion_stop(a->hw.ctx);
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    a->pass_phase = 0;
+    if (a->state == AV_STATE_REACQUIRE && !a->search_started && a->sweep_idx > 0)
+        a->metrics.sweep_found++; // caught during a sweep pivot
+    if (driving && start_align(a, now)) return true;
     rejoin_line(a, now);
     return true;
 }
 
+// Centring on the line, then turning along it. If the sensors no longer see
+// the line once aligned, the normal line search takes over.
+static void on_align(av_t *a, uint32_t now) {
+    if (a->align_step == 1) {
+        if (motion_failed(a)) {
+            fail_motion(a, now);
+        } else if (a->hw.motion_done(a->hw.ctx)) {
+            a->align_step = 2;
+            turn_to(a, now, 0); // av_tick() waits for the turn before calling back
+        } else if (time_reached(now, a->deadline)) {
+            a->metrics.motion_timeouts++;
+            fail(a, now, "line align timed out");
+        } else {
+            guard_tripped(a, now);
+        }
+        return;
+    }
+    a->align_step = 0;
+    if (a->hw.line_detected(a->hw.ctx)) {
+        rejoin_line(a, now);
+    } else {
+        start_reacquire(a);
+    }
+}
+
+// ---- Pass leg: watch the obstacle's side (cfg.pass_watch_side) ----
+
+static float travelled_cm(const av_t *a) {
+    return a->hw.motion_travelled_cm != NULL ? a->hw.motion_travelled_cm(a->hw.ctx) : -1.0f;
+}
+
+// Servo angle looking at the obstacle beside the car.
+static int pass_servo(const av_t *a) {
+    int deg = a->cfg.pass_side_deg > 0 ? a->cfg.pass_side_deg : a->cfg.fine_half_range_deg;
+    return servo_toward(a, opposite(a->plan.side), deg);
+}
+
+// Square distance below which the side face counts as beside the car: the
+// fixed pass_beside_cm, or the planned side distance plus the slack.
+static float pass_beside_limit(const av_t *a) {
+    float limit = a->cfg.pass_beside_cm;
+    if (a->cfg.pass_beside_slack_cm > 0.0f) {
+        const obstacle_edge_t *e = a->plan.side == SIDE_RIGHT ? &a->profile.right : &a->profile.left;
+        float toward = a->plan.side == SIDE_RIGHT ? e->pt.x_cm : -e->pt.x_cm;
+        float planned = a->plan.lateral_cm - toward;
+        if (planned + a->cfg.pass_beside_slack_cm > limit) limit = planned + a->cfg.pass_beside_slack_cm;
+    }
+    return limit;
+}
+
+// Mean of the side hits as a point (car frame: x square to the car, y ahead).
+static point2_t pass_hit_point(const av_t *a) {
+    float mean = a->pass_hit_sum_cm / (float)a->pass_hits;
+    return obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)pass_servo(a)), mean);
+}
+
+static void start_pass(av_t *a) {
+    a->pass_phase = a->cfg.pass_watch_side ? 1 : 0;
+    a->pass_seen = false;
+    a->pass_readings = 0;
+    a->pass_hits = 0;
+    a->pass_hit_sum_cm = 0.0f;
+    a->pass_seen_at_cm = -1.0f;
+}
+
+// One reading per call, side mostly, with a forward collision ping after
+// every pass_guard_every side pings. The ray points ahead of square, so it
+// leaves the face before the car is level with the back corner: once it
+// opens up, drive that lead plus pass_clear_margin_cm, then turn back.
+static void pass_watch(av_t *a, uint32_t now) {
+    int every = a->cfg.pass_guard_every;
+    bool forward = every > 0 && a->cfg.emergency_stop_cm > 0.0f &&
+                   a->pass_readings % (every + 1) == every;
+    int angle = forward ? a->cfg.center_deg : pass_servo(a);
+    range_reading_t r;
+    if (take(a, now, angle, &r) != TAKE_READY) return;
+    a->pass_readings++;
+    if (forward) {
+        if (is_blocked(r, a->cfg.emergency_stop_cm)) emergency_stop(a, now, r);
+        return;
+    }
+    if (r.status == RANGE_FAULT) return;
+    emit_point(a, now, angle, r); // side readings show up in the log
+
+    float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : range_effective_cm(r, a->cfg.max_range_cm);
+    point2_t pt = obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)angle), cm);
+    float square = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
+    if (square < pass_beside_limit(a)) {
+        if (!a->pass_seen) a->pass_seen_at_cm = travelled_cm(a);
+        a->pass_seen = true;
+        a->pass_hits++;
+        a->pass_hit_sum_cm += cm;
+        return;
+    }
+    if (!a->pass_seen) {
+        // Car trial 2026-11-10: a shallow box was already behind the car
+        // when the pass started, so the face never showed and the car ran
+        // the full extra distance away from it. Unseen by the planned
+        // length: end there, as the plan without the watch would.
+        float at = travelled_cm(a);
+        if (at >= 0.0f && at >= a->legs[LEG_PASS].cm) {
+            a->hw.motion_stop(a->hw.ctx);
+            a->pass_phase = 0;
+            a->metrics.pass_unseen++;
+            a->leg_active = false;
+            a->leg_idx++;
+        }
+        return; // otherwise not reached the face yet: keep going
+    }
+
+    float at = travelled_cm(a);
+    a->hw.motion_stop(a->hw.ctx);
+    point2_t hit = pass_hit_point(a);
+    a->side_cm = hit.x_cm < 0.0f ? -hit.x_cm : hit.x_cm;
+    // A lower bound: the face may already have been beside the ray when the
+    // leg started.
+    a->depth_cm = (a->pass_seen_at_cm >= 0.0f && at >= a->pass_seen_at_cm)
+                      ? at - a->pass_seen_at_cm : -1.0f;
+    float extra = (hit.y_cm > 0.0f ? hit.y_cm : 0.0f) + a->cfg.pass_clear_margin_cm;
+    a->metrics.pass_clear++;
+    a->pass_phase = 2;
+    a->hw.motion_forward(a->hw.ctx, extra);
+    a->deadline = now + drive_timeout_ms(a, extra);
+    av_event_t e = event_of(AV_EVT_PASS_CLEAR);
+    e.side = a->plan.side;
+    e.side_cm = a->side_cm;
+    e.depth_cm = a->depth_cm;
+    emit(a, now, &e);
+}
+
+// Leaving the pass leg. With return_from_side, the return drive covers the
+// measured sideways offset (edge position + side distance) rather than
+// mirroring the out leg, so drift on the way out is undone.
+static void finish_pass(av_t *a) {
+    if (a->pass_phase == 1) a->metrics.pass_capped++;
+    a->pass_phase = 0;
+    if (!a->cfg.return_from_side || !a->pass_seen || a->pass_hits == 0 ||
+        a->cfg.turn_radius_cm > 0.0f)
+        return;
+    point2_t hit = pass_hit_point(a);
+    a->side_cm = hit.x_cm < 0.0f ? -hit.x_cm : hit.x_cm;
+    const obstacle_edge_t *e = a->plan.side == SIDE_RIGHT ? &a->profile.right : &a->profile.left;
+    float toward = a->plan.side == SIDE_RIGHT ? e->pt.x_cm : -e->pt.x_cm;
+    float lateral = toward + a->side_cm;
+    point2_t unit = obstacle_polar_to_xy((float)a->plan.turn_deg, 1.0f);
+    float sin_turn = -unit.x_cm;
+    if (lateral <= 0.0f || sin_turn <= 0.0f) return;
+    float cm = lateral / sin_turn;
+    float lo = 0.5f * a->plan.out_cm, hi = 1.5f * a->plan.out_cm;
+    a->legs[LEG_RETURN_DRIVE].cm = (cm < lo ? lo : (cm > hi ? hi : cm)) + a->cfg.return_extra_cm;
+}
+
 static void on_bypass(av_t *a, uint32_t now) {
+    if (a->align_step != 0) {
+        on_align(a, now);
+        return;
+    }
     if (a->leg_idx >= LEG_COUNT) {
         start_reacquire(a);
         return;
@@ -795,8 +1064,13 @@ static void on_bypass(av_t *a, uint32_t now) {
     }
 
     if (!a->leg_active) {
-        a->hw.motion_forward(a->hw.ctx, a->legs[i].cm);
-        a->deadline = now + drive_timeout_ms(a, a->legs[i].cm);
+        float cm = a->legs[i].cm;
+        if (i == LEG_PASS) {
+            start_pass(a);
+            if (a->pass_phase == 1) cm += a->cfg.pass_max_extra_cm;
+        }
+        a->hw.motion_forward(a->hw.ctx, cm);
+        a->deadline = now + drive_timeout_ms(a, cm);
         a->leg_active = true;
         return;
     }
@@ -805,6 +1079,7 @@ static void on_bypass(av_t *a, uint32_t now) {
         return;
     }
     if (a->hw.motion_done(a->hw.ctx)) {
+        if (i == LEG_PASS) finish_pass(a);
         a->leg_active = false;
         a->leg_idx++;
         return;
@@ -815,10 +1090,39 @@ static void on_bypass(av_t *a, uint32_t now) {
         return;
     }
     if (rejoin_if_line(a, now)) return;
-    guard_tripped(a, now);
+    if (a->pass_phase == 1) {
+        pass_watch(a, now);
+    } else {
+        guard_tripped(a, now);
+    }
+}
+
+// Car trial 2026-11-10: the arc search carried the car well off course. The
+// line is almost always within a few cm: pivot in place first, toward the
+// far side (where the car was heading) then the other, a step wider each
+// time. A sensor seeing black mid-pivot rejoins at once (av_tick).
+static bool sweep_for_line(av_t *a, uint32_t now) {
+    if (a->sweep_done) return false;
+    if (a->hw.line_detected(a->hw.ctx)) {
+        if (a->sweep_idx > 0) a->metrics.sweep_found++;
+        rejoin_line(a, now);
+        return true;
+    }
+    int n = 2 * (a->cfg.sweep_max_deg / a->cfg.sweep_step_deg);
+    if (a->sweep_idx < n) {
+        int first = side_sign(opposite(a->choice.side)); // + = left
+        int k = a->sweep_idx / 2 + 1;
+        int sign = a->sweep_idx % 2 == 0 ? first : -first;
+        a->sweep_idx++;
+        turn_to(a, now, sign * k * a->cfg.sweep_step_deg);
+        return true;
+    }
+    a->sweep_done = true; // not found: the search below turns back to 0 first
+    return false;
 }
 
 static void on_reacquire(av_t *a, uint32_t now) {
+    if (sweep_for_line(a, now)) return;
     if (!a->search_started) {
         if (turn_to(a, now, 0)) return; // face the line direction before searching
         if (a->hw.line_detected(a->hw.ctx)) { // already over it: no search
@@ -941,6 +1245,8 @@ void av_reset(av_t *a) {
     a->turn_pending = false;
     a->body_settling = false;
     a->leg_active = false;
+    a->align_step = 0;
+    a->pass_phase = 0;
     a->confirm_count = 0;
     a->fault_streak = 0;
     a->off_line = false;

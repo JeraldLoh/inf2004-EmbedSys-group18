@@ -26,6 +26,33 @@ static uint32_t b5_wifi_at;
 #define B5_SERVO_MAX_US 2500U
 #define B5_PENDING_MAX 8U
 #define B5_STATUS_PERIOD_MS 1000U
+/* Crossings shallower than this hand over at once (avoidance.c). The return
+ * leg crosses at the bypass turn, 60..75 deg; the pass leg runs along it. */
+#define B5_LINE_ALIGN_MIN_DEG 20
+#define B5_LINE_ALIGN_CM 13.0f          /* line sensors to wheel axle, measured */
+#define B5_RETURN_EXTRA_CM 8.0f
+#define B5_SWEEP_STEP_DEG 10
+#define B5_SWEEP_MAX_DEG 30
+#define B5_REACQUIRE_TIMEOUT_MS 2000U   /* was 3000 x 3 attempts */
+#define B5_REACQUIRE_ATTEMPTS 2
+#define B5_SEARCH_CURVATURE_U1_M 5000000 /* 5 /m: ~20 cm radius */
+/* Pass leg side watch (avoidance.c). The car centre passes ~15 cm outside
+ * the edge (bypass_side_margin_cm), so a face square to the car under 30 cm
+ * is the obstacle. Rear clearance ~ half the car length plus a margin. One
+ * forward collision ping after every 3 side pings (~1.2 s at 50 mm/s). */
+#define B5_PASS_BESIDE_CM 30.0f
+#define B5_PASS_MAX_EXTRA_CM 40.0f
+#define B5_PASS_CLEAR_MARGIN_CM 8.0f
+#define B5_PASS_GUARD_EVERY 3
+/* Car trial 2026-11-10: side readings were 44-74 cm at 70 deg (41+ cm
+ * square), never under the fixed 30 cm, so the pass never saw the face.
+ * Also count out to the planned side distance + 20 cm, and look closer to
+ * square for a firmer echo. 85 deg (servo 5/175) left the servo stuck at
+ * its end stop; 75 deg (15/165) stays clear of it. */
+#define B5_PASS_BESIDE_SLACK_CM 20.0f
+#define B5_BYPASS_SIDE_MARGIN_CM 10.0f
+#define B5_MIN_CLEARANCE_CM 25.0f
+#define B5_PASS_SIDE_DEG 75
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -210,13 +237,234 @@ static bool cb_line_detected(void *ctx)
     return b5_motion_line_seen(&motion);
 }
 
+static float cb_motion_travelled(void *ctx)
+{
+    int32_t mm;
+    (void)ctx;
+    return b5_motion_travelled_mm(&motion, &mm) ? (float)mm / 10.0f : -1.0f;
+}
+
+/* ---------------------------------------------------------------------------
+ * Per-encounter result line (Week 10 metrics evidence)
+ *
+ * One "[B5 RESULT]" line when an encounter ends, plus running totals, so a
+ * logged run gives detection, width, side choice, rejoin and bypass time
+ * without reading the whole trace. testing/subsystem5/b5_metrics.py turns a
+ * log of these lines into the metrics table.
+ * ------------------------------------------------------------------------- */
+
+static bool enc_profile;   /* this encounter built a profile */
+static bool enc_aligned;   /* the rejoin turned along the line first */
+static bool enc_pass_clear; /* the side sonar ended the pass leg */
+static uint32_t enc_capped0; /* pass_capped at detection */
+static uint32_t enc_unseen0; /* pass_unseen at detection */
+static uint32_t rejoined_count;
+static uint32_t cleared_count;
+static uint32_t aborted_count;
+
+static int cm_to_mm(float cm)
+{
+    return (int)(cm * 10.0f + ((cm < 0.0f) ? -0.5f : 0.5f));
+}
+
+static const char *edges_name(const obstacle_profile_t *p)
+{
+    if (p->left.found && p->right.found) { return "both"; }
+    if (p->left.found) { return "left_only"; }
+    if (p->right.found) { return "right_only"; }
+    return "none";
+}
+
+static void print_result(const char *outcome, uint32_t ms, const char *reason)
+{
+    const av_metrics_t *m = av_metrics(&av);
+    const obstacle_profile_t *p = av_profile(&av);
+
+    tm_printf((UB*)"[B5 RESULT] n=%lu outcome=%s ms=%lu scan_ms=%lu",
+        (unsigned long)m->detections, outcome, (unsigned long)ms,
+        (unsigned long)(enc_profile ? m->last_scan_ms : 0U));
+    if (enc_profile && (p != NULL))
+    {
+        tm_printf((UB*)" ahead_mm=%d width_mm=%d edges=%s centre_x_mm=%d",
+            cm_to_mm(p->distance_cm), cm_to_mm(p->width_cm), edges_name(p),
+            cm_to_mm(p->center.x_cm));
+        tm_printf((UB*)" side=%s lclear_mm=%d rclear_mm=%d",
+            side_name(av.choice.side), cm_to_mm(av.choice.left_clear_cm),
+            cm_to_mm(av.choice.right_clear_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=-");
+    }
+    tm_printf((UB*)" aligned=%d backoffs=%d reverses=%d reacq=%d",
+        enc_aligned ? 1 : 0, av.backoffs, av.reverses, av.reacquire_attempts);
+    tm_printf((UB*)" pass=%s side_mm=", !av.cfg.pass_watch_side ? "off" :
+        (enc_pass_clear ? "clear" : ((m->pass_capped != enc_capped0) ? "cap" :
+        ((m->pass_unseen != enc_unseen0) ? "unseen" : "-"))));
+    if (enc_pass_clear) { tm_printf((UB*)"%d", cm_to_mm(av.side_cm)); }
+    else { tm_printf((UB*)"-"); }
+    if (enc_pass_clear && (av.depth_cm >= 0.0f))
+    {
+        tm_printf((UB*)" depth_mm=%d", cm_to_mm(av.depth_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" depth_mm=-");
+    }
+    tm_printf((UB*)" reason=\"%s\"\n", (reason != NULL) ? reason : "");
+    tm_printf((UB*)"[B5 TOTALS] detections=%lu rejoined=%lu cleared=%lu failed=%lu aborted=%lu left=%lu right=%lu estops=%lu\n",
+        (unsigned long)m->detections, (unsigned long)rejoined_count,
+        (unsigned long)cleared_count, (unsigned long)m->failures,
+        (unsigned long)aborted_count, (unsigned long)m->bypass_left,
+        (unsigned long)m->bypass_right, (unsigned long)m->emergency_stops);
+}
+
+static void result_on_event(const av_event_t *e)
+{
+    switch (e->type)
+    {
+        case AV_EVT_OBSTACLE_DETECTED:
+            enc_profile = false;
+            enc_aligned = false;
+            enc_pass_clear = false;
+            enc_capped0 = av_metrics(&av)->pass_capped;
+            enc_unseen0 = av_metrics(&av)->pass_unseen;
+            break;
+        case AV_EVT_PASS_CLEAR:
+            enc_pass_clear = true;
+            break;
+        case AV_EVT_PROFILE_READY:
+            enc_profile = true;
+            break;
+        case AV_EVT_LINE_ALIGN:
+            enc_aligned = true;
+            break;
+        case AV_EVT_LINE_REACQUIRED:
+            rejoined_count++;
+            print_result("REJOINED", e->duration_ms, NULL);
+            break;
+        case AV_EVT_OBSTACLE_CLEARED:
+            if (!av.off_line)   /* off the line it goes on to the line search */
+            {
+                cleared_count++;
+                print_result("CLEARED", e->time_ms - av.t_detect, e->reason);
+            }
+            break;
+        case AV_EVT_FAILED:
+            print_result("FAILED", e->time_ms - av.t_detect, e->reason);
+            break;
+        default:
+            break;
+    }
+}
+
+#if APP_CAR_MQTT
+/* ---------------------------------------------------------------------------
+ * Section 5 profile / decision / plan (docs/protocol/BINARY_TELEMETRY.md)
+ *
+ * Each group is marked valid only if every value fits its field; nothing is
+ * clamped except free range, which saturates at the sonar's 400 cm no-echo
+ * value. Cleared when a new encounter starts or avoidance is reset.
+ * ------------------------------------------------------------------------- */
+
+static bool fits(float v, float lo, float hi)
+{
+    return isfinite(v) && (v >= lo) && (v <= hi);
+}
+
+static void wifi_profile(const obstacle_profile_t *p)
+{
+    const float lo = -6553.6f, hi = 6553.5f;   /* 17-bit signed mm, in cm */
+    b5_wifi.profile_valid = 0U;
+    if ((p == NULL) || !fits(p->distance_cm, 0.0f, 6553.5f) ||
+        !fits(p->width_cm, 0.0f, 6553.5f) ||
+        !fits(p->center.x_cm, lo, hi) || !fits(p->center.y_cm, lo, hi) ||
+        !fits(p->left.angle_deg, -512.0f, 511.5f) || !fits(p->left.pt.x_cm, lo, hi) ||
+        !fits(p->left.pt.y_cm, lo, hi) ||
+        !fits(p->right.angle_deg, -512.0f, 511.5f) || !fits(p->right.pt.x_cm, lo, hi) ||
+        !fits(p->right.pt.y_cm, lo, hi))
+    {
+        return;
+    }
+    b5_wifi.ahead_mm = (uint32_t)cm_to_mm(p->distance_cm);
+    b5_wifi.width_mm = (uint32_t)cm_to_mm(p->width_cm);
+    b5_wifi.centre_x_mm = cm_to_mm(p->center.x_cm);
+    b5_wifi.centre_y_mm = cm_to_mm(p->center.y_cm);
+    b5_wifi.left_found = p->left.found ? 1U : 0U;
+    b5_wifi.left_angle_halfdeg = (int32_t)(p->left.angle_deg * 2.0f +
+        ((p->left.angle_deg < 0.0f) ? -0.5f : 0.5f));
+    b5_wifi.left_x_mm = cm_to_mm(p->left.pt.x_cm);
+    b5_wifi.left_y_mm = cm_to_mm(p->left.pt.y_cm);
+    b5_wifi.right_found = p->right.found ? 1U : 0U;
+    b5_wifi.right_angle_halfdeg = (int32_t)(p->right.angle_deg * 2.0f +
+        ((p->right.angle_deg < 0.0f) ? -0.5f : 0.5f));
+    b5_wifi.right_x_mm = cm_to_mm(p->right.pt.x_cm);
+    b5_wifi.right_y_mm = cm_to_mm(p->right.pt.y_cm);
+    b5_wifi.profile_valid = 1U;
+}
+
+static uint32_t room_mm(float cm)
+{
+    if (!isfinite(cm) || (cm <= 0.0f)) { return 0U; }
+    return (cm >= 400.0f) ? 4000U : (uint32_t)cm_to_mm(cm);
+}
+
+static void wifi_plan(const bypass_plan_t *plan)
+{
+    b5_wifi.plan_valid = 0U;
+    if ((plan == NULL) || (plan->turn_deg < 1) || (plan->turn_deg > 89) ||
+        !fits(plan->out_cm, 0.0f, 6553.5f) || !fits(plan->pass_cm, 0.0f, 6553.5f) ||
+        !fits(plan->lateral_cm, 0.0f, 6553.5f))
+    {
+        return;
+    }
+    b5_wifi.turn_deg = (uint32_t)plan->turn_deg;
+    b5_wifi.diagonal_mm = (uint32_t)cm_to_mm(plan->out_cm);
+    b5_wifi.alongside_mm = (uint32_t)cm_to_mm(plan->pass_cm);
+    b5_wifi.offset_mm = (uint32_t)cm_to_mm(plan->lateral_cm);
+    b5_wifi.plan_valid = 1U;
+}
+
+/* Where the encounter is, every snapshot. Fields whose range is narrower
+ * than the current config (fine_offset_deg is 0..10) are left at 0. */
+static void wifi_progress(void)
+{
+    b5_wifi.leg = (av_state(&av) == AV_STATE_BYPASS) ? (uint32_t)av.leg_idx : 0U;
+    b5_wifi.leg_active = av.leg_active ? 1U : 0U;
+    b5_wifi.rescans = (av.rescans <= 3) ? (uint32_t)av.rescans : 3U;
+    b5_wifi.reverses = (av.reverses <= 3) ? (uint32_t)av.reverses : 3U;
+    b5_wifi.reacquire_attempts = (av.reacquire_attempts <= 3) ?
+        (uint32_t)av.reacquire_attempts : 3U;
+    b5_wifi.coarse_index = (av.coarse_idx <= 7) ? (uint32_t)av.coarse_idx : 7U;
+    b5_wifi.turn_magnitude_deg = ((av.turn_mag >= 0) && (av.turn_mag <= 70)) ?
+        (uint32_t)av.turn_mag : 0U;
+    b5_wifi.refining = av.refining ? 1U : 0U;
+}
+
+static void wifi_clear_encounter(void)
+{
+    b5_wifi.decision_valid = 0U;
+    b5_wifi.profile_valid = 0U;
+    b5_wifi.plan_valid = 0U;
+}
+#endif
+
 static void cb_on_event(void *ctx, const av_event_t *e)
 {
     (void)ctx;
 #if APP_CAR_MQTT
     if(e->type==AV_EVT_OBSTACLE_DETECTED){++b5_wifi.encounter;b5_wifi.decision_valid=0;}
     if(e->type==AV_EVT_DECISION){b5_wifi.decision_valid=1;b5_wifi.side=e->side;}
+    if (e->type == AV_EVT_OBSTACLE_DETECTED) { wifi_clear_encounter(); }
+    if (e->type == AV_EVT_PROFILE_READY) { wifi_profile(e->profile); }
+    if ((e->type == AV_EVT_DECISION) && (e->choice != NULL))
+    {
+        b5_wifi.left_room_mm = room_mm(e->choice->left_clear_cm);
+        b5_wifi.right_room_mm = room_mm(e->choice->right_clear_cm);
+    }
+    if (e->type == AV_EVT_BYPASS_START) { wifi_plan(e->plan); }
 #endif
+    result_on_event(e);
     switch (e->type)
     {
         case AV_EVT_OBSTACLE_DETECTED:
@@ -235,6 +483,26 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             break;
         case AV_EVT_EMERGENCY_STOP:
             tm_printf((UB*)"[B5] emergency stop\n");
+            break;
+        case AV_EVT_LINE_ALIGN:
+            tm_printf((UB*)"[B5] line crossed at %d deg: centring, then turning along it\n",
+                e->heading_deg);
+            break;
+        case AV_EVT_SCAN_POINT:
+            if (av_state(&av) == AV_STATE_BYPASS)   /* the pass-leg side watch */
+            {
+                tm_printf((UB*)"[B5] side servo=%d dist=%d cm (status %d)\n",
+                    e->point.angle_deg, (int)e->point.reading.cm,
+                    (int)e->point.reading.status);
+            }
+            break;
+        case AV_EVT_SIDE_BLOCKED:
+            tm_printf((UB*)"[B5] %s blocked: %d cm at servo %d is inside the bypass strip\n",
+                side_name(e->side), (int)e->point.reading.cm, e->point.angle_deg);
+            break;
+        case AV_EVT_PASS_CLEAR:
+            tm_printf((UB*)"[B5] passed the back corner: side %d mm, depth %d mm (-10 = unknown)\n",
+                cm_to_mm(e->side_cm), (e->depth_cm >= 0.0f) ? cm_to_mm(e->depth_cm) : -10);
             break;
         case AV_EVT_FAILED:
             tm_printf((UB*)"[B5] FAILED: %s\n", e->reason);
@@ -370,9 +638,19 @@ static void subsystem5_task(INT stacd, void *exinf)
         now_armed = avoidance_armed(armed);
         if (!now_armed && armed)
         {
+            if ((av_state(&av) != AV_STATE_MONITOR) && (av_state(&av) != AV_STATE_FAILED))
+            {
+                /* Run stopped mid-encounter: count it, so detections add up. */
+                aborted_count++;
+                print_result("ABORTED", cb_now_ms(NULL) - av.t_detect, "AUTO ended");
+            }
             av_reset(&av);              /* back to MONITOR for the next run */
+            /* A run can stop with the servo turned fully aside (side watch):
+             * bring it back to centre rather than leaving it at the stop. */
+            cb_servo_set(NULL, av.cfg.center_deg);
 #if APP_CAR_MQTT
             b5_wifi.front_status=4;b5_wifi.last_status=4;b5_wifi.decision_valid=0;
+            wifi_clear_encounter();
 #endif
             b5_bridge_init(&bridge);
         }
@@ -406,7 +684,9 @@ static void subsystem5_task(INT stacd, void *exinf)
                 b5_wifi.profiles_complete=m->profiles_complete;b5_wifi.profiles_partial=m->profiles_partial;
                 b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
                 b5_wifi.max_encounter_ms=m->max_encounter_ms;
-                /* No event stream/profile/plan API is exported by this hookup. */
+                wifi_progress();
+                /* Profile, decision and plan are filled from the avoidance
+                 * events (cb_on_event); no event stream is exported. */
                 const bool bypass=av_state(&av)==AV_STATE_BYPASS;
                 b1_live_bypass live={.at_ms=at,.fast=0,.active=bypass,
                     .backing_off=av_state(&av)==AV_STATE_REVERSE && av.backing_off,.segment=bypass?(uint32_t)av.leg_idx:0,
@@ -454,8 +734,10 @@ EXPORT ER subsystem5_init(void)
         cb_motion_turn, cb_motion_forward, cb_motion_reverse,
         cb_motion_search_line, cb_motion_resume, cb_motion_done,
         cb_motion_failed, cb_line_detected, cb_on_event,
+        cb_motion_travelled,
     };
     T_CTSK ctsk = {0};
+    b5_motion_config_t motion_cfg;
     ER er;
     ID id;
 
@@ -469,6 +751,45 @@ EXPORT ER subsystem5_init(void)
     }
 
     av_config_default(&cfg); /* servo 20/90/160: free mount, see avoidance.c */
+    if (has_motion())
+    {
+        /* Rejoin: centre the turning point on the line and turn along it
+         * before handing over (avoidance.c line_align_cm): the line sensors
+         * to wheel axle distance, measured 13 cm on the car (2026-11-10).
+         * The controller's junction approach_mm is its own setting. */
+        cfg.line_align_cm = B5_LINE_ALIGN_CM;
+        cfg.line_align_min_deg = B5_LINE_ALIGN_MIN_DEG;
+        /* Finding the line again (car trial 2026-11-10: the arc search ran
+         * off course): drive a little past the expected crossing, then pivot
+         * in place +/-10..30 deg before a smaller, shorter arc search. */
+        cfg.return_extra_cm = B5_RETURN_EXTRA_CM;
+        cfg.sweep_step_deg = B5_SWEEP_STEP_DEG;
+        cfg.sweep_max_deg = B5_SWEEP_MAX_DEG;
+        cfg.reacquire_timeout_ms = B5_REACQUIRE_TIMEOUT_MS;
+        cfg.max_reacquire_attempts = B5_REACQUIRE_ATTEMPTS;
+        /* Pass leg ends once the side sonar sees the back corner go by;
+         * the return drive covers the measured sideways offset. */
+        cfg.pass_watch_side = true;
+        cfg.pass_beside_cm = B5_PASS_BESIDE_CM;
+        cfg.pass_max_extra_cm = B5_PASS_MAX_EXTRA_CM;
+        cfg.pass_clear_margin_cm = B5_PASS_CLEAR_MARGIN_CM;
+        cfg.pass_guard_every = B5_PASS_GUARD_EVERY;
+        cfg.pass_beside_slack_cm = B5_PASS_BESIDE_SLACK_CM;
+        cfg.pass_side_deg = B5_PASS_SIDE_DEG;
+        /* Car trial 2026-11-10: chose left through a gap with a blocker
+         * 19 cm out at 160 deg. Any coarse reading beyond the edge closer
+         * sideways than edge + 15 cm margin + 10 cm blocks that side. */
+        cfg.strip_extra_cm = 10.0f;
+        /* Car trial 2026-11-10: the pass ran 20 cm from the face and the
+         * car came back across the line too far out to hold it. Car centre
+         * passes the edge by 10 cm (half the ~14 cm car + 3 cm), not 15. */
+        cfg.bypass_side_margin_cm = B5_BYPASS_SIDE_MARGIN_CM;
+        /* Car trial 2026-11-10: 20 and 30 cm free past the right edge were
+         * refused (35 needed), so it found no side twice. Passing 10 cm out,
+         * 25 cm free past the edge is room enough. */
+        cfg.min_clearance_cm = B5_MIN_CLEARANCE_CM;
+        cfg.return_from_side = true;
+    }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);
     if (er != E_OK)
@@ -490,7 +811,11 @@ EXPORT ER subsystem5_init(void)
         return E_PAR;
     }
     b5_bridge_init(&bridge);
-    b5_motion_init(&motion, &bindings.motion, NULL);
+    b5_motion_default_config(&motion_cfg);
+    /* Last-resort arc search: ~20 cm radius instead of ~33, so it stays
+     * near where the line should be. */
+    motion_cfg.search_curvature_u1_m = B5_SEARCH_CURVATURE_U1_M;
+    b5_motion_init(&motion, &bindings.motion, &motion_cfg);
 
     /* Core 0, the same core that services the GPIO interrupt writing the
      * echo timestamps this task reads. */

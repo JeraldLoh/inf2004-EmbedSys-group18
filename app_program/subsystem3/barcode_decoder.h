@@ -28,6 +28,11 @@ typedef struct
     route_command_t command;
     char character;
     bool reversed;   /* last read was crossed in the opposite direction */
+    /* Diagnostics: the runs of the last capture that did NOT decode. Kept
+     * across reset; the caller prints them and clears fail_pending. */
+    bool fail_pending;
+    uint8_t fail_count;
+    uint32_t fail_run_us[BARCODE_DECODER_MAX_RUNS];
 } barcode_decoder_t;
 
 void barcode_decoder_reset(barcode_decoder_t *decoder);

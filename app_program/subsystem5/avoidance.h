@@ -51,13 +51,16 @@ typedef enum {
     AV_EVT_REACQUIRE_START,
     AV_EVT_LINE_REACQUIRED,
     AV_EVT_FAILED,
+    AV_EVT_LINE_ALIGN,     // line crossed on a drive leg: centring on it, then turning along it
+    AV_EVT_PASS_CLEAR,     // side sonar saw the obstacle's back corner go by on the pass leg
+    AV_EVT_SIDE_BLOCKED,   // a reading beyond that edge lies in the bypass strip (point, side)
 } av_event_type_t;
 
 typedef struct {
     av_event_type_t type;
     uint32_t time_ms;
     scan_point_t point;                // DETECTED, SCAN_POINT, EMERGENCY_STOP (servo angle)
-    int heading_deg;                   // SCAN_POINT: car heading vs line direction, + = left
+    int heading_deg;                   // SCAN_POINT, LINE_ALIGN: car heading vs line direction, + = left
     float direction_deg;               // SCAN_POINT: heading + servo, vs scan start, + = left
     side_t side;                       // DECISION, BYPASS_START, REACQUIRE_START
     int attempt;                       // RESCAN, REVERSING, REACQUIRE_START
@@ -66,6 +69,8 @@ typedef struct {
     const bypass_plan_t *plan;         // BYPASS_START
     uint32_t duration_ms;              // LINE_REACQUIRED: detection -> back on line
     const char *reason;                // FAILED, OBSTACLE_CLEARED
+    float side_cm;                     // PASS_CLEAR: car centre to the obstacle's side face
+    float depth_cm;                    // PASS_CLEAR: obstacle depth along the pass; < 0 unknown
 } av_event_t;
 
 // Integration surface. Everything except on_event is required.
@@ -95,6 +100,10 @@ typedef struct {
 
     // Optional: telemetry / logging hook (Buddy 1).
     void (*on_event)(void *ctx, const av_event_t *event);
+
+    // Optional: distance covered so far by the current forward/reverse
+    // command, from wheel odometry; < 0 when unknown. NULL: depth unknown.
+    float (*motion_travelled_cm)(void *ctx);
 } av_platform_t;
 
 typedef struct {
@@ -138,6 +147,47 @@ typedef struct {
     uint32_t reacquire_timeout_ms; // per search attempt
     int max_reacquire_attempts;
     int max_consecutive_faults;
+
+    // Line seen on a drive leg past the obstacle: drive this far (line
+    // sensors to the turning centre) so the car turns about the line, then
+    // pivot to the line direction before handing over. 0 hands over at once,
+    // at the crossing angle.
+    float line_align_cm;
+    int line_align_min_deg; // shallower crossings hand over at once
+
+    // Pass leg watches the obstacle's side with the servo turned fully toward
+    // it: the leg may run up to pass_max_extra_cm longer, and ends once the
+    // side opens up (the back corner went by) plus pass_clear_margin_cm.
+    // Off: the fixed pass leg, as planned from the front scan.
+    bool pass_watch_side;
+    float pass_beside_cm;       // side face closer than this (square to the car) = still beside
+    float pass_max_extra_cm;
+    float pass_clear_margin_cm; // rear of the car past the corner before turning back
+    int pass_guard_every;       // a forward collision ping after this many side pings; 0 = none
+    // "Beside" also counts out to the planned side distance plus this, so a
+    // car that drifted out still sees the face. 0: pass_beside_cm only.
+    float pass_beside_slack_cm;
+    // Servo offset from centre for the side watch; square to the face echoes
+    // best. 0: fine_half_range_deg. Must stay within the servo's 0..180.
+    int pass_side_deg;
+
+    // Before choosing a side, every coarse reading beyond that edge is
+    // checked: one closer sideways than the edge + bypass_side_margin_cm +
+    // this lies in the strip the bypass drives through, so that side is
+    // blocked. 0: only the single reading just past the edge counts.
+    float strip_extra_cm;
+
+    // Return drive runs this much past where the line should be crossed, so
+    // a slightly short plan still crosses it; unseen by then, it stops there.
+    float return_extra_cm;
+    // Line not seen once back on the line heading: pivot in place to +/-
+    // step, 2 step, ... up to max (toward the far side first) and take the
+    // line as soon as it shows, before any arc search. 0 = no sweep.
+    int sweep_step_deg;
+    int sweep_max_deg;
+    // Return drive sized from the measured side distance instead of
+    // mirroring the out leg (pivot turns only; within 0.5..1.5 x out leg).
+    bool return_from_side;
 } av_config_t;
 
 typedef struct {
@@ -162,6 +212,10 @@ typedef struct {
     uint32_t last_encounter_ms; // detection -> back on line
     uint32_t max_encounter_ms;
     uint64_t total_encounter_ms;
+    uint32_t pass_clear;  // pass leg ended by the side sonar
+    uint32_t pass_capped; // pass leg ran to its cap without seeing the side open
+    uint32_t pass_unseen; // face never seen by the planned length: ended there
+    uint32_t sweep_found; // line found by the in-place sweep
 } av_metrics_t;
 
 // Treat as opaque; defined here only so callers can allocate it statically.
@@ -221,6 +275,24 @@ typedef struct {
     bool leg_active;
     bool reverse_issued;
     bool search_started;
+    int align_step; // 0 none, 1 driving onto the line, 2 turning along it
+    int sweep_idx;   // next sweep heading; done once past the last
+    bool sweep_done;
+    int pass_phase; // 0 off, 1 watching the side, 2 driving past the corner
+    bool pass_seen;       // side face seen at least once this pass
+    int pass_readings;
+    int pass_hits;
+    float pass_hit_sum_cm; // radial side readings that hit, for their mean
+    float pass_seen_at_cm; // odometry at the first hit; < 0 unknown
+    float side_cm;         // measured car centre to side face; valid if pass_seen
+    float depth_cm;        // obstacle depth along the pass; < 0 unknown
+    // Last real obstacle depth/direction this encounter, and how far the car
+    // has backed off since: a rescan after a back-off that no longer sees a
+    // narrow obstacle plans from this instead of calling it gone.
+    bool have_prev;
+    float prev_ahead_cm;
+    int prev_base;
+    float prev_backed_cm;
 
     bool off_line;
     int rescans;

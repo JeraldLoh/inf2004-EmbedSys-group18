@@ -114,6 +114,8 @@ static void start_goal(b5_motion_t *motion, motion_goal_type_t type,
     motion->goal.max_speed_mm_s = motion->config.goal_speed_mm_s;
     motion->goal.timeout_ms = motion->config.goal_timeout_ms;
     motion->deadline_ms = now_ms + motion->config.wait_ms;
+    motion->travelled_mm = 0;
+    motion->travelled_valid = false;
     motion->state = B5_MOVE_PENDING;
 }
 
@@ -215,6 +217,11 @@ static void service_goal(b5_motion_t *motion)
         motion->last_result = MOTION_RESULT_FAULT;   /* executor lost it */
         motion->state = B5_MOVE_FAILED;
         return;
+    }
+    if (result.odometry_valid)
+    {
+        motion->travelled_mm = result.travelled_mm;
+        motion->travelled_valid = true;
     }
     if ((result.code == MOTION_RESULT_PROGRESS) ||
         (result.code == MOTION_RESULT_ACCEPTED))
@@ -332,4 +339,14 @@ bool b5_motion_line_seen(const b5_motion_t *motion)
 {
     return (motion != NULL) && (motion->ops.line_seen != NULL) &&
         motion->ops.line_seen();
+}
+
+bool b5_motion_travelled_mm(const b5_motion_t *motion, int32_t *mm)
+{
+    if ((motion == NULL) || (mm == NULL) || !motion->travelled_valid)
+    {
+        return false;
+    }
+    *mm = motion->travelled_mm;
+    return true;
 }

@@ -14,8 +14,9 @@ IMPORT line_status_t subsystem3_line_status(void);
 
 /* Steering proposal for Buddy 2: -100 (full left) .. 0 .. +100 (full right).
  * It grows the longer the car stays off centre and briefly counter-steers
- * after a correction to stop zig-zagging. */
-IMPORT int8_t subsystem3_steer(void);
+ * after a correction to stop zig-zagging. If analogue is supplied, return
+ * whether this same steering sample came from the analogue PID. */
+IMPORT int8_t subsystem3_steer(bool *analogue);
 
 /* Take the newest decoded barcode / junction. Each returns true once per event. */
 IMPORT BOOL subsystem3_take_route(route_instruction_t *route);

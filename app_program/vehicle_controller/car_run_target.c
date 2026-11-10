@@ -250,9 +250,10 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
     line->steer = 0;
     line->barcode_active = false;
     line->on_line = true;
+    line->analogue_steering = false;
     return true;
 #endif
-    line->steer = subsystem3_steer();
+    line->steer = subsystem3_steer(&line->analogue_steering);
     line->barcode_active = status.barcode_active != 0U;
     line->on_line = (status.left_black != 0U) || (status.right_black != 0U);
     return true;
@@ -479,13 +480,14 @@ static void print_status(bool running)
     {
         return;
     }
-    tm_printf((UB*)"[CAR] run=%d mode=%d mission=%d stops=0x%lx steer=%d | "
+    tm_printf((UB*)"[CAR] run=%d mode=%d mission=%d stops=0x%lx steer=%d source=%s | "
         "line_black L=%d R=%d state=%d last_side=%d | "
         "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
         "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | search=%d n=%lu fail=%lu\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
-        (int)c.last_steer, (int)line.left_black, (int)line.right_black,
+        (int)c.last_steer, c.last_analogue_steering ? "analogue" : "digital",
+        (int)line.left_black, (int)line.right_black,
         (int)line.state, (int)line.last_side, (int)t.left_effort, (int)t.right_effort,
         (long)t.left_mm_s, (long)t.right_mm_s, (unsigned long)c.drive_requests,
         (unsigned long)c.drive_rejected, (unsigned long)t.rejected,
