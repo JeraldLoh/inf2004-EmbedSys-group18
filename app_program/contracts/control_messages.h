@@ -13,6 +13,7 @@ typedef struct
     uint32_t speed_cap_mm_s;
     system_time_ms_t created_ms;
     system_time_ms_t expires_ms;
+    bool analogue_steering;  /* LINE: curvature comes from the analogue PID */
 } motion_continuous_request_t;
 
 typedef struct

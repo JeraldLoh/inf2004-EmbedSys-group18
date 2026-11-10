@@ -152,7 +152,9 @@ add_executable(test_car_trial_line_pid test_car_trial.c
 target_compile_definitions(test_car_trial_line_pid PRIVATE APP_CAR_B2_TRIAL=1 APP_S3_LINE_PID=1)
 target_link_libraries(test_car_trial_line_pid PRIVATE b2_fake)
 add_test(NAME b2_integrated_trial_pid_steering COMMAND test_car_trial_line_pid bend_speed)
-foreach(case IN ITEMS bend_speed normal bounds line goal goal_obstacle deadline stop unlimited pivot_cap forward_cap sync sync_far pivot_sync pivot_sync_far straight_hold)
+add_test(NAME b2_integrated_trial_pid_digital_fallback COMMAND test_car_trial_line_pid digital_straight)
+add_test(NAME b2_integrated_trial_pid_steering_switch COMMAND test_car_trial_line_pid steering_switch)
+foreach(case IN ITEMS bend_speed digital_straight normal bounds line goal goal_obstacle deadline stop unlimited pivot_cap forward_cap sync sync_far pivot_sync pivot_sync_far straight_hold)
     add_test(NAME b2_integrated_trial_${case} COMMAND test_car_trial ${case})
 endforeach()
 add_executable(test_integrated_trial_startup test_car_startup.c

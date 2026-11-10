@@ -744,7 +744,7 @@ static void search_start(controller_service_t *service,
 static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
 {
     const vehicle_controller_t *controller = &service->controller;
-    controller_line_input_t line = {0, false, false};
+    controller_line_input_t line = {0};
     motion_goal_result_t result = {0};
 
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
@@ -786,7 +786,7 @@ void controller_service_tick(
     system_time_ms_t now_ms)
 {
     const vehicle_controller_t *controller;
-    controller_line_input_t line = {0, false, false};
+    controller_line_input_t line = {0};
     motion_continuous_request_t request;
     uint32_t speed;
 
@@ -843,10 +843,12 @@ void controller_service_tick(
     /* Buddy 3: steer > 0 = turn right. Curvature > 0 = turn left. */
     request.curvature_u1_m = -(int32_t)line.steer *
         service->line.curvature_per_steer_u1_m;
+    request.analogue_steering = line.analogue_steering;
     request.created_ms = now_ms;
     request.expires_ms = now_ms + service->line.request_life_ms;
 
     service->status.last_steer = line.steer;
+    service->status.last_analogue_steering = line.analogue_steering;
     if (service->outputs.drive(service->outputs.context, &request))
     {
         service->status.drive_requests++;
