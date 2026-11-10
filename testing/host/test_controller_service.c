@@ -272,6 +272,7 @@ static void test_tick_turns_steering_into_requests(void)
 
     start_car(&service, &car);
     car.line.steer = 40;   /* Buddy 3: turn right */
+    car.line.analogue_steering = true;
     controller_service_tick(&service, 1000U);
     assert(car.drives == 1 && service.status.drive_requests == 1U);
     assert(car.last.source == MOTION_SOURCE_LINE);
@@ -281,12 +282,15 @@ static void test_tick_turns_steering_into_requests(void)
     assert(car.last.created_ms == 1000U);
     assert(car.last.expires_ms == 1000U + service.line.request_life_ms);
     assert(service.status.last_steer == 40);
+    assert(car.last.analogue_steering && service.status.last_analogue_steering);
 
     /* Command ids advance; a barcode read slows the car. */
     car.line.barcode_active = true;
+    car.line.analogue_steering = false;
     controller_service_tick(&service, 1010U);
     assert(car.last.command_id == 2U);
     assert(car.last.speed_mm_s == (int32_t)service.line.slow_mm_s);
+    assert(!car.last.analogue_steering && !service.status.last_analogue_steering);
 
     car.reject = true;
     controller_service_tick(&service, 1020U);

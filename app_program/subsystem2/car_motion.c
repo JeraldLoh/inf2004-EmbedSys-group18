@@ -96,9 +96,7 @@ bool car_motion_continuous(car_motion_t *m,
     motion_status_t status;
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
     bool carrying_bend = false;
-#if !defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID
     int32_t fresh_bend = 0;
-#endif
 #endif
     if (m == NULL || r == NULL) { return false; }
     life = r->expires_ms-r->created_ms;
@@ -112,39 +110,33 @@ bool car_motion_continuous(car_motion_t *m,
     converted = *r;
     curvature = -(int64_t)r->curvature_u1_m;
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-#if !defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID
-    /* A PID steering value near +/-20 is a real correction. In that
-     * build, preserve it rather than applying the digital hold heuristic. */
-    if (r->source == MOTION_SOURCE_LINE && r->speed_mm_s > 0)
+    /* A small analogue PID command is a real correction, unlike a digital
+     * hold. Shape digital fallback even when the analogue PID is compiled in. */
+    if (r->source == MOTION_SOURCE_LINE && !r->analogue_steering && r->speed_mm_s > 0)
     {
         int64_t raw_curvature = curvature;
         uint32_t age = ms - m->last_bend_ms;
         fresh_bend = b2_line_shape_curvature(raw_curvature);
-        if (raw_curvature > B2_LINE_HOLD_DEADBAND_U1_M &&
-            fresh_bend < B2_LINE_MIN_DETECTED_CURVATURE_U1_M)
-        { fresh_bend = B2_LINE_MIN_DETECTED_CURVATURE_U1_M; }
-        else if (raw_curvature < -B2_LINE_HOLD_DEADBAND_U1_M &&
-            fresh_bend > -B2_LINE_MIN_DETECTED_CURVATURE_U1_M)
-        { fresh_bend = -B2_LINE_MIN_DETECTED_CURVATURE_U1_M; }
         curvature = fresh_bend;
-        /* Buddy3's same-side hold can bridge a brief both-white gap.
-         * It must never refresh the age of the last strong correction. */
+        /* End a small correction when both sensors clear. A developed bend
+         * can bridge a short gap measured from the last direct sighting. */
         if (age < B2_LINE_BEND_CARRY_MS &&
             m->executor.status.state == MOTION_EXEC_CONTINUOUS &&
             m->executor.status.generation == r->authority_generation &&
             m->executor.continuous.source == MOTION_SOURCE_LINE &&
             (int32_t)(m->executor.continuous_until_us - us) > 0 &&
-            ((raw_curvature == B2_LINE_HOLD_DEADBAND_U1_M && m->last_bend_curvature > 0) ||
-             (raw_curvature == -B2_LINE_HOLD_DEADBAND_U1_M && m->last_bend_curvature < 0)))
+            ((raw_curvature == B2_LINE_HOLD_DEADBAND_U1_M &&
+              m->last_bend_curvature >= B2_LINE_MIN_CARRY_CURVATURE_U1_M) ||
+             (raw_curvature == -B2_LINE_HOLD_DEADBAND_U1_M &&
+              m->last_bend_curvature <= -B2_LINE_MIN_CARRY_CURVATURE_U1_M)))
         {
             curvature = (int64_t)m->last_bend_curvature * (B2_LINE_BEND_CARRY_MS - age) /
                 (2U * B2_LINE_BEND_CARRY_MS);
             carrying_bend = true;
         }
     }
-    else if (r->source == MOTION_SOURCE_LINE)
+    else if (r->source == MOTION_SOURCE_LINE && !r->analogue_steering)
     { curvature = b2_line_shape_curvature(curvature); }
-#endif
 #endif
     /* Nearest whole 1/m, symmetric rounding; INT32_MIN handled in int64. */
     converted.curvature_u1_m = (int32_t)((curvature + (curvature < 0 ? -500000 : 500000))/1000000);
@@ -185,7 +177,7 @@ bool car_motion_continuous(car_motion_t *m,
         (r->expires_ms-ms)*1000U);
     if (status != MOTION_OK)
     { return car_motion_record_rejection(m,CAR_REJECT_EXECUTOR,status,r->source,r->command_id,r->authority_generation); }
-#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL && (!defined(APP_S3_LINE_PID) || !APP_S3_LINE_PID)
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
     if (!carrying_bend)
     {
         m->last_bend_curvature = fresh_bend;

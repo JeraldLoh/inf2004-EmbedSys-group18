@@ -61,6 +61,7 @@ typedef struct
     int8_t steer;          /* -100 (full left) .. +100 (full right) */
     bool barcode_active;   /* a barcode is being read: hold a steady speed */
     bool on_line;          /* either sensor sees black (line search) */
+    bool analogue_steering;
 } controller_line_input_t;
 
 typedef struct
@@ -149,6 +150,7 @@ typedef struct
     uint32_t drive_requests;    /* line-tracking requests accepted by Buddy 2 */
     uint32_t drive_rejected;
     int8_t last_steer;
+    bool last_analogue_steering;
     controller_junction_phase_t junction_phase;
     uint32_t junctions_seen;      /* passed to the vehicle controller */
     uint32_t junctions_ignored;   /* during the holdoff after a turn */

@@ -103,7 +103,7 @@ bool controller_authority(motion_source_t source,authority_generation_t *g) { (v
 ER subsystem3_init(void) { assert(inits++==4U); return strcmp(scenario,"init_failure")==0 ? E_SYS : E_OK; }
 ER subsystem3_start(void) { assert(starts++==3U); return E_OK; }
 line_status_t subsystem3_line_status(void) { line_status_t s={0}; s.left_black=1U; return s; }
-int8_t subsystem3_steer(void) { return 0; }
+int8_t subsystem3_steer(bool *analogue) { if (analogue != NULL) { *analogue = false; } return 0; }
 BOOL subsystem3_take_route(route_instruction_t *r) { (void)r; return FALSE; }
 BOOL subsystem3_take_junction(junction_observation_t *j) { (void)j; return FALSE; }
 BOOL subsystem3_probe_requested(void) { return FALSE; }

@@ -43,7 +43,7 @@ static void bounds(void) {
     fake_assert_safe(&f.fake);
 }
 static void deadline(bool wrap,bool race) {
-    fixture_t f; motion_continuous_request_t r={1U,1U,MOTION_SOURCE_CALIBRATION,100,0,100U,0U,1000U};
+    fixture_t f; motion_continuous_request_t r={1U,1U,MOTION_SOURCE_CALIBRATION,100,0,100U,0U,1000U,false};
     unsigned i; init(&f); if(wrap) { f.fake.now_us=UINT32_MAX-90000U; }
     f.race=race;
     assert(measured_motion_executor_authorize_calibration(&f.e,1U,f.fake.now_us,300000U)==MOTION_OK);

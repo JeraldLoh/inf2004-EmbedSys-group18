@@ -87,12 +87,14 @@ LOCAL ID s3_tid = E_NOEXS;
 LOCAL ID s3_cyc = E_NOEXS;
 LOCAL ID s3_mtx = E_NOEXS;
 
-/* Written only by s3_task. line_status is one byte and the steering value is
- * one byte, so each is stored and read atomically without a lock. Events
+/* Written only by s3_task. Line status and the packed steering sample each
+ * use a single aligned store. Events
  * that are read-and-cleared by another task (a read-modify-write) and the
  * request handshakes are protected by s3_mtx. */
 LOCAL volatile line_status_t s3_line;
-LOCAL volatile int8_t s3_steer_value;
+#define S3_STEER_OFFSET 100
+#define S3_STEER_ANALOGUE 0x100U
+LOCAL volatile uint16_t s3_steering = S3_STEER_OFFSET;
 LOCAL route_instruction_t s3_route;
 LOCAL BOOL s3_route_pending = FALSE;
 LOCAL junction_observation_t s3_junction;
@@ -357,6 +359,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
     for (;;)
     {
+        int8_t steer = 0;
+        bool analogue_steering = false;
         (void)tk_slp_tsk(TMO_FEVR);
         (void)tk_can_wup(TSK_SELF);   /* drop missed wake-ups, no catch-up burst */
 
@@ -377,12 +381,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
         {
             /* Car is pivoting for the probe: watch, do not steer. */
             line_follow_probe_sample(&line, left_black, right_black);
-            s3_steer_value = 0;
         }
         else
         {
             (void)line_follow_update(&line, left_black, right_black, now_ms);
-            s3_steer_value = line_follow_steer(&line, now_ms);
+            steer = line_follow_steer(&line, now_ms);
 #if APP_S3_LINE_PID
             /* PID steers only while plainly following. Junction, reacquire
              * and line loss keep the digital behaviour. */
@@ -395,10 +398,10 @@ LOCAL void s3_task(INT stacd, void *exinf)
                     {
                         /* On a bend the sensor runs off the edge; the
                          * digital ramp then takes over if it steers harder. */
-                        s3_steer_value = line_pid_blend(
-                            line_pid_step(&s3_pid, s3_pid_raw, now_ms),
-                            s3_steer_value,
+                        int8_t pid_steer = line_pid_step(&s3_pid, s3_pid_raw, now_ms);
+                        steer = line_pid_blend(pid_steer, steer,
                             line_pid_saturated(&s3_pid, s3_pid_raw));
+                        analogue_steering = steer == pid_steer;
                     }
                     break;
                 default:
@@ -489,9 +492,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
             }
         }
 
-        /* ---- Publish: build locally, store once (atomic byte) ---- */
+        /* ---- Publish line status and steering ---- */
         line_follow_set_barcode_active(&line, barcode_decoder_busy(&decoder));
         s3_line = line.status;
+        s3_steering = (uint16_t)((unsigned)(steer + S3_STEER_OFFSET) |
+            (analogue_steering ? S3_STEER_ANALOGUE : 0U));
 #if APP_CAR_MQTT
         {
             uint32_t at=s3_kernel_ms();
@@ -500,7 +505,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 s3_wifi.right_black=line.status.right_black;
                 s3_wifi.line_state=line.status.state;
                 s3_wifi.last_side=line.status.last_side;
-                s3_wifi.steering=s3_steer_value;
+                s3_wifi.steering=steer;
                 s3_wifi.black=barcode_black;
                 s3_wifi.calibrated=s3_barcode_ready!=FALSE;
                 s3_wifi.decoder_state=decoder.state;
@@ -528,10 +533,10 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #if S3_BARCODE_USE_EDGES
             tm_printf((UB *)"[S3 RAW] L=%d R=%d steer=%d barcode=%d\n",
                       (INT)left_black, (INT)right_black,
-                      (INT)s3_steer_value, (INT)barcode_black);
+                      (INT)steer, (INT)barcode_black);
 #else
             tm_printf((UB *)"[S3 RAW] L=%d R=%d steer=%d adc=%d dark=%d thr=%d/%d\n",
-                      (INT)left_black, (INT)right_black, (INT)s3_steer_value,
+                      (INT)left_black, (INT)right_black, (INT)steer,
                       (INT)raw, (INT)barcode_sensor_darkness(raw),
                       (INT)bar.threshold_low, (INT)bar.threshold_high);
 #endif
@@ -604,9 +609,11 @@ EXPORT line_status_t subsystem3_line_status(void)
     return s3_line;
 }
 
-EXPORT int8_t subsystem3_steer(void)
+EXPORT int8_t subsystem3_steer(bool *analogue)
 {
-    return s3_steer_value;
+    uint16_t sample = s3_steering;
+    if (analogue != NULL) { *analogue = (sample & S3_STEER_ANALOGUE) != 0U; }
+    return (int8_t)((int)(sample & 0xffU) - S3_STEER_OFFSET);
 }
 
 EXPORT BOOL subsystem3_take_route(route_instruction_t *route)
