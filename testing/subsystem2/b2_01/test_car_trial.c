@@ -34,7 +34,7 @@ static void tick(fixture_t *f,unsigned l,unsigned r) {
 }
 static bool line(fixture_t *f,uint32_t id) {
     uint32_t ms=f->f.now_us/1000U;
-    motion_continuous_request_t r={id,1U,MOTION_SOURCE_LINE,100,0,100U,ms,ms+150U};
+    motion_continuous_request_t r={id,1U,MOTION_SOURCE_LINE,100,0,100U,ms,ms+150U,false};
     return car_motion_continuous(&f->car,&r,ms,f->f.now_us);
 }
 int main(int argc,char **argv) {
@@ -42,7 +42,10 @@ int main(int argc,char **argv) {
     /* Buddy 3 treats both-white as centred, not evidence of line loss. */
     assert(CONTROLLER_LINE_LOST_MS == 0U);
     if(strcmp(argv[1],"bend_speed")==0) {
-        motion_continuous_request_t r={1U,1U,MOTION_SOURCE_LINE,120,0,120U,0U,150U};
+        motion_continuous_request_t r={1U,1U,MOTION_SOURCE_LINE,120,0,120U,0U,150U,false};
+#if defined(APP_S3_LINE_PID) && APP_S3_LINE_PID
+        r.analogue_steering = true;
+#endif
         int32_t curves[5]={0,2800000,-2800000,5600000,-5600000};
         assert(car_motion_enable_trial(&f.car,15000000U));
         for(i=0U;i<5U;++i) {
@@ -53,9 +56,9 @@ int main(int argc,char **argv) {
             assert(f.car.executor.continuous.speed_mm_s==(i==0U?120:(i<3U?109:105)));
             assert(f.car.executor.continuous.curvature_u1_m==expected_curves[i]);
 #else
-            assert(f.car.executor.continuous.speed_mm_s==(i<3U?120:107));
+            assert(f.car.executor.continuous.speed_mm_s==(i<3U?120:109));
             if(i<3U) { assert(f.car.executor.continuous.curvature_u1_m==0); }
-            else { assert(f.car.executor.continuous.curvature_u1_m==(i==3U?-4:4)); }
+            else { assert(f.car.executor.continuous.curvature_u1_m==(i==3U?-3:3)); }
 #endif
         }
         r.command_id=6U; r.source=MOTION_SOURCE_OBSTACLE;
@@ -65,6 +68,38 @@ int main(int argc,char **argv) {
         assert(!car_motion_continuous(&f.car,&r,0U,0U));
         r.command_id=8U; r.speed_mm_s=(int32_t)f.car.executor.config.max_speed_mm_s+1;
         assert(!car_motion_continuous(&f.car,&r,0U,0U));
+    } else if(strcmp(argv[1],"digital_straight")==0) {
+        assert(CONTROLLER_LINE_CRUISE_MM_S == 70U);
+        assert(car_motion_enable_trial(&f.car, 15000000U));
+        const int32_t raw_curves[] = {4200000, 2800000, 14000000, 2800000, 2800000};
+        const int32_t expected_curves[] = {-1, 0, -14, -6, 0};
+        const uint32_t times_ms[] = {0U, 10U, 20U, 30U, 80U};
+        for (unsigned direction = 0U; direction < 2U; ++direction) {
+            int32_t sign = direction == 0U ? 1 : -1;
+            for (i = 0U; i < 5U; ++i) {
+                uint32_t ms = direction * 100U + times_ms[i];
+                motion_continuous_request_t r = {direction * 5U + i + 1U, 1U,
+                    MOTION_SOURCE_LINE, 70, sign * raw_curves[i], 0U, ms, ms + 150U, false};
+                assert(car_motion_continuous(&f.car, &r, ms, ms * 1000U));
+                assert(f.car.executor.continuous.curvature_u1_m == sign * expected_curves[i]);
+                assert(f.car.executor.continuous.speed_mm_s == 70);
+            }
+        }
+    } else if(strcmp(argv[1],"steering_switch")==0) {
+        assert(car_motion_enable_trial(&f.car, 15000000U));
+        motion_continuous_request_t r = {1U, 1U, MOTION_SOURCE_LINE,
+            70, 14000000, 0U, 0U, 150U, false};
+        assert(car_motion_continuous(&f.car, &r, 0U, 0U));
+        assert(f.car.executor.continuous.curvature_u1_m == -14);
+        r.command_id++;
+        r.curvature_u1_m = 2800000;
+        r.analogue_steering = true;
+        assert(car_motion_continuous(&f.car, &r, 10U, 10000U));
+        assert(f.car.executor.continuous.curvature_u1_m == -3);
+        r.command_id++;
+        r.analogue_steering = false;
+        assert(car_motion_continuous(&f.car, &r, 20U, 20000U));
+        assert(f.car.executor.continuous.curvature_u1_m == 0);
     } else if(strcmp(argv[1],"normal")==0) {
         assert(!line(&f,1U) && !f.car.executor.status.authorized); fake_assert_safe(&f.f);
     } else if(strcmp(argv[1],"bounds")==0) {
