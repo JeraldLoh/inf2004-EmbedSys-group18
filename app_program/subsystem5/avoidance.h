@@ -163,6 +163,12 @@ typedef struct {
     float pass_max_extra_cm;
     float pass_clear_margin_cm; // rear of the car past the corner before turning back
     int pass_guard_every;       // a forward collision ping after this many side pings; 0 = none
+    // "Beside" also counts out to the planned side distance plus this, so a
+    // car that drifted out still sees the face. 0: pass_beside_cm only.
+    float pass_beside_slack_cm;
+    // Servo offset from centre for the side watch; square to the face echoes
+    // best. 0: fine_half_range_deg. Must stay within the servo's 0..180.
+    int pass_side_deg;
     // Return drive sized from the measured side distance instead of
     // mirroring the out leg (pivot turns only; within 0.5..1.5 x out leg).
     bool return_from_side;
@@ -260,6 +266,13 @@ typedef struct {
     float pass_seen_at_cm; // odometry at the first hit; < 0 unknown
     float side_cm;         // measured car centre to side face; valid if pass_seen
     float depth_cm;        // obstacle depth along the pass; < 0 unknown
+    // Last real obstacle depth/direction this encounter, and how far the car
+    // has backed off since: a rescan after a back-off that no longer sees a
+    // narrow obstacle plans from this instead of calling it gone.
+    bool have_prev;
+    float prev_ahead_cm;
+    int prev_base;
+    float prev_backed_cm;
 
     bool off_line;
     int rescans;

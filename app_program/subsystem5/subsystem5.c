@@ -37,6 +37,12 @@ static uint32_t b5_wifi_at;
 #define B5_PASS_MAX_EXTRA_CM 40.0f
 #define B5_PASS_CLEAR_MARGIN_CM 8.0f
 #define B5_PASS_GUARD_EVERY 3
+/* Car trial 2026-11-10: side readings were 44-74 cm at 70 deg (41+ cm
+ * square), never under the fixed 30 cm, so the pass never saw the face.
+ * Also count out to the planned side distance + 20 cm, and look nearly
+ * square (85 deg; the servo turns almost 0..180) for a firmer echo. */
+#define B5_PASS_BESIDE_SLACK_CM 20.0f
+#define B5_PASS_SIDE_DEG 85
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -469,6 +475,14 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             tm_printf((UB*)"[B5] line crossed at %d deg: centring, then turning along it\n",
                 e->heading_deg);
             break;
+        case AV_EVT_SCAN_POINT:
+            if (av_state(&av) == AV_STATE_BYPASS)   /* the pass-leg side watch */
+            {
+                tm_printf((UB*)"[B5] side servo=%d dist=%d cm (status %d)\n",
+                    e->point.angle_deg, (int)e->point.reading.cm,
+                    (int)e->point.reading.status);
+            }
+            break;
         case AV_EVT_PASS_CLEAR:
             tm_printf((UB*)"[B5] passed the back corner: side %d mm, depth %d mm (-10 = unknown)\n",
                 cm_to_mm(e->side_cm), (e->depth_cm >= 0.0f) ? cm_to_mm(e->depth_cm) : -10);
@@ -733,6 +747,8 @@ EXPORT ER subsystem5_init(void)
         cfg.pass_max_extra_cm = B5_PASS_MAX_EXTRA_CM;
         cfg.pass_clear_margin_cm = B5_PASS_CLEAR_MARGIN_CM;
         cfg.pass_guard_every = B5_PASS_GUARD_EVERY;
+        cfg.pass_beside_slack_cm = B5_PASS_BESIDE_SLACK_CM;
+        cfg.pass_side_deg = B5_PASS_SIDE_DEG;
         cfg.return_from_side = true;
     }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,

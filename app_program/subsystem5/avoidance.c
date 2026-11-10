@@ -132,6 +132,11 @@ const char *av_config_check(const av_config_t *c) {
         if (!(c->pass_max_extra_cm >= 0.0f)) return "pass_max_extra_cm must be >= 0";
         if (!(c->pass_clear_margin_cm >= 0.0f)) return "pass_clear_margin_cm must be >= 0";
         if (c->pass_guard_every < 0) return "pass_guard_every must be >= 0";
+        if (!(c->pass_beside_slack_cm >= 0.0f)) return "pass_beside_slack_cm must be >= 0";
+        if (c->pass_side_deg < 0 || c->pass_side_deg > 90 ||
+            !angle_ok(c->center_deg - c->pass_side_deg) ||
+            !angle_ok(c->center_deg + c->pass_side_deg))
+            return "pass_side_deg must be 0..90 and within the servo's 0..180";
     }
     return NULL;
 }
@@ -361,6 +366,8 @@ static void begin_encounter(av_t *a, uint32_t now, range_reading_t r) {
     a->choice.side = SIDE_NONE;
     a->pass_seen = false;
     a->depth_cm = -1.0f;
+    a->have_prev = false;
+    a->prev_backed_cm = 0.0f;
     av_event_t e = event_of(AV_EVT_OBSTACLE_DETECTED);
     e.point.angle_deg = a->cfg.center_deg;
     e.point.reading = r;
@@ -457,6 +464,21 @@ static void on_coarse(av_t *a, uint32_t now) {
 
     bool gone = center.status != RANGE_FAULT &&
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
+    if (gone && !a->off_line && a->backoffs > 0 && a->have_prev) {
+        // Car trial 2026-11-10: backed off from a narrow obstacle seen at
+        // 13 cm, rescanned, no longer saw it (51 cm), resumed and met it
+        // again. Backing off moves the car, not the obstacle: plan from
+        // where it was last seen, moved back by the back-off.
+        gone = false;
+        a->scan_base = a->prev_base;
+        a->ahead_cm = a->prev_ahead_cm + a->prev_backed_cm;
+        near_cm = a->ahead_cm;
+    } else if (!gone) {
+        a->have_prev = true;
+        a->prev_ahead_cm = a->ahead_cm;
+        a->prev_base = a->scan_base;
+        a->prev_backed_cm = 0.0f;
+    }
     if (!gone) {
         a->nearest_cm = near_cm;
         for (int i = 0; i < 2; i++) {
@@ -741,6 +763,7 @@ static void on_reverse(av_t *a, uint32_t now) {
     if (motion_failed(a)) {
         fail_motion(a, now);
     } else if (a->hw.motion_done(a->hw.ctx)) {
+        if (a->backoffs > 0) a->prev_backed_cm += a->reverse_by_cm;
         if (a->backing_off) {
             // Plan from the scan already taken, moved back by the reverse.
             // Car trial 2026-11-02: rescanning from further away lost a
@@ -798,6 +821,10 @@ static bool start_align(av_t *a, uint32_t now) {
 // seen on a drive leg (heading known exactly) is first turned along the line.
 static bool rejoin_if_line(av_t *a, uint32_t now) {
     if (a->align_step != 0) return false; // the line is expected; on_align decides
+    // Car trial 2026-11-10: the line turned up while still beside the
+    // obstacle and the car rejoined there. Watching the side, the corner
+    // (or the cap) decides when the pass ends.
+    if (a->pass_phase == 1) return false;
     // leg_idx moves on when a turn is issued, so == LEG_PASS while turning
     // is still the straighten-up beside the obstacle: only the drive counts.
     bool past = a->state == AV_STATE_REACQUIRE ||
@@ -846,9 +873,23 @@ static float travelled_cm(const av_t *a) {
     return a->hw.motion_travelled_cm != NULL ? a->hw.motion_travelled_cm(a->hw.ctx) : -1.0f;
 }
 
-// Servo angle looking at the obstacle beside the car: fully toward it.
+// Servo angle looking at the obstacle beside the car.
 static int pass_servo(const av_t *a) {
-    return servo_toward(a, opposite(a->plan.side), a->cfg.fine_half_range_deg);
+    int deg = a->cfg.pass_side_deg > 0 ? a->cfg.pass_side_deg : a->cfg.fine_half_range_deg;
+    return servo_toward(a, opposite(a->plan.side), deg);
+}
+
+// Square distance below which the side face counts as beside the car: the
+// fixed pass_beside_cm, or the planned side distance plus the slack.
+static float pass_beside_limit(const av_t *a) {
+    float limit = a->cfg.pass_beside_cm;
+    if (a->cfg.pass_beside_slack_cm > 0.0f) {
+        const obstacle_edge_t *e = a->plan.side == SIDE_RIGHT ? &a->profile.right : &a->profile.left;
+        float toward = a->plan.side == SIDE_RIGHT ? e->pt.x_cm : -e->pt.x_cm;
+        float planned = a->plan.lateral_cm - toward;
+        if (planned + a->cfg.pass_beside_slack_cm > limit) limit = planned + a->cfg.pass_beside_slack_cm;
+    }
+    return limit;
 }
 
 // Mean of the side hits as a point (car frame: x square to the car, y ahead).
@@ -883,11 +924,12 @@ static void pass_watch(av_t *a, uint32_t now) {
         return;
     }
     if (r.status == RANGE_FAULT) return;
+    emit_point(a, now, angle, r); // side readings show up in the log
 
     float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : range_effective_cm(r, a->cfg.max_range_cm);
     point2_t pt = obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)angle), cm);
     float square = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
-    if (square < a->cfg.pass_beside_cm) {
+    if (square < pass_beside_limit(a)) {
         if (!a->pass_seen) a->pass_seen_at_cm = travelled_cm(a);
         a->pass_seen = true;
         a->pass_hits++;

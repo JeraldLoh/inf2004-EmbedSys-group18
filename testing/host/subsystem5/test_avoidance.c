@@ -816,6 +816,40 @@ static void too_close_backs_off_without_turning(void) {
     check_hygiene(&s);
 }
 
+// Car trial 2026-11-10: too close to see past it, the car backed off and
+// rescanned; from further back the narrow obstacle no longer echoed, so it
+// was called gone and the car drove into it again. Plan from where it was.
+static void backoff_rescan_keeps_unseen_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.pivot_clearance_cm = 10.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){20, 160, 6.0f, true}; // fills the servo's view
+    s.reverse_moves_away = true;
+    s.visible_under_cm = 12.0f;                 // gone from the sonar once backed off
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(s.reverses, 1);
+    CHECK(s.obstacle.cm >= 12.0f);
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
+    CHECK_INT(s.resumes, 0);
+    CHECK_INT(s.bypasses, 1);
+    CHECK(av_profile(&av)->distance_cm >= 12.0f); // where it was, moved back
+}
+
+// Without a back-off a rescan that sees nothing still means gone.
+static void rescan_without_backoff_can_clear(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.vanish_on_stop = true;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 1);
+    CHECK_INT(s.bypasses, 0);
+}
+
 static void edge_beyond_turn_range_is_partial(void) {
     sim_t s;
     av_t av;
@@ -1370,6 +1404,65 @@ static void return_leg_sized_from_side_distance(void) {
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
+// Car trial 2026-11-10: the car drifted out and the face read 41+ cm square,
+// past the fixed 30 cm. Planned side distance + slack still counts it.
+static void pass_counts_a_drifted_face_with_slack(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, false);
+    s.side_face_cm = 36.0f; // ~34 cm square at 70 deg
+    s.side_face_ms = 1500;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 0); // fixed 30 cm: never beside
+    CHECK_INT(av_metrics(&av)->pass_capped, 1);
+
+    sim_defaults(&s, 0);
+    s.cfg.pass_watch_side = true;
+    s.cfg.pass_beside_cm = 30.0f;
+    s.cfg.pass_max_extra_cm = 40.0f;
+    s.cfg.pass_clear_margin_cm = 8.0f;
+    s.cfg.pass_guard_every = 3;
+    s.cfg.pass_beside_slack_cm = 20.0f;
+    s.forward_ms_per_cm = 50U;
+    s.odometry = true;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.side_face_cm = 36.0f;
+    s.side_face_ms = 1500;
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 1);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+// While watching the side, a line seen beside the obstacle is not a rejoin.
+static void pass_ignores_line_beside_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_pass(&s, &av, false);
+    s.side_face_cm = 16.0f;
+    s.side_face_ms = 1500;
+    s.line_on_forward = 2; // the watched pass leg
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 1); // the corner ended the pass
+    CHECK(s.forwards >= 3);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+}
+
+static void pass_side_angle_is_configurable(void) {
+    av_config_t c;
+    av_config_default(&c);
+    c.pass_watch_side = true;
+    c.pass_beside_cm = 30.0f;
+    c.pass_side_deg = 85;
+    CHECK(av_config_check(&c) == NULL);
+    c.pass_side_deg = 91;
+    CHECK(av_config_check(&c) != NULL);
+    c.pass_side_deg = 0;
+    c.pass_beside_slack_cm = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+}
+
 static void pass_still_guards_ahead(void) {
     sim_t s;
     av_t av;
@@ -1593,6 +1686,11 @@ void run_avoidance_tests(void) {
     RUN(pass_without_side_face_runs_capped);
     RUN(return_leg_sized_from_side_distance);
     RUN(pass_still_guards_ahead);
+    RUN(pass_counts_a_drifted_face_with_slack);
+    RUN(pass_ignores_line_beside_obstacle);
+    RUN(pass_side_angle_is_configurable);
+    RUN(backoff_rescan_keeps_unseen_obstacle);
+    RUN(rescan_without_backoff_can_clear);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);
