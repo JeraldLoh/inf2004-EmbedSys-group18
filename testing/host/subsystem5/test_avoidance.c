@@ -850,6 +850,39 @@ static void rescan_without_backoff_can_clear(void) {
     CHECK_INT(s.bypasses, 0);
 }
 
+// Car trial 2026-11-10: the reading just past the left edge was open (a
+// gap), a wider one beyond it was a blocker 19 cm out. With the strip
+// check the left is blocked and the car goes right; without it, left wins.
+static void blocker_beyond_edge_blocks_that_side(void) {
+    for (int strip = 0; strip < 2; strip++) {
+        sim_t s;
+        av_t av;
+        sim_defaults(&s, 0);
+        s.cfg.strip_extra_cm = strip ? 10.0f : 0.0f;
+        av_platform_t p = platform_for(&s);
+        CHECK(av_init(&av, &s.cfg, &p));
+        s.obstacle = (blob_t){80, 100, 12.0f, true};
+        s.wall = (blob_t){155, 165, 19.0f, true}; // left, past a gap at 105..150
+        CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+        CHECK_INT(count_events(&s, AV_EVT_SIDE_BLOCKED), strip ? 1 : 0);
+        CHECK_INT(s.last_bypass, strip ? SIDE_RIGHT : SIDE_LEFT);
+    }
+}
+
+// A far reading beyond the edge is not in the strip: no effect.
+static void far_reading_beyond_edge_does_not_block(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.strip_extra_cm = 10.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.wall = (blob_t){155, 165, 80.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(count_events(&s, AV_EVT_SIDE_BLOCKED), 0);
+}
+
 static void edge_beyond_turn_range_is_partial(void) {
     sim_t s;
     av_t av;
@@ -1694,6 +1727,8 @@ void run_avoidance_tests(void) {
     RUN(pass_ignores_line_beside_obstacle);
     RUN(pass_side_angle_is_configurable);
     RUN(backoff_rescan_keeps_unseen_obstacle);
+    RUN(blocker_beyond_edge_blocks_that_side);
+    RUN(far_reading_beyond_edge_does_not_block);
     RUN(rescan_without_backoff_can_clear);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);

@@ -125,6 +125,7 @@ const char *av_config_check(const av_config_t *c) {
     if (c->max_reacquire_attempts < 1) return "max_reacquire_attempts must be >= 1";
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
     if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
+    if (!(c->strip_extra_cm >= 0.0f)) return "strip_extra_cm must be >= 0";
     if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
         return "line_align_min_deg must be within 0..89";
     if (c->pass_watch_side) {
@@ -657,6 +658,38 @@ static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
     emit(a, now, &e);
 }
 
+// Car trial 2026-11-10: the reading just past the left edge went through a
+// gap (39 cm) while the wider one beyond it read 19 cm; the car chose left
+// and its pivot met the blocker at 3 cm. Any coarse reading beyond the edge
+// that lies inside the strip the bypass drives through blocks that side.
+static bool strip_blocked(av_t *a, uint32_t now, side_t side) {
+    const obstacle_edge_t *e = side == SIDE_LEFT ? &a->profile.left : &a->profile.right;
+    if (!e->found) return false;
+    float edge_x = e->pt.x_cm < 0.0f ? -e->pt.x_cm : e->pt.x_cm;
+    float strip = edge_x + a->cfg.bypass_side_margin_cm + a->cfg.strip_extra_cm;
+    for (int i = 0; i < a->cfg.coarse_points; i++) {
+        range_reading_t r = a->coarse[i].reading;
+        if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue; // no echo: open
+        float dir = scan_left_offset_deg(&a->geom, (float)a->coarse[i].angle_deg);
+        bool beyond = side == SIDE_LEFT ? dir > e->angle_deg : dir < e->angle_deg;
+        if (!beyond) continue;
+        float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : r.cm;
+        point2_t pt = obstacle_polar_to_xy(dir, cm);
+        pt.y_cm += a->shift_cm; // the scan may be reused after a back-off
+        float x = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
+        bool toward = side == SIDE_LEFT ? pt.x_cm <= 0.0f : pt.x_cm >= 0.0f;
+        // Outside the obstacle sideways (not its own corner), inside the strip.
+        if (toward && x > edge_x && x < strip && pt.y_cm > 0.0f) {
+            av_event_t ev = event_of(AV_EVT_SIDE_BLOCKED);
+            ev.side = side;
+            ev.point = a->coarse[i];
+            emit(a, now, &ev);
+            return true;
+        }
+    }
+    return false;
+}
+
 static void on_decide(av_t *a, uint32_t now) {
     // A bypass starts with a pivot. Too close and the front corner sweeps into
     // the obstacle (or a stalled wheel turns the pivot into a forward arc), so
@@ -692,8 +725,13 @@ static void on_decide(av_t *a, uint32_t now) {
     pe.profile = &a->profile;
     emit(a, now, &pe);
 
-    a->choice = obstacle_choose_side(&a->profile, a->edge[EDGE_LEFT].clear_cm,
-                                     a->edge[EDGE_RIGHT].clear_cm, a->cfg.min_clearance_cm);
+    float left_clear = a->edge[EDGE_LEFT].clear_cm;
+    float right_clear = a->edge[EDGE_RIGHT].clear_cm;
+    if (a->cfg.strip_extra_cm > 0.0f) {
+        if (strip_blocked(a, now, SIDE_LEFT)) left_clear = 0.0f;
+        if (strip_blocked(a, now, SIDE_RIGHT)) right_clear = 0.0f;
+    }
+    a->choice = obstacle_choose_side(&a->profile, left_clear, right_clear, a->cfg.min_clearance_cm);
     av_event_t de = event_of(AV_EVT_DECISION);
     de.side = a->choice.side;
     de.profile = &a->profile;

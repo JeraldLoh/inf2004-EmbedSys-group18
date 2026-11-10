@@ -53,6 +53,7 @@ typedef enum {
     AV_EVT_FAILED,
     AV_EVT_LINE_ALIGN,     // line crossed on a drive leg: centring on it, then turning along it
     AV_EVT_PASS_CLEAR,     // side sonar saw the obstacle's back corner go by on the pass leg
+    AV_EVT_SIDE_BLOCKED,   // a reading beyond that edge lies in the bypass strip (point, side)
 } av_event_type_t;
 
 typedef struct {
@@ -169,6 +170,12 @@ typedef struct {
     // Servo offset from centre for the side watch; square to the face echoes
     // best. 0: fine_half_range_deg. Must stay within the servo's 0..180.
     int pass_side_deg;
+
+    // Before choosing a side, every coarse reading beyond that edge is
+    // checked: one closer sideways than the edge + bypass_side_margin_cm +
+    // this lies in the strip the bypass drives through, so that side is
+    // blocked. 0: only the single reading just past the edge counts.
+    float strip_extra_cm;
     // Return drive sized from the measured side distance instead of
     // mirroring the out leg (pivot turns only; within 0.5..1.5 x out leg).
     bool return_from_side;

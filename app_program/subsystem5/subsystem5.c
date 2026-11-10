@@ -487,6 +487,10 @@ static void cb_on_event(void *ctx, const av_event_t *e)
                     (int)e->point.reading.status);
             }
             break;
+        case AV_EVT_SIDE_BLOCKED:
+            tm_printf((UB*)"[B5] %s blocked: %d cm at servo %d is inside the bypass strip\n",
+                side_name(e->side), (int)e->point.reading.cm, e->point.angle_deg);
+            break;
         case AV_EVT_PASS_CLEAR:
             tm_printf((UB*)"[B5] passed the back corner: side %d mm, depth %d mm (-10 = unknown)\n",
                 cm_to_mm(e->side_cm), (e->depth_cm >= 0.0f) ? cm_to_mm(e->depth_cm) : -10);
@@ -756,6 +760,10 @@ EXPORT ER subsystem5_init(void)
         cfg.pass_guard_every = B5_PASS_GUARD_EVERY;
         cfg.pass_beside_slack_cm = B5_PASS_BESIDE_SLACK_CM;
         cfg.pass_side_deg = B5_PASS_SIDE_DEG;
+        /* Car trial 2026-11-10: chose left through a gap with a blocker
+         * 19 cm out at 160 deg. Any coarse reading beyond the edge closer
+         * sideways than edge + 15 cm margin + 10 cm blocks that side. */
+        cfg.strip_extra_cm = 10.0f;
         cfg.return_from_side = true;
     }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
