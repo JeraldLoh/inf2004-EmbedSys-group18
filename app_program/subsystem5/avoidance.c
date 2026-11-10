@@ -465,7 +465,9 @@ static void on_coarse(av_t *a, uint32_t now) {
 
     bool gone = center.status != RANGE_FAULT &&
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
-    if (gone && !a->off_line && a->backoffs > 0 && a->have_prev) {
+    // Also after a plain reverse (no side found): car trial 2026-11-10 later,
+    // reversed 10 cm, lost the obstacle, resumed and met it again, twice.
+    if (gone && !a->off_line && (a->backoffs > 0 || a->reverses > 0) && a->have_prev) {
         // Car trial 2026-11-10: backed off from a narrow obstacle seen at
         // 13 cm, rescanned, no longer saw it (51 cm), resumed and met it
         // again. Backing off moves the car, not the obstacle: plan from
@@ -801,7 +803,7 @@ static void on_reverse(av_t *a, uint32_t now) {
     if (motion_failed(a)) {
         fail_motion(a, now);
     } else if (a->hw.motion_done(a->hw.ctx)) {
-        if (a->backoffs > 0) a->prev_backed_cm += a->reverse_by_cm;
+        a->prev_backed_cm += a->reverse_by_cm; // backing off or reversing
         if (a->backing_off) {
             // Plan from the scan already taken, moved back by the reverse.
             // Car trial 2026-11-02: rescanning from further away lost a

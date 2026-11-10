@@ -838,6 +838,27 @@ static void backoff_rescan_keeps_unseen_obstacle(void) {
     CHECK(av_profile(&av)->distance_cm >= 12.0f); // where it was, moved back
 }
 
+// Car trial 2026-11-10: no side found, reversed 10 cm, the narrow obstacle
+// no longer echoed and was called gone; the car met it again. A plain
+// reverse keeps it too.
+static void reverse_rescan_keeps_unseen_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.max_rescans = 0; // straight to the reverse
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.wall = (blob_t){20, 160, 15.0f, true}; // both sides too tight: no side
+    s.reverse_moves_away = true;
+    s.visible_under_cm = 13.0f;              // gone from the sonar once reversed
+    CHECK(run_until(&s, &av, AV_STATE_REVERSE, 30000));
+    s.wall.present = false;                   // from further back the sides are open
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
+    CHECK_INT(s.resumes, 0);
+}
+
 // Without a back-off a rescan that sees nothing still means gone.
 static void rescan_without_backoff_can_clear(void) {
     sim_t s;
@@ -1728,6 +1749,7 @@ void run_avoidance_tests(void) {
     RUN(pass_side_angle_is_configurable);
     RUN(backoff_rescan_keeps_unseen_obstacle);
     RUN(blocker_beyond_edge_blocks_that_side);
+    RUN(reverse_rescan_keeps_unseen_obstacle);
     RUN(far_reading_beyond_edge_does_not_block);
     RUN(rescan_without_backoff_can_clear);
     RUN(reacquire_retries_alternate_direction);

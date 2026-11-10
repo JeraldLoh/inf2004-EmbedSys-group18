@@ -44,6 +44,7 @@ static uint32_t b5_wifi_at;
  * its end stop; 75 deg (15/165) stays clear of it. */
 #define B5_PASS_BESIDE_SLACK_CM 20.0f
 #define B5_BYPASS_SIDE_MARGIN_CM 10.0f
+#define B5_MIN_CLEARANCE_CM 25.0f
 #define B5_PASS_SIDE_DEG 75
 static subsystem5_bindings_t bindings;
 static bool bound;
@@ -769,6 +770,10 @@ EXPORT ER subsystem5_init(void)
          * car came back across the line too far out to hold it. Car centre
          * passes the edge by 10 cm (half the ~14 cm car + 3 cm), not 15. */
         cfg.bypass_side_margin_cm = B5_BYPASS_SIDE_MARGIN_CM;
+        /* Car trial 2026-11-10: 20 and 30 cm free past the right edge were
+         * refused (35 needed), so it found no side twice. Passing 10 cm out,
+         * 25 cm free past the edge is room enough. */
+        cfg.min_clearance_cm = B5_MIN_CLEARANCE_CM;
         cfg.return_from_side = true;
     }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
