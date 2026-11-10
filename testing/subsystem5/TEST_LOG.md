@@ -27,6 +27,34 @@ Bench procedures: `bench_firmware/README.md`.
 The code's subsystem5_test() is only a SKIP placeholder and is not invoked by
 the inactive app_main. Do not report it as a subsystem PASS.
 
+## Week 10 metrics (briefing page 8)
+
+The `CAR_RUN` firmware prints one `[B5 RESULT]` line per encounter (outcome,
+detection-to-line time, scan time, profile width and edges, side, clearances,
+whether the rejoin turned along the line) and a `[B5 TOTALS]` line.
+`b5_metrics.py` turns a console log into the page 8 table and grades.
+
+| ID | Metric | Procedure | Status |
+|---|---|---|---|
+| S5-M01 | Obstacle detection rate | Place the obstacle on the line ahead of the car, N >= 20 runs. Record each run in `trials.csv`; leave `n` empty when no RESULT line appears (missed or hit) | Not run |
+| S5-M02 | Width estimation error | Same runs; measure the obstacle face with a ruler (`true_width_mm`). Only `edges=both` results count | Not run |
+| S5-M03 | Direction selection success | Block one side with a box inside the bypass clearance (`blocked_side`); vary left/right between runs | Not run |
+| S5-M04 | Line reacquisition | `outcome=REJOINED` over every encounter that chose a side; `aligned=1` shows the car turned along the line first | Not run |
+| S5-M06 | Pass-leg side watch | Boxes 10 cm and 30 cm deep on the line. `pass=clear` expected; compare `depth_mm` (a lower bound) with a ruler; the car should turn back just past the back corner and return close to the line | Not run |
+| S5-M05 | Time to bypass | `ms=` of the REJOINED lines (detection to line follow); graded on the worst run | Not run |
+
+```
+python testing/subsystem5/b5_metrics.py logs/<date>_car_run.log logs/<date>_trials.csv
+```
+
+`trials.csv`: `trial,true_width_mm,blocked_side,n` (one row per obstacle
+placed). Save the raw console log and the CSV under `logs/` and add a row to
+Results with the commit and the printed table.
+
+Rejoin alignment (`line_align_cm`) uses the controller's `approach_mm`
+(line sensors to wheel axle), still the 50 mm placeholder: measure it with a
+ruler before S5-M04 (`CAR_RUN_TEST_PLAN.md`, junction approach).
+
 ## Results
 
 Append actual runs only. Keep failures and link the exact tested commit, profile,
