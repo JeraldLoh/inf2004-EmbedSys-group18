@@ -79,6 +79,7 @@ static void diagnostic_worker(INT code, void *exinf)
     bool announced = false;
     (void)code; (void)exinf;
     for (;;) {
+        uint32_t delay_ms = 1000U;
         if (started && !announced) {
             tm_printf((UB*)"[B2 CONFIG] fw=%s base=%umm/s curve_scale=%lu inner=%u%% extra_inner=%u.%u%% min_line_wheel=%umm/s QUALIFIED (Buddy 2 sign-off 2026-11-03); this configuration supersedes older CAR banner speed text.\n",
                 B2_FIRMWARE_TAG, (unsigned)CONTROLLER_LINE_CRUISE_MM_S,
@@ -95,17 +96,25 @@ static void diagnostic_worker(INT code, void *exinf)
             motion_status_t rejected_status = motion.last_reject_status;
             motion_motor_state_t outputs = {0};
             bool have_outputs = drv_motor_read(motor,&outputs) == MOTION_OK;
+            bool tracking = s.state == MOTION_EXEC_CONTINUOUS &&
+                motion.executor.continuous.source == MOTION_SOURCE_LINE;
+            int32_t curve = tracking ? motion.executor.continuous.curvature_u1_m : 0;
+            const char *steering = tracking ?
+                (motion.executor.continuous.analogue_steering ? "analogue" : "digital") : "idle";
+            uint32_t sample_ms = now_ms();
             uint32_t count = motion.rejected, id = motion.rejected_id;
             uint32_t generation = motion.rejected_generation, floor = motion.line_floor;
             unsigned source = (unsigned)motion.rejected_source;
             uint32_t ingress = ingress_diagnostic;
             unlock();
-            tm_printf((UB*)"[B2 TRACK] fw=%s target=%ld/%ld measured=%lu/%lu mm/s speed_valid=%d effort=%d/%d output_valid=%d floor_mask=0x%x state=%d gen=%lu rejected=%lu\n",
-                B2_FIRMWARE_TAG,(long)(s.target_um_s[0]/1000),(long)(s.target_um_s[1]/1000),
+            tm_printf((UB*)"[B2 TRACK] fw=%s t_ms=%lu steering=%s curve=%ld target=%ld/%ld measured=%lu/%lu mm/s speed_valid=%d effort=%d/%d output_valid=%d floor_mask=0x%x state=%d gen=%lu rejected=%lu\n",
+                B2_FIRMWARE_TAG,(unsigned long)sample_ms,steering,(long)curve,
+                (long)(s.target_um_s[0]/1000),(long)(s.target_um_s[1]/1000),
                 (unsigned long)(s.wheels.speed_um_s[0]/1000U),(unsigned long)(s.wheels.speed_um_s[1]/1000U),
                 (int)s.wheels.speed_valid,(int)outputs.left_effort,(int)outputs.right_effort,
                 (int)have_outputs,(unsigned)s.low_speed_floor_mask,(int)s.state,
                 (unsigned long)s.generation,(unsigned long)count);
+            if (tracking) { delay_ms = 50U; }
             if (s.detail_sequence != last_detail) {
                 tm_printf((UB*)"[B2 STOP DETAIL] seq=%lu reason=%s result=%d gen=%lu command=%lu wheel_mask=0x%x before_target=%ld/%ld before_speed=%lu/%lu mm/s speed_valid=%d\n",
                     (unsigned long)s.detail_sequence,measured_motion_detail_name(s.detail_reason),
@@ -128,7 +137,7 @@ static void diagnostic_worker(INT code, void *exinf)
                 last_ingress = ingress;
             }
         }
-        (void)tk_dly_tsk(1000U);
+        (void)tk_dly_tsk(delay_ms);
     }
 }
 #endif

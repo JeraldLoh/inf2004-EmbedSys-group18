@@ -416,6 +416,11 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
         /* Tune the inside and outside targets independently after the
          * paired cap, preserving the inside target when the boost is capped. */
+        if (e->continuous.source == MOTION_SOURCE_LINE && e->continuous.curvature_u1_m == 0)
+        {
+            /* Small floor-trial trim for the reported left drift. */
+            desired[1] = desired[1] * 95U / 100U;
+        }
         if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
         {
             unsigned inside = correction > 0 ? 1U : 0U;
@@ -514,8 +519,9 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         int64_t current_split = (int64_t)e->ramp_um_s[0] - e->ramp_um_s[1];
         /* Catch up when the requested wheel split grows in the direction
          * of the bend. Use the normal rate when unwinding toward straight. */
-        if ((desired_split > 0 && desired_split > current_split) ||
-            (desired_split < 0 && desired_split < current_split))
+        if (e->continuous.curvature_u1_m != 0 &&
+            ((desired_split > 0 && desired_split > current_split) ||
+             (desired_split < 0 && desired_split < current_split)))
         {
             line_ramp_multiplier = B2_LINE_BEND_ENTRY_RAMP_MULTIPLIER;
         }
