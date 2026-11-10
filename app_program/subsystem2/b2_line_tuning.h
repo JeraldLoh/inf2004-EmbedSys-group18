@@ -33,9 +33,9 @@
 /* Two 30% increases followed by 15%: 1.30 * 1.30 * 1.15 = 1.9435. */
 #define B2_LINE_BEND_SPEED_SCALE_10000 19435U
 #if defined(APP_S3_LINE_PID) && APP_S3_LINE_PID
-#define B2_FIRMWARE_TAG "b2-straight70-hybrid"
+#define B2_FIRMWARE_TAG "b2-straight80-right95"
 #else
-#define B2_FIRMWARE_TAG "b2-straight70-soft-digital"
+#define B2_FIRMWARE_TAG "b2-straight80-right95-digital"
 #endif
 
 static inline int32_t b2_line_shape_curvature(int64_t curvature)
