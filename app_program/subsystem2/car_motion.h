@@ -20,6 +20,8 @@ typedef struct
     motion_goal_request_t external_goal;
     motion_goal_result_t retained;
     uint32_t next_command, next_goal;
+    uint32_t last_bend_ms;
+    int32_t last_bend_curvature;
     uint32_t trial_limit_us; /* Zero in normal production builds. */
     uint32_t last_goal_id[6];
     uint32_t line_floor;

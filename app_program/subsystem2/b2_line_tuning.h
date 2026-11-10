@@ -15,7 +15,29 @@
 /* V17's20mm/s floor widened the operator's curve. Disable it to restore
  * the V16 target geometry while retaining V17's diagnostic reporting. */
 #define B2_LINE_MIN_ROLLING_MM_S 0U
-#define B2_FIRMWARE_TAG "v19-inner-minus10"
+/* Tighten a bend with twice the normal paired ramp rate. */
+#define B2_LINE_BEND_ENTRY_RAMP_MULTIPLIER 2U
+/* Let the inside wheel shed speed faster than the outside wheel changes. */
+#define B2_LINE_INSIDE_DECEL_MULTIPLIER 2U
+/* Carry at most half the previous correction through a brief sensor gap. */
+#define B2_LINE_BEND_CARRY_MS 160U
+/* Extra PWM headroom for the outside wheel under bend load. */
+#define B2_LINE_OUTSIDE_MAX_EFFORT 400U
+#define B2_LINE_OUTSIDE_SPEED_PERCENT 115U
+#define B2_LINE_FAST_STRAIGHT_MM_S 250U
+#define B2_LINE_FAST_STRAIGHT_MAX_EFFORT 400U
+/* Pre-split speed ceilings for gentle and maximum-curvature bends. */
+#define B2_LINE_BEND_ENTRY_MM_S 57U
+#define B2_LINE_BEND_TIGHT_MM_S 49U
+/* Two 30% increases followed by 15%: 1.30 * 1.30 * 1.15 = 1.9435. */
+#define B2_LINE_BEND_SPEED_SCALE_10000 19435U
+/* Give a fresh correction above Buddy3's hold a useful minimum wheel split. */
+#define B2_LINE_MIN_DETECTED_CURVATURE_U1_M 3000000LL
+#if defined(APP_S3_LINE_PID) && APP_S3_LINE_PID
+#define B2_FIRMWARE_TAG "b2-cruise250-bend15-pid"
+#else
+#define B2_FIRMWARE_TAG "b2-cruise70-outside15"
+#endif
 
 static inline int32_t b2_line_shape_curvature(int64_t curvature)
 {
