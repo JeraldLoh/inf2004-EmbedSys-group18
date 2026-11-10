@@ -29,6 +29,13 @@ static uint32_t b5_wifi_at;
 /* Crossings shallower than this hand over at once (avoidance.c). The return
  * leg crosses at the bypass turn, 60..75 deg; the pass leg runs along it. */
 #define B5_LINE_ALIGN_MIN_DEG 20
+#define B5_LINE_ALIGN_CM 13.0f          /* line sensors to wheel axle, measured */
+#define B5_RETURN_EXTRA_CM 8.0f
+#define B5_SWEEP_STEP_DEG 10
+#define B5_SWEEP_MAX_DEG 30
+#define B5_REACQUIRE_TIMEOUT_MS 2000U   /* was 3000 x 3 attempts */
+#define B5_REACQUIRE_ATTEMPTS 2
+#define B5_SEARCH_CURVATURE_U1_M 5000000 /* 5 /m: ~20 cm radius */
 /* Pass leg side watch (avoidance.c). The car centre passes ~15 cm outside
  * the edge (bypass_side_margin_cm), so a face square to the car under 30 cm
  * is the obstacle. Rear clearance ~ half the car length plus a margin. One
@@ -730,7 +737,7 @@ EXPORT ER subsystem5_init(void)
         cb_motion_travelled,
     };
     T_CTSK ctsk = {0};
-    controller_junction_config_t junction;
+    b5_motion_config_t motion_cfg;
     ER er;
     ID id;
 
@@ -747,12 +754,19 @@ EXPORT ER subsystem5_init(void)
     if (has_motion())
     {
         /* Rejoin: centre the turning point on the line and turn along it
-         * before handing over (avoidance.c line_align_cm). The same line
-         * sensors-to-axle distance the controller drives before a junction
-         * pivot, so one measurement sets both. */
-        controller_junction_default_config(&junction);
-        cfg.line_align_cm = (float)junction.approach_mm / 10.0f;
+         * before handing over (avoidance.c line_align_cm): the line sensors
+         * to wheel axle distance, measured 13 cm on the car (2026-11-10).
+         * The controller's junction approach_mm is its own setting. */
+        cfg.line_align_cm = B5_LINE_ALIGN_CM;
         cfg.line_align_min_deg = B5_LINE_ALIGN_MIN_DEG;
+        /* Finding the line again (car trial 2026-11-10: the arc search ran
+         * off course): drive a little past the expected crossing, then pivot
+         * in place +/-10..30 deg before a smaller, shorter arc search. */
+        cfg.return_extra_cm = B5_RETURN_EXTRA_CM;
+        cfg.sweep_step_deg = B5_SWEEP_STEP_DEG;
+        cfg.sweep_max_deg = B5_SWEEP_MAX_DEG;
+        cfg.reacquire_timeout_ms = B5_REACQUIRE_TIMEOUT_MS;
+        cfg.max_reacquire_attempts = B5_REACQUIRE_ATTEMPTS;
         /* Pass leg ends once the side sonar sees the back corner go by;
          * the return drive covers the measured sideways offset. */
         cfg.pass_watch_side = true;
@@ -797,7 +811,11 @@ EXPORT ER subsystem5_init(void)
         return E_PAR;
     }
     b5_bridge_init(&bridge);
-    b5_motion_init(&motion, &bindings.motion, NULL);
+    b5_motion_default_config(&motion_cfg);
+    /* Last-resort arc search: ~20 cm radius instead of ~33, so it stays
+     * near where the line should be. */
+    motion_cfg.search_curvature_u1_m = B5_SEARCH_CURVATURE_U1_M;
+    b5_motion_init(&motion, &bindings.motion, &motion_cfg);
 
     /* Core 0, the same core that services the GPIO interrupt writing the
      * echo timestamps this task reads. */

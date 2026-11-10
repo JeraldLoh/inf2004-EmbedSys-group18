@@ -126,6 +126,10 @@ const char *av_config_check(const av_config_t *c) {
     if (c->max_consecutive_faults < 1) return "max_consecutive_faults must be >= 1";
     if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
     if (!(c->strip_extra_cm >= 0.0f)) return "strip_extra_cm must be >= 0";
+    if (!(c->return_extra_cm >= 0.0f)) return "return_extra_cm must be >= 0";
+    if (c->sweep_max_deg < 0 || c->sweep_max_deg > 60) return "sweep_max_deg must be within 0..60";
+    if (c->sweep_max_deg > 0 && (c->sweep_step_deg < 1 || c->sweep_step_deg > c->sweep_max_deg))
+        return "sweep_step_deg must be within 1..sweep_max_deg";
     if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
         return "line_align_min_deg must be within 0..89";
     if (c->pass_watch_side) {
@@ -349,6 +353,8 @@ static void next_edge_stage(av_t *a, side_t just_done) {
 static void start_reacquire(av_t *a) {
     a->reacquire_attempts = 0;
     a->search_started = false;
+    a->sweep_idx = 0;
+    a->sweep_done = a->cfg.sweep_max_deg <= 0;
     enter(a, AV_STATE_REACQUIRE);
 }
 
@@ -643,7 +649,7 @@ static void plan_legs(av_t *a) {
     a->legs[LEG_RETURN_TURN].forward = false;
     a->legs[LEG_RETURN_TURN].heading_deg = o - s * t;
     a->legs[LEG_RETURN_DRIVE].forward = true;
-    a->legs[LEG_RETURN_DRIVE].cm = a->plan.out_cm;
+    a->legs[LEG_RETURN_DRIVE].cm = a->plan.out_cm + a->cfg.return_extra_cm;
     a->legs[6].forward = false;
     a->legs[6].heading_deg = 0; // line direction
     a->leg_idx = 0;
@@ -877,6 +883,8 @@ static bool rejoin_if_line(av_t *a, uint32_t now) {
     a->body_settling = false;
     a->leg_active = false;
     a->pass_phase = 0;
+    if (a->state == AV_STATE_REACQUIRE && !a->search_started && a->sweep_idx > 0)
+        a->metrics.sweep_found++; // caught during a sweep pivot
     if (driving && start_align(a, now)) return true;
     rejoin_line(a, now);
     return true;
@@ -1031,7 +1039,7 @@ static void finish_pass(av_t *a) {
     if (lateral <= 0.0f || sin_turn <= 0.0f) return;
     float cm = lateral / sin_turn;
     float lo = 0.5f * a->plan.out_cm, hi = 1.5f * a->plan.out_cm;
-    a->legs[LEG_RETURN_DRIVE].cm = cm < lo ? lo : (cm > hi ? hi : cm);
+    a->legs[LEG_RETURN_DRIVE].cm = (cm < lo ? lo : (cm > hi ? hi : cm)) + a->cfg.return_extra_cm;
 }
 
 static void on_bypass(av_t *a, uint32_t now) {
@@ -1089,7 +1097,32 @@ static void on_bypass(av_t *a, uint32_t now) {
     }
 }
 
+// Car trial 2026-11-10: the arc search carried the car well off course. The
+// line is almost always within a few cm: pivot in place first, toward the
+// far side (where the car was heading) then the other, a step wider each
+// time. A sensor seeing black mid-pivot rejoins at once (av_tick).
+static bool sweep_for_line(av_t *a, uint32_t now) {
+    if (a->sweep_done) return false;
+    if (a->hw.line_detected(a->hw.ctx)) {
+        if (a->sweep_idx > 0) a->metrics.sweep_found++;
+        rejoin_line(a, now);
+        return true;
+    }
+    int n = 2 * (a->cfg.sweep_max_deg / a->cfg.sweep_step_deg);
+    if (a->sweep_idx < n) {
+        int first = side_sign(opposite(a->choice.side)); // + = left
+        int k = a->sweep_idx / 2 + 1;
+        int sign = a->sweep_idx % 2 == 0 ? first : -first;
+        a->sweep_idx++;
+        turn_to(a, now, sign * k * a->cfg.sweep_step_deg);
+        return true;
+    }
+    a->sweep_done = true; // not found: the search below turns back to 0 first
+    return false;
+}
+
 static void on_reacquire(av_t *a, uint32_t now) {
+    if (sweep_for_line(a, now)) return;
     if (!a->search_started) {
         if (turn_to(a, now, 0)) return; // face the line direction before searching
         if (a->hw.line_detected(a->hw.ctx)) { // already over it: no search

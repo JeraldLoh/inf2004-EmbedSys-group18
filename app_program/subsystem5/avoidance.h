@@ -176,6 +176,15 @@ typedef struct {
     // this lies in the strip the bypass drives through, so that side is
     // blocked. 0: only the single reading just past the edge counts.
     float strip_extra_cm;
+
+    // Return drive runs this much past where the line should be crossed, so
+    // a slightly short plan still crosses it; unseen by then, it stops there.
+    float return_extra_cm;
+    // Line not seen once back on the line heading: pivot in place to +/-
+    // step, 2 step, ... up to max (toward the far side first) and take the
+    // line as soon as it shows, before any arc search. 0 = no sweep.
+    int sweep_step_deg;
+    int sweep_max_deg;
     // Return drive sized from the measured side distance instead of
     // mirroring the out leg (pivot turns only; within 0.5..1.5 x out leg).
     bool return_from_side;
@@ -206,6 +215,7 @@ typedef struct {
     uint32_t pass_clear;  // pass leg ended by the side sonar
     uint32_t pass_capped; // pass leg ran to its cap without seeing the side open
     uint32_t pass_unseen; // face never seen by the planned length: ended there
+    uint32_t sweep_found; // line found by the in-place sweep
 } av_metrics_t;
 
 // Treat as opaque; defined here only so callers can allocate it statically.
@@ -266,6 +276,8 @@ typedef struct {
     bool reverse_issued;
     bool search_started;
     int align_step; // 0 none, 1 driving onto the line, 2 turning along it
+    int sweep_idx;   // next sweep heading; done once past the last
+    bool sweep_done;
     int pass_phase; // 0 off, 1 watching the side, 2 driving past the corner
     bool pass_seen;       // side face seen at least once this pass
     int pass_readings;

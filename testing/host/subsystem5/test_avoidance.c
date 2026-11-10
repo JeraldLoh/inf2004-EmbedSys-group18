@@ -78,6 +78,8 @@ typedef struct {
     uint32_t forward_start;
     float forward_cm[8];
     float pass_side_cm, pass_depth_cm; // from the last PASS_CLEAR event
+    bool line_at_heading_on;   // line seen once settled at this heading (sweep)
+    int line_heading;
     int bypass_turns;
     bool bypassing;
 
@@ -237,6 +239,10 @@ static bool s_line(void *ctx) {
         s->motion_active && (int32_t)(s->t - s->turn_end) >= 0) return true;
     if (s->line_on_bypass_turn != 0 && s->bypassing && s->bypass_turns == s->line_on_bypass_turn &&
         s->motion_active && (int32_t)(s->t - s->turn_end) < 0) return true;
+    // After the four bypass turns, only the sweep turns the car.
+    if (s->line_at_heading_on && s->bypassing && s->bypass_turns > 4 &&
+        s->heading == s->line_heading &&
+        (int32_t)(s->t - s->turn_end) >= 0) return true;
     if (s->line_when_aligned && s->bypassing && s->forwards == 4 && s->heading == 0 &&
         (int32_t)(s->t - s->motion_end) >= 0) return true;
     if (s->line_never || !s->searching) return false;
@@ -857,6 +863,66 @@ static void reverse_rescan_keeps_unseen_obstacle(void) {
     CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
     CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 0);
     CHECK_INT(s.resumes, 0);
+}
+
+// Car trial 2026-11-10: the arc search carried the car off course. Back on
+// the line heading without the line, pivot in place +/-10..30 first.
+static void sim_setup_sweep(sim_t *s, av_t *av) {
+    sim_defaults(s, 0);
+    s->cfg.sweep_step_deg = 10;
+    s->cfg.sweep_max_deg = 30;
+    s->cfg.return_extra_cm = 8.0f;
+    av_platform_t p = platform_for(s);
+    CHECK(av_init(av, &s->cfg, &p));
+    s->obstacle = (blob_t){80, 100, 12.0f, true};
+    s->line_never = true; // the arc search never finds it
+}
+
+static void sweep_finds_line_without_arc_search(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_sweep(&s, &av);
+    s.line_at_heading_on = true;
+    s.line_heading = -20; // second step on the right
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.searches, 0);
+    CHECK_INT(av_metrics(&av)->sweep_found, 1);
+    CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
+    CHECK(abs(s.heading) <= 30);
+    check_hygiene(&s);
+}
+
+static void sweep_then_arc_search_when_not_found(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_sweep(&s, &av);
+    CHECK(run_until(&s, &av, AV_STATE_FAILED, 120000)); // line_never: gives up
+    CHECK_INT(s.bypass_turns, 4 + 6 + 1);               // bypass, 6 sweep steps, back to 0
+    CHECK(s.searches >= 1);                             // arc search only after the sweep
+    CHECK(s.max_abs_heading <= 75);
+}
+
+static void return_drive_runs_past_expected_crossing(void) {
+    sim_t s;
+    av_t av;
+    sim_setup_sweep(&s, &av);
+    s.line_never = false;
+    CHECK(run_encounter(&s, &av));
+    float want = s.last_plan.out_cm + 8.0f;
+    CHECK(s.forward_cm[2] > want - 0.01f && s.forward_cm[2] < want + 0.01f);
+}
+
+static void sweep_config_checked(void) {
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.sweep_max_deg == 0 && c.return_extra_cm == 0.0f); // off by default
+    c.sweep_max_deg = 30;
+    c.sweep_step_deg = 0;
+    CHECK(av_config_check(&c) != NULL);
+    c.sweep_step_deg = 10;
+    CHECK(av_config_check(&c) == NULL);
+    c.sweep_max_deg = 61;
+    CHECK(av_config_check(&c) != NULL);
 }
 
 // Without a back-off a rescan that sees nothing still means gone.
@@ -1750,6 +1816,10 @@ void run_avoidance_tests(void) {
     RUN(backoff_rescan_keeps_unseen_obstacle);
     RUN(blocker_beyond_edge_blocks_that_side);
     RUN(reverse_rescan_keeps_unseen_obstacle);
+    RUN(sweep_finds_line_without_arc_search);
+    RUN(sweep_then_arc_search_when_not_found);
+    RUN(return_drive_runs_past_expected_crossing);
+    RUN(sweep_config_checked);
     RUN(far_reading_beyond_edge_does_not_block);
     RUN(rescan_without_backoff_can_clear);
     RUN(reacquire_retries_alternate_direction);
