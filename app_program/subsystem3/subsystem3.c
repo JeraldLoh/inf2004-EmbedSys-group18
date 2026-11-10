@@ -80,6 +80,15 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #define S3_TASK_PRIORITY 10      /* TBD: agree the schedule as a team */
 #define S3_TASK_STACK 1024
 #define S3_CALIBRATION_MS 3000U  /* sweep the barcode sensor during this */
+/* 1 = no calibration sweep: fixed darkness thresholds, measured on the car
+ * 2026-11-10, sensor lowered to ~2-3 mm, mounted 30+ mm left of the line:
+ * white paper/mat ~120-350; the ~1.5-2 mm thin bars of the course print peak
+ * only ~540-1850 at 70 mm/s; wide bars ~3000-3900. */
+#ifndef S3_BARCODE_FIXED
+#define S3_BARCODE_FIXED 1
+#endif
+#define S3_BARCODE_FIXED_LOW 350U
+#define S3_BARCODE_FIXED_HIGH 450U
 #define S3_ROUTE_VALID_MS 10000U /* TBD: measure barcode-to-junction time */
 #define S3_DEBUG_PERIOD_MS 100U
 
@@ -121,6 +130,25 @@ LOCAL line_side_t s3_reacquire_hint = LINE_SIDE_NONE;
  * following. s3_barcode_ready is one word written only by s3_task. */
 LOCAL BOOL s3_calibrate_request = FALSE;
 LOCAL volatile BOOL s3_barcode_ready = FALSE;
+/* Capture diagnostics (darkest reading per element, sample gaps, 2 ms
+ * waveform dump) cost ~6 KB of RAM: S3_DEBUG_RAW=1 builds only. */
+#define S3_CAPTURE_DIAG (!S3_BARCODE_USE_EDGES && S3_DEBUG_RAW)
+#if S3_CAPTURE_DIAG
+/* Diagnostics only (s3_task): darkest reading per element of a capture. */
+LOCAL uint16_t s3_peak[BARCODE_DECODER_MAX_RUNS];
+LOCAL bool s3_peak_busy = false;
+LOCAL uint32_t s3_prev_sample_us = 0U;
+LOCAL uint32_t s3_max_gap_us = 0U;     /* largest sample gap in a capture */
+LOCAL uint32_t s3_capture_samples = 0U;
+/* Waveform recorder: darkness every 2 ms of a capture (6 s max). Printed
+ * slowly after a failed read so the USB ring never overflows. */
+#define S3_WAVE_MAX 3000U
+LOCAL uint16_t s3_wave[S3_WAVE_MAX];
+LOCAL UINT s3_wave_n = 0U;
+LOCAL UINT s3_wave_next = 0U;
+LOCAL bool s3_wave_dumping = false;
+LOCAL uint32_t s3_wave_last_ms = 0U;
+#endif
 #if APP_CAR_MQTT
 /* Observation only: 0 not started, 1 running, 2 passed, 3 failed, 4 not reported. */
 static uint32_t s3_wifi_calibration_state,s3_wifi_calibration_reason;
@@ -153,6 +181,21 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
     s3_calibrate_request = FALSE;
     (void)tk_unl_mtx(s3_mtx);
 
+#if S3_BARCODE_FIXED && !APP_S3_LINE_PID   /* PID builds still need the sweep */
+    if (requested)
+    {
+        barcode_sensor_set_fixed(bar, S3_BARCODE_FIXED_LOW, S3_BARCODE_FIXED_HIGH);
+        barcode_decoder_reset(decoder);
+        s3_barcode_ready = TRUE;
+#if APP_CAR_MQTT
+        s3_wifi_calibration_state=2U;
+#endif
+        tm_printf((UB *)"[S3] Barcode OK: fixed thresholds %d/%d (no calibration sweep)\n",
+                  (INT)bar->threshold_low, (INT)bar->threshold_high);
+    }
+    (void)have_raw; (void)raw; (void)now_ms; (void)active; (void)start_ms;
+    return false;
+#endif
     if (requested)
     {
         tm_printf((UB *)"[S3] Calibrating: sweep barcode sensor over black and white for %d ms\n",
@@ -353,6 +396,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
     line_pid_init(&s3_pid);   /* digital steering until calibrated */
 #endif
     barcode_decoder_reset(&decoder);
+    decoder.fail_pending = false;
+    decoder.fail_count = 0U;
 #if !S3_BARCODE_USE_EDGES
     barcode_sensor_reset(&bar);   /* reads white until calibrated */
 #endif
@@ -457,6 +502,50 @@ LOCAL void s3_task(INT stacd, void *exinf)
             {
                 barcode_black = barcode_sensor_is_black(&bar, raw);
                 barcode_decoder_feed(&decoder, barcode_black, now_us);
+#if S3_CAPTURE_DIAG
+                /* Diagnostics: darkest reading inside each element of the
+                 * capture, printed if it fails. A "white" element hiding a
+                 * missed bar shows as a raised peak. */
+                if (barcode_decoder_busy(&decoder))
+                {
+                    uint16_t dark = barcode_sensor_darkness(raw);
+                    if (!s3_peak_busy)
+                    {
+                        UINT k;
+                        for (k = 0U; k < BARCODE_DECODER_MAX_RUNS; k++)
+                        {
+                            s3_peak[k] = 0U;
+                        }
+                        s3_peak_busy = true;
+                        if (!s3_wave_dumping)
+                        {
+                            s3_wave_n = 0U;
+                        }
+                        s3_max_gap_us = 0U;
+                        s3_capture_samples = 0U;
+                    }
+                    else if ((now_us - s3_prev_sample_us) > s3_max_gap_us)
+                    {
+                        s3_max_gap_us = now_us - s3_prev_sample_us;
+                    }
+                    if (((s3_capture_samples & 1U) == 0U) && !s3_wave_dumping &&
+                        (s3_wave_n < S3_WAVE_MAX))
+                    {
+                        s3_wave[s3_wave_n++] = dark;
+                    }
+                    s3_capture_samples++;
+                    if ((decoder.run_count < BARCODE_DECODER_MAX_RUNS) &&
+                        (dark > s3_peak[decoder.run_count]))
+                    {
+                        s3_peak[decoder.run_count] = dark;
+                    }
+                }
+                else
+                {
+                    s3_peak_busy = false;
+                }
+                s3_prev_sample_us = now_us;
+#endif
             }
         }
 #endif
@@ -491,6 +580,60 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 barcode_seen = true;
             }
         }
+
+        /* A capture that did not decode: print its element widths (ms) so
+         * the cause is visible. Few runs = a tape crossing, not a barcode. */
+        if (decoder.fail_pending)
+        {
+            decoder.fail_pending = false;
+            if (decoder.fail_count >= 5U)
+            {
+                UINT i;
+                tm_printf((UB *)"[S3] Barcode NOT decoded: %d elements (need 29), ms:",
+                          (INT)decoder.fail_count);
+                for (i = 0U; i < decoder.fail_count; i++)
+                {
+                    tm_printf((UB *)" %d", (INT)(decoder.fail_run_us[i] / 1000U));
+                }
+                tm_printf((UB *)"\n");
+#if S3_CAPTURE_DIAG
+                tm_printf((UB *)"[S3]   darkest per element:");
+                for (i = 0U; i < decoder.fail_count; i++)
+                {
+                    tm_printf((UB *)" %d", (INT)s3_peak[i]);
+                }
+                tm_printf((UB *)"\n[S3]   samples %lu, largest gap between samples %lu us\n",
+                          (unsigned long)s3_capture_samples,
+                          (unsigned long)s3_max_gap_us);
+                if (!s3_wave_dumping && (s3_wave_n > 0U))
+                {
+                    tm_printf((UB *)"[S3 WAVE] begin n=%d step_ms=2\n", (INT)s3_wave_n);
+                    s3_wave_next = 0U;
+                    s3_wave_dumping = true;
+                    s3_wave_last_ms = now_ms;
+                }
+#endif
+            }
+        }
+#if S3_CAPTURE_DIAG
+        /* Drip the recorded waveform out, 20 values every 20 ms. */
+        if (s3_wave_dumping && ((now_ms - s3_wave_last_ms) >= 20U))
+        {
+            UINT j;
+            s3_wave_last_ms = now_ms;
+            tm_printf((UB *)"[S3 WAVE] %d:", (INT)s3_wave_next);
+            for (j = 0U; (j < 20U) && (s3_wave_next < s3_wave_n); j++)
+            {
+                tm_printf((UB *)" %d", (INT)s3_wave[s3_wave_next++]);
+            }
+            tm_printf((UB *)"\n");
+            if (s3_wave_next >= s3_wave_n)
+            {
+                tm_printf((UB *)"[S3 WAVE] end\n");
+                s3_wave_dumping = false;
+            }
+        }
+#endif
 
         /* ---- Publish line status and steering ---- */
         line_follow_set_barcode_active(&line, barcode_decoder_busy(&decoder));
