@@ -6,9 +6,10 @@
 
 #define BARCODE_QUIET_START_US 8000U
 #define BARCODE_QUIET_END_US 28000U   /* lower bound for the end quiet zone */
-#define BARCODE_QUIET_END_FACTOR 5U   /* end quiet zone = 5 x narrow bar */
 #define BARCODE_MIN_RUN_US 400U
 #define BARCODE_MAX_SCAN_US 6000000U  /* 141 mm barcode at ~25 mm/s */
+#define BARCODE_ABANDON_MIN_US 600000U /* shortest white that ends a partial read */
+#define BARCODE_MAX_BAR_US 1500000U    /* longer black is tape, not a bar */
 #define BARCODE_WIDE_NUMERATOR 17U
 #define BARCODE_WIDE_DENOMINATOR 10U
 #define BARCODE_SYMBOL_RUNS 29U   /* 3 characters x 9 + 2 gaps */
@@ -54,21 +55,43 @@ static char code39_character(uint16_t bits)
     return '?';
 }
 
-static uint32_t minimum_run_us(const barcode_decoder_t *decoder)
+/* Wide/narrow limits, worked out separately for bars (even runs) and spaces
+ * (odd runs). Sensor blur makes every black bar read a little thinner and
+ * every white space a little wider, so one shared "narrow" width misjudges
+ * one of the two colours. Each colour gets the midpoint of its own shortest
+ * and longest run; a valid symbol always has both widths of both colours
+ * because the '*' start/stop character does. Returns false if impossible. */
+static bool wide_limits(const barcode_decoder_t *decoder,
+                        uint32_t *bar_limit, uint32_t *space_limit)
 {
-    uint32_t minimum = 0U;
+    uint32_t low[2] = {0U, 0U};
+    uint32_t high[2] = {0U, 0U};
     uint8_t index;
 
-    for (index = 0U; index < decoder->run_count; index++)
+    for (index = 0U; index < BARCODE_SYMBOL_RUNS; index++)
     {
+        uint8_t colour = (uint8_t)(index & 1U);   /* 0 = bar, 1 = space */
         uint32_t width = decoder->run_us[index];
-        if ((width >= BARCODE_MIN_RUN_US) &&
-            ((minimum == 0U) || (width < minimum)))
+
+        if ((low[colour] == 0U) || (width < low[colour]))
         {
-            minimum = width;
+            low[colour] = width;
+        }
+        if (width > high[colour])
+        {
+            high[colour] = width;
         }
     }
-    return minimum;
+    /* A real wide element is at least ~2x narrow; anything flatter is noise. */
+    if ((low[0] == 0U) || (low[1] == 0U) ||
+        ((high[0] * BARCODE_WIDE_DENOMINATOR) < (low[0] * BARCODE_WIDE_NUMERATOR)) ||
+        ((high[1] * BARCODE_WIDE_DENOMINATOR) < (low[1] * BARCODE_WIDE_NUMERATOR)))
+    {
+        return false;
+    }
+    *bar_limit = (low[0] + high[0]) / 2U;
+    *space_limit = (low[1] + high[1]) / 2U;
+    return true;
 }
 
 /* Builds the 9-bit wide/narrow pattern of the character that starts at
@@ -78,12 +101,11 @@ static uint32_t minimum_run_us(const barcode_decoder_t *decoder)
 static uint16_t pattern_at(
     const barcode_decoder_t *decoder,
     uint8_t start,
-    uint32_t narrow_us,
+    uint32_t bar_limit,
+    uint32_t space_limit,
     bool reverse)
 {
     uint16_t bits = 0U;
-    uint32_t wide_limit =
-        (narrow_us * BARCODE_WIDE_NUMERATOR) / BARCODE_WIDE_DENOMINATOR;
     uint8_t index;
     uint8_t run;
 
@@ -92,10 +114,11 @@ static uint16_t pattern_at(
         run = (uint8_t)(start + index);
         if (reverse)
         {
+            /* 28 - run keeps the parity, so bars stay bars. */
             run = (uint8_t)(BARCODE_SYMBOL_RUNS - 1U - run);
         }
         bits = (uint16_t)(bits << 1);
-        if (decoder->run_us[run] > wide_limit)
+        if (decoder->run_us[run] > (((run & 1U) == 0U) ? bar_limit : space_limit))
         {
             bits = (uint16_t)(bits | 1U);
         }
@@ -118,23 +141,21 @@ static bool has_three_wide(uint16_t bits)
 
 /* The gap between characters is always a narrow space. Gaps sit at elements
  * 9 and 19, which are the same positions whichever way the code is read. */
-static bool gaps_are_narrow(const barcode_decoder_t *decoder, uint32_t narrow_us)
+static bool gaps_are_narrow(const barcode_decoder_t *decoder, uint32_t space_limit)
 {
-    uint32_t wide_limit =
-        (narrow_us * BARCODE_WIDE_NUMERATOR) / BARCODE_WIDE_DENOMINATOR;
-
-    return (decoder->run_us[9] <= wide_limit) &&
-           (decoder->run_us[19] <= wide_limit);
+    return (decoder->run_us[9] <= space_limit) &&
+           (decoder->run_us[19] <= space_limit);
 }
 
 static bool decode_direction(
     barcode_decoder_t *decoder,
-    uint32_t narrow_us,
+    uint32_t bar_limit,
+    uint32_t space_limit,
     bool reverse)
 {
-    uint16_t start_bits = pattern_at(decoder, 0U, narrow_us, reverse);
-    uint16_t data_bits = pattern_at(decoder, 10U, narrow_us, reverse);
-    uint16_t stop_bits = pattern_at(decoder, 20U, narrow_us, reverse);
+    uint16_t start_bits = pattern_at(decoder, 0U, bar_limit, space_limit, reverse);
+    uint16_t data_bits = pattern_at(decoder, 10U, bar_limit, space_limit, reverse);
+    uint16_t stop_bits = pattern_at(decoder, 20U, bar_limit, space_limit, reverse);
     char data;
 
     /* Validation: reject anything that is not a well-formed symbol, so a
@@ -168,7 +189,8 @@ static bool decode_direction(
 
 static bool decode_complete_symbol(barcode_decoder_t *decoder)
 {
-    uint32_t narrow_us;
+    uint32_t bar_limit;
+    uint32_t space_limit;
 
     /* Exactly one Code 39 character is authoritative: * X * plus two gaps. */
     if (decoder->run_count < BARCODE_SYMBOL_RUNS)
@@ -176,15 +198,15 @@ static bool decode_complete_symbol(barcode_decoder_t *decoder)
         return false;
     }
 
-    narrow_us = minimum_run_us(decoder);
-    if ((narrow_us == 0U) || !gaps_are_narrow(decoder, narrow_us))
+    if (!wide_limits(decoder, &bar_limit, &space_limit) ||
+        !gaps_are_narrow(decoder, space_limit))
     {
         return false;
     }
 
     /* Try the normal direction first, then the mirrored one. */
-    return decode_direction(decoder, narrow_us, false) ||
-           decode_direction(decoder, narrow_us, true);
+    return decode_direction(decoder, bar_limit, space_limit, false) ||
+           decode_direction(decoder, bar_limit, space_limit, true);
 }
 
 static void push_run(barcode_decoder_t *decoder, uint32_t width_us)
@@ -204,7 +226,15 @@ static void finish_or_reset(barcode_decoder_t *decoder)
     }
     else
     {
-        barcode_decoder_reset(decoder);
+        uint8_t index;
+
+        for (index = 0U; index < decoder->run_count; index++)
+        {
+            decoder->fail_run_us[index] = decoder->run_us[index];
+        }
+        decoder->fail_count = decoder->run_count;
+        decoder->fail_pending = true;
+        barcode_decoder_reset(decoder);   /* leaves the fail_* fields alone */
     }
 }
 
@@ -287,20 +317,65 @@ void barcode_decoder_feed(
             return;
         }
     }
-    else if (!centre_sensor_black && (decoder->run_count >= 19U))
+    else
     {
-        /* The end quiet zone is judged relative to the narrow bar width, so
-         * the decoder works at any car speed. A wide space is at most ~3x
-         * narrow, so 5x narrow can only be the white area after the barcode. */
-        uint32_t quiet_us = minimum_run_us(decoder) * BARCODE_QUIET_END_FACTOR;
-        if (quiet_us < BARCODE_QUIET_END_US)
+        /* How long the current colour has lasted, against the longest
+         * element captured so far. Measured on the car (2026-11-10): sensor
+         * blur makes narrow spaces read ~45 ms but wide spaces ~245 ms, over
+         * 5x, so "5x the narrowest" cut real barcodes off at a wide space.
+         * Every wide space is shorter than 2x the longest element (the wide
+         * bars read longest), so 2x longest only ever matches the white
+         * after the barcode or a sensor that has left it. */
+        uint32_t current_us = now_us - decoder->run_started_us;
+        uint32_t longest = 0U;
+        uint32_t limit;
+        uint8_t index;
+
+        for (index = 0U; index < decoder->run_count; index++)
         {
-            quiet_us = BARCODE_QUIET_END_US;
+            if (decoder->run_us[index] > longest)
+            {
+                longest = decoder->run_us[index];
+            }
         }
-        if ((now_us - decoder->run_started_us) >= quiet_us)
+
+        if (centre_sensor_black)
         {
-            finish_or_reset(decoder);
-            return;
+            /* Far longer than any bar: line tape or a crossbar. Drop it at
+             * once so the decoder is idle again before the next barcode. */
+            if (current_us > BARCODE_MAX_BAR_US)
+            {
+                barcode_decoder_reset(decoder);
+                return;
+            }
+        }
+        else if (decoder->run_count > 0U)
+        {
+            /* At 19+ elements a long white is the end quiet zone; below
+             * that it is a partial read. Either way, decide now instead of
+             * waiting out BARCODE_MAX_SCAN_US. A floor protects the first
+             * elements, when only a thin bar may have been seen. */
+            limit = longest * 2U;
+            if (decoder->run_count >= 19U)
+            {
+                if (limit < BARCODE_QUIET_END_US)
+                {
+                    limit = BARCODE_QUIET_END_US;
+                }
+            }
+            else if (limit < BARCODE_ABANDON_MIN_US)
+            {
+                limit = BARCODE_ABANDON_MIN_US;
+            }
+            if (current_us > limit)
+            {
+                if (decoder->run_count < 19U)
+                {
+                    push_run(decoder, current_us);   /* shows in diagnostics */
+                }
+                finish_or_reset(decoder);
+                return;
+            }
         }
     }
 
