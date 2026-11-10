@@ -248,6 +248,7 @@ static bool enc_profile;   /* this encounter built a profile */
 static bool enc_aligned;   /* the rejoin turned along the line first */
 static bool enc_pass_clear; /* the side sonar ended the pass leg */
 static uint32_t enc_capped0; /* pass_capped at detection */
+static uint32_t enc_unseen0; /* pass_unseen at detection */
 static uint32_t rejoined_count;
 static uint32_t cleared_count;
 static uint32_t aborted_count;
@@ -289,7 +290,8 @@ static void print_result(const char *outcome, uint32_t ms, const char *reason)
     tm_printf((UB*)" aligned=%d backoffs=%d reverses=%d reacq=%d",
         enc_aligned ? 1 : 0, av.backoffs, av.reverses, av.reacquire_attempts);
     tm_printf((UB*)" pass=%s side_mm=", !av.cfg.pass_watch_side ? "off" :
-        (enc_pass_clear ? "clear" : ((m->pass_capped != enc_capped0) ? "cap" : "-")));
+        (enc_pass_clear ? "clear" : ((m->pass_capped != enc_capped0) ? "cap" :
+        ((m->pass_unseen != enc_unseen0) ? "unseen" : "-"))));
     if (enc_pass_clear) { tm_printf((UB*)"%d", cm_to_mm(av.side_cm)); }
     else { tm_printf((UB*)"-"); }
     if (enc_pass_clear && (av.depth_cm >= 0.0f))
@@ -317,6 +319,7 @@ static void result_on_event(const av_event_t *e)
             enc_aligned = false;
             enc_pass_clear = false;
             enc_capped0 = av_metrics(&av)->pass_capped;
+            enc_unseen0 = av_metrics(&av)->pass_unseen;
             break;
         case AV_EVT_PASS_CLEAR:
             enc_pass_clear = true;

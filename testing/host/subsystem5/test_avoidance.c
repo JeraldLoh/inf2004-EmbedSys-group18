@@ -1376,13 +1376,17 @@ static void pass_capped_when_side_never_opens(void) {
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
 }
 
-static void pass_without_side_face_runs_capped(void) {
+// Never seeing the face (a shallow box already behind the car): the pass
+// ends at its planned length by odometry, not at the cap.
+static void pass_without_side_face_ends_at_planned_length(void) {
     sim_t s;
     av_t av;
     sim_setup_pass(&s, &av, true);
     CHECK(run_encounter(&s, &av));
     CHECK_INT(count_events(&s, AV_EVT_PASS_CLEAR), 0);
-    CHECK_INT(av_metrics(&av)->pass_capped, 1);
+    CHECK_INT(av_metrics(&av)->pass_unseen, 1);
+    CHECK_INT(av_metrics(&av)->pass_capped, 0);
+    CHECK_INT(s.forwards, 3); // out, pass (stopped at the planned length), back
     // Nothing measured: the return leg still mirrors the out leg.
     CHECK(near(s.forward_cm[2], s.last_plan.out_cm, 0.01f));
     CHECK_INT(av_metrics(&av)->reacquire_ok, 1);
@@ -1683,7 +1687,7 @@ void run_avoidance_tests(void) {
     RUN(pass_config_checked);
     RUN(pass_ends_after_back_corner);
     RUN(pass_capped_when_side_never_opens);
-    RUN(pass_without_side_face_runs_capped);
+    RUN(pass_without_side_face_ends_at_planned_length);
     RUN(return_leg_sized_from_side_distance);
     RUN(pass_still_guards_ahead);
     RUN(pass_counts_a_drifted_face_with_slack);

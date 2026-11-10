@@ -936,7 +936,21 @@ static void pass_watch(av_t *a, uint32_t now) {
         a->pass_hit_sum_cm += cm;
         return;
     }
-    if (!a->pass_seen) return; // not reached the face yet (or missed it): keep going
+    if (!a->pass_seen) {
+        // Car trial 2026-11-10: a shallow box was already behind the car
+        // when the pass started, so the face never showed and the car ran
+        // the full extra distance away from it. Unseen by the planned
+        // length: end there, as the plan without the watch would.
+        float at = travelled_cm(a);
+        if (at >= 0.0f && at >= a->legs[LEG_PASS].cm) {
+            a->hw.motion_stop(a->hw.ctx);
+            a->pass_phase = 0;
+            a->metrics.pass_unseen++;
+            a->leg_active = false;
+            a->leg_idx++;
+        }
+        return; // otherwise not reached the face yet: keep going
+    }
 
     float at = travelled_cm(a);
     a->hw.motion_stop(a->hw.ctx);

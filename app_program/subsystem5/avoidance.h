@@ -198,6 +198,7 @@ typedef struct {
     uint64_t total_encounter_ms;
     uint32_t pass_clear;  // pass leg ended by the side sonar
     uint32_t pass_capped; // pass leg ran to its cap without seeing the side open
+    uint32_t pass_unseen; // face never seen by the planned length: ended there
 } av_metrics_t;
 
 // Treat as opaque; defined here only so callers can allocate it statically.
