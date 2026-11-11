@@ -77,6 +77,7 @@ typedef struct
     uint8_t history_left;        /* last 3 raw samples, bit 0 = newest */
     uint8_t history_right;
     uint8_t previous_state;      /* state before the current one */
+    uint32_t previous_duration_ms; /* how long that state lasted */
     uint32_t both_black_since_ms;
     uint32_t state_since_ms;
     bool both_black_active;
@@ -114,7 +115,12 @@ typedef struct
 #define LINE_DAMP_STEER 15
 #endif
 #ifndef LINE_DAMP_MS
-#define LINE_DAMP_MS 40U
+#define LINE_DAMP_MS 40U   /* longest counter-steer pulse */
+#endif
+/* The pulse lasts half as long as the correction it undoes (so a tiny nudge
+ * gets a tiny counter), but never less than this. Shorter than this = none. */
+#ifndef LINE_DAMP_MIN_MS
+#define LINE_DAMP_MIN_MS 15U
 #endif
 
 /* Hold: while centred (both white), steer this much toward the side the

@@ -14,6 +14,10 @@
 #include "s4_config.h"
 #include "terrain_estimator.h"
 
+#ifndef B4_HEADING_LOG
+#define B4_HEADING_LOG 0
+#endif
+
 #define S4_FLG_TICK 0x8000U              /* private: set by the cyclic handler */
 #define S4_WAIT_TIMEOUT_MS (S4_PERIOD_MS * 5U)
 #define S4_MBF_MSG_BYTES ((SZ)sizeof(s4_event_msg_t))
@@ -415,6 +419,56 @@ LOCAL void s4_imu_task(INT stacd, void *exinf)
         }
         s4_stage = S4_STAGE_DISPATCH;
         s4_dispatch(&events);
+#if B4_HEADING_LOG
+        {
+            /* ~10 Hz heading trace, same millisecond timebase as [B2 TRACK]
+             * (operating time). Diagnostic only; nothing steers from it. */
+            static UW hdg_last_ms = 0U;
+            SYSTIM otm;
+            (void)tk_get_otm(&otm);
+            if ((UW)(otm.lo - hdg_last_ms) >= 100U)
+            {
+                hdg_last_ms = otm.lo;
+                tm_printf((UB *)"[B4 HDG] t_ms=%d valid=%d hdg_ddeg=%d turn_ddps=%d pitch_ddeg=%d roll_ddeg=%d\n",
+                          (INT)otm.lo, (INT)s4_est.heading_valid, (INT)s4_est.heading_ddeg,
+                          (INT)s4_est.turn_ddps, (INT)s4_est.pitch_ddeg, (INT)s4_est.roll_ddeg);
+            }
+        }
+#endif
+    }
+}
+
+/* Heading for the controller's optional assist (HDG_ASSIST=1). */
+bool s4_heading_read(int32_t *heading_ddeg, int32_t *turn_dps)
+{
+    if (!s4_est.heading_valid)
+    {
+        return false;
+    }
+    *heading_ddeg = (int32_t)s4_est.heading_ddeg;
+    *turn_dps = (int32_t)s4_est.turn_ddps;
+    return true;
+}
+
+/* Rate-limited status line: calibrating / holding / tape leads. */
+void s4_heading_report(int state, int32_t ref_ddeg, int32_t err_ddeg, int32_t bias_u1_m)
+{
+    static UW last_ms = 0U;
+    static int last_state = -1;
+    SYSTIM otm;
+
+    (void)tk_get_otm(&otm);
+    if ((state != last_state) || ((state == 1) && ((UW)(otm.lo - last_ms) >= 500U)))
+    {
+        if ((state != last_state) || (bias_u1_m != 0))
+        {
+            tm_printf((UB *)"[HDG] %s ref=%d err=%d ddeg bias=%d\n",
+                      (state == 0) ? "calibrating, keep the car still" :
+                      (state == 1) ? "holding heading" : "tape leads",
+                      (INT)ref_ddeg, (INT)err_ddeg, (INT)bias_u1_m);
+        }
+        last_state = state;
+        last_ms = otm.lo;
     }
 }
 
