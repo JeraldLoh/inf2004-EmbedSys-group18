@@ -1,13 +1,14 @@
 import {decodeLiveStatus} from './live-status.mjs';
 import {decodeTelemetry} from './binary.mjs';
 import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs';
+import {mapFromHex} from './route-map.mjs';
 export function validateCommand(command) {
  if(command==='START'||command==='STOP') return command;
  throw new Error('Only START and STOP are supported');
 }
 export class RobotState {
  constructor(){this.disconnect();}
- disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.liveStatus=null;this.liveStatusAt=null;this.demo=null;this.result=null;this.received=0;this.diagnostics=newDiagnostics();}
+ disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.liveStatus=null;this.liveStatusAt=null;this.demo=null;this.result=null;this.routeMap=null;this.routeMapAt=null;this.received=0;this.diagnostics=newDiagnostics();}
  status(now){return !this.connected?'disconnected':this.lastHeartbeat===null?'waiting':now-this.lastHeartbeat<15?'online':'offline';}
  connectionLost(){this.connected=false;this.result=null;}
  connectionRestored(){this.connected=true;this.lastHeartbeat=null;this.result=null;}
@@ -40,7 +41,8 @@ export class RobotState {
    this.telemetry=v;this.telemetryAt=now;
    this.diagnostics.packetBytes=typeof payload==='string'?new TextEncoder().encode(payload).length:payload.byteLength;
   }else if(topic==='command_result'){
-   if(!['simulated','queued','rejected','queue_full'].includes(v.status))throw new Error('Invalid command result');
+   if(!['simulated','queued','rejected','queue_full','applied'].includes(v.status))throw new Error('Invalid command result');
+   if(v.map!==undefined){this.routeMap=mapFromHex(v.map);this.routeMapAt=now;}
    this.result=v;
   }else throw new Error('Unexpected topic');
   this.demo=v.demo;this.received++;return true;

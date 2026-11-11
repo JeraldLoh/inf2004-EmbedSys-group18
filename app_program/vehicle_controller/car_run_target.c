@@ -725,9 +725,10 @@ static void supervisor_task(INT code, void *exinf)
 #endif
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
 #if APP_NO_BARCODE_CAL
-    tm_printf((UB*)"[CAR] Barcode calibration SKIPPED (NO_BARCODE_CAL=1): barcodes ignored.\n");
-#else
-    tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");
+    tm_printf((UB*)"[CAR] Start-up calibration SKIPPED (NO_BARCODE_CAL=1); barcodes use fixed thresholds.\n");
+#elif APP_S3_LINE_PID
+    /* The line PID still needs its sweep; barcodes use fixed thresholds. */
+    tm_printf((UB*)"[CAR] Slide the car sideways across the tape now (3 s line PID calibration).\n");
     subsystem3_calibrate_barcode();
 #endif
 #if APP_CAR_B2_TRIAL

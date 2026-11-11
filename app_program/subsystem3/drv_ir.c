@@ -26,18 +26,6 @@ EXPORT ER drv_ir_init(void)
         return er;
     }
 
-    if (S3_PIN_BARCODE_D0 != 0xFFU)
-    {
-        er = gpio_set_pin(S3_PIN_BARCODE_D0, GPIO_MODE_IN);
-        if (er < E_OK)
-        {
-            return er;
-        }
-        /* The edge interrupt itself is enabled by the team's shared GPIO
-         * dispatcher (one IO_BANK0 IRQ serves all pins: encoders, echo,
-         * buttons), so it is not set up here. */
-    }
-
     /* "adca" is unit 0 as registered by device/adc: DEVCNF_ADC_DEVNAME ("adc")
      * plus 'a' + unit. Opening plain "adc" returns E_NOEXS.
      * GP26 is switched to analogue mode (digital input and pulls off) by
@@ -89,15 +77,6 @@ EXPORT ER drv_ir_read_barcode(uint16_t *raw)
 EXPORT ER drv_ir_read_line_analogue(uint16_t *raw)
 {
     return read_adc(S3_LINE_ADC_CHANNEL, raw);
-}
-
-EXPORT bool drv_ir_read_barcode_digital(void)
-{
-    if (S3_PIN_BARCODE_D0 == 0xFFU)
-    {
-        return false;
-    }
-    return gpio_get_val(S3_PIN_BARCODE_D0) == S3_BARCODE_D0_BLACK_LEVEL;
 }
 
 EXPORT uint32_t drv_ir_now_us(void)
