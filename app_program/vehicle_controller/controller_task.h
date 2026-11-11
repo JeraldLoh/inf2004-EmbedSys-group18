@@ -34,6 +34,12 @@ ER controller_task_bind_junction(const controller_junction_outputs_t *outputs);
  * need no change. No hook means motion commands fail closed. */
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     uint32_t boot_session, uint32_t caution_mm_s, uint32_t cruise_mm_s);
+/* Optional terrain input (IF-03, Buddy 4). Bind after controller init and
+ * before any start. The controller task calls it every 10 ms tick and feeds
+ * vehicle_controller_update_terrain(), so line tracking applies the terrain
+ * speed cap (lowest cap wins). Return false when no report is available; the
+ * previous report is then kept. Unbound means no terrain cap. */
+ER controller_task_bind_terrain(bool (*read_terrain)(terrain_report_t *report));
 bool controller_post_motion(const controller_motion_request_t *request);
 bool controller_post_motion_result(const motion_goal_result_t *result);
 bool controller_post_motion_stop(stop_reason_mask_t reasons, uint32_t evidence_id);

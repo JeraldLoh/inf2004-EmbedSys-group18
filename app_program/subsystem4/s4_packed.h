@@ -162,7 +162,7 @@ enum
 #define S4_HU_UNC_WIDTH 6U
 #define S4_HU_PITCH_SHIFT 14U    /* peak |pitch| 0..63 deg */
 #define S4_HU_PITCH_WIDTH 6U
-#define S4_HU_LEN_SHIFT 20U      /* path length 0..255 cm */
+#define S4_HU_LEN_SHIFT 20U      /* hump width 0..255 cm (path driven if no profile fit) */
 #define S4_HU_LEN_WIDTH 8U
 #define S4_HU_VALID_SHIFT 28U
 #define S4_HU_SEQ_SHIFT 29U      /* result counter mod 8, new-result check */

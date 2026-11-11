@@ -40,6 +40,12 @@
 #define	DEVCNF_I2C1_SDA_PIN	2	/* Buddy 4 IMU SDA, Grove 2 / Maker port */
 #define	DEVCNF_I2C1_SCL_PIN	3	/* Buddy 4 IMU SCL, Grove 2 / Maker port */
 
+/* Bus speed: 1 = 100 kbit/s standard mode, 0 = 400 kbit/s fast mode.
+ * Group 18 runs the GY-511 on a Grove cable with only the RP2040's weak
+ * internal pull-ups; at 400 kbit/s the car showed intermittent bus errors
+ * with the motors idle (2026-11-04). The IMU needs ~30 bytes per 20 ms. */
+#define	DEVCNF_I2C_STANDARD_MODE	1
+
 /* Register initial value */
 
 // Interrupt priority

@@ -8,6 +8,131 @@
 #include "../subsystem2/b2_gesture.h"
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem5/subsystem5.h"
+#include "../subsystem4/s4_imu.h"
+
+/* ---- Buddy 4: IMU terrain and hump monitoring --------------------------- */
+/* Buddy 4 only observes. If it cannot start, the car still runs without it:
+ * no terrain cap, no hump telemetry. Its faults are reported in its own
+ * telemetry, not latched as hardware faults, because any hardware fault
+ * blocks junctions and MQTT START (an unplugged IMU must not stop a run). */
+static bool b4_ready;
+static ER b4_init_status = E_OBJ;
+static ER b4_start_status = E_OBJ;
+
+/* Called by the IMU task every 20 ms: Buddy 2's measured wheel speeds,
+ * integrated into a signed path distance for the hump height. Each wheel is
+ * signed by its last non-zero target (encoders give magnitude only), so a
+ * pivot adds nothing. A brief miss repeats the last value (the next call
+ * catches up by time); 10 misses in a row report odometry unavailable. */
+static bool b4_read_odometry(int32_t *cumulative_mm)
+{
+    static int64_t path_um;
+    static uint32_t last_sampled_ms;
+    static int8_t left_sign = 1;
+    static int8_t right_sign = 1;
+    static uint8_t misses;
+    static bool primed;
+    subsystem2_motion_telemetry_t t;
+    uint32_t dt_ms;
+
+    if (!subsystem2_motion_telemetry(&t) || !t.valid || !t.speed_valid)
+    {
+        if (primed && (misses < 10U))
+        {
+            misses++;
+            *cumulative_mm = (int32_t)(path_um / 1000);
+            return true;
+        }
+        primed = false;
+        return false;
+    }
+    misses = 0U;
+    if (t.left_target_mm_s != 0) { left_sign = (t.left_target_mm_s > 0) ? 1 : -1; }
+    if (t.right_target_mm_s != 0) { right_sign = (t.right_target_mm_s > 0) ? 1 : -1; }
+    if (!primed)
+    {
+        last_sampled_ms = t.sampled_ms;
+        primed = true;
+    }
+    dt_ms = t.sampled_ms - last_sampled_ms;
+    last_sampled_ms = t.sampled_ms;
+    if (dt_ms <= 200U)   /* a longer gap would invent distance */
+    {
+        /* mm/s x ms = micrometres; the average of both wheels. */
+        path_um += ((int64_t)(left_sign * t.left_mm_s) +
+                    (int64_t)(right_sign * t.right_mm_s)) * (int64_t)dt_ms / 2;
+    }
+    *cumulative_mm = (int32_t)(path_um / 1000);
+    return true;
+}
+
+/* Controller task, every 10 ms tick (IF-03): terrain state and speed cap. */
+static bool b4_read_terrain(terrain_report_t *report)
+{
+    uint32_t words[S4_WORDS];
+    SYSTIM now;
+
+    if (!b4_ready || !s4_shared_read(words))
+    {
+        return false;
+    }
+    (void)tk_get_otm(&now);
+    s4_terrain_report_from_words(words, (system_time_ms_t)now.lo, report);
+    return true;
+}
+
+static void b4_print_status(void)
+{
+    static const char *const terrain[] = {
+        "UNKNOWN", "LEVEL", "ASCENDING", "CREST", "DESCENDING", "SETTLING", "INVALID"
+    };
+    static const char *const cal[] = {"none", "RUNNING-keep still", "level", "level+mag"};
+    uint32_t w[S4_WORDS];
+    uint32_t state;
+    int32_t pitch;
+    int32_t roll;
+
+    if (!b4_ready)
+    {
+        return;
+    }
+    if (!s4_shared_read(w))
+    {
+        tm_printf((UB*)"[B4] no IMU snapshot yet\n");
+        s4_print_task_state();
+        return;
+    }
+    state = s4_get(w[S4_W_STATUS], S4_ST_TERRAIN_SHIFT, S4_ST_TERRAIN_WIDTH);
+    pitch = s4_get_signed(w[S4_W_ATTITUDE], S4_AT_PITCH_SHIFT, S4_AT_PITCH_WIDTH) * 5;
+    roll = s4_get_signed(w[S4_W_ATTITUDE], S4_AT_ROLL_SHIFT, S4_AT_ROLL_WIDTH) * 5;
+    tm_printf((UB*)"[B4] valid=%d cal=%s terrain=%s cap=%lu pitch=%ld.%ld roll=%ld.%ld deg "
+        "vib=%lu mg motion=%lu odom=%d faults=0x%lx fail=0x%lx i2c_err=%lu live_h=%lu mm | "
+        "last hump %lu mm +/-%lu peak %lu deg %lu cm %s #%lu | %lu us/sample\n",
+        (int)s4_get(w[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U),
+        cal[s4_get(w[S4_W_STATUS], S4_ST_CAL_SHIFT, S4_ST_CAL_WIDTH)],
+        (state < 7U) ? terrain[state] : "?",
+        (unsigned long)(s4_get(w[S4_W_STATUS], S4_ST_CAP_SHIFT, S4_ST_CAP_WIDTH) *
+            S4_CAP_UNIT_MM_S),
+        (long)(pitch / 10), (long)((pitch < 0 ? -pitch : pitch) % 10),
+        (long)(roll / 10), (long)((roll < 0 ? -roll : roll) % 10),
+        (unsigned long)(s4_get(w[S4_W_MOTION], S4_MO_VIB_SHIFT, S4_MO_VIB_WIDTH) *
+            S4_VIB_UNIT_MG),
+        (unsigned long)s4_get(w[S4_W_STATUS], S4_ST_MOTION_SHIFT, S4_ST_MOTION_WIDTH),
+        (int)s4_get(w[S4_W_STATUS], S4_ST_ODOM_SHIFT, 1U),
+        (unsigned long)s4_get(w[S4_W_STATUS], S4_ST_FAULT_SHIFT, S4_ST_FAULT_WIDTH),
+        (unsigned long)s4_sensor_failures(),
+        (unsigned long)s4_bus_errors,
+        (unsigned long)s4_get(w[S4_W_MOTION], S4_MO_LIVEH_SHIFT, S4_MO_LIVEH_WIDTH),
+        (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_HEIGHT_SHIFT, S4_HU_HEIGHT_WIDTH),
+        (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_UNC_SHIFT, S4_HU_UNC_WIDTH),
+        (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_PITCH_SHIFT, S4_HU_PITCH_WIDTH),
+        (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_LEN_SHIFT, S4_HU_LEN_WIDTH),
+        s4_get(w[S4_W_HUMP], S4_HU_VALID_SHIFT, 1U) ? "valid" : "invalid/none",
+        (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_SEQ_SHIFT, S4_HU_SEQ_WIDTH),
+        (unsigned long)s4_sample_time_us);
+    s4_print_task_state();   /* is the IMU task alive, and where is it? */
+}
+
 #if APP_CAR_MQTT
 #include "../subsystem1/subsystem1.h"
 #include "../subsystem1/buddy1_bridge.h"
@@ -35,7 +160,22 @@ static void wifi_telemetry(uint32_t now)
         .encoder_right_counts=m.encoder_right_counts,.wheel_diameter_mm=m.wheel_diameter_mm};
     (void)b1_submit_live_status(2,&live);
     /* Integrated distance and goal acknowledgement are not supplied here. */
+    {
+        uint32_t w[S4_WORDS];
+        if(b4_ready && s4_shared_read(w))
+            s.terrain_state=s4_get(w[S4_W_STATUS],S4_ST_TERRAIN_SHIFT,S4_ST_TERRAIN_WIDTH);
+    }
     if(b1_submit_section(2,&s,m.sampled_ms)) wifi_telemetry_at=now;
+}
+/* Buddy 4 section: its own 17-byte packed frame, every 200 ms. Independent
+ * of Buddy 2's section, so IMU data still flows when the motors are idle. */
+static void b4_wifi_telemetry(uint32_t now)
+{
+    static uint32_t sent_at;
+    uint8_t frame[S4_TLM_SIZE];
+    if(!b4_ready || (uint32_t)(now-sent_at)<200U) return;
+    if(s4_telemetry_pack(frame,sizeof frame)==S4_TLM_SIZE && b1_submit_section(4,frame,now))
+        sent_at=now;
 }
 #endif
 
@@ -279,12 +419,25 @@ static ER bring_up(void)
         return er;
     }
 
+    /* Buddy 4 last: optional, so its failure is recorded, not fatal. */
+    {
+        static const s4_bindings_t b4 = {b4_read_odometry};
+        b4_init_status = subsystem4_init();
+        if (b4_init_status == E_OK) { b4_init_status = s4_imu_bind(&b4); }
+        if (b4_init_status == E_OK) { b4_init_status = controller_task_bind_terrain(b4_read_terrain); }
+    }
+
     /* Mover first, then the controller that feeds it, then the sensors. */
     er = subsystem2_start();
     if (er == E_OK) { er = subsystem2_motion_start(); }
     if (er == E_OK) { er = controller_task_start(); }
     if (er == E_OK) { er = subsystem3_start(); }
     if (er == E_OK) { er = subsystem5_start(); }
+    if ((er == E_OK) && (b4_init_status == E_OK))
+    {
+        b4_start_status = subsystem4_start();
+        b4_ready = b4_start_status == E_OK;
+    }
 #if APP_CAR_MQTT
     if (er == E_OK) { er = subsystem1_start(); }
 #endif
@@ -426,6 +579,7 @@ static void supervise(void)
                 }
             }
             wifi_telemetry(t);
+            b4_wifi_telemetry(t);
             /* A physical start gesture cannot undo remote STOP in this cycle. */
             if(choice==B1_STOP || start_queued){(void)tk_dly_tsk(SUPERVISOR_PERIOD_MS);continue;}
         }
@@ -517,6 +671,7 @@ static void supervise(void)
         {
             last_status = t;
             print_status(running);
+            b4_print_status();
         }
         (void)tk_dly_tsk(SUPERVISOR_PERIOD_MS);
     }
@@ -547,6 +702,16 @@ static void supervisor_task(INT code, void *exinf)
     if(subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR B2 TRIAL] Buddy3 restored to prior testing source/steering; 50mm/s B2 trial; junction-pause fix; v6 wheel PID. Production qualification FALSE. Manual START,no run limit,30%% effort (pivots 40%%),100ms watchdog.\n"); }
     tm_printf((UB*)"[CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.\n");
+    if (b4_ready)
+    {
+        tm_printf((UB*)"[CAR] B4 IMU running: terrain cap -> controller, B2 odometry -> hump height. "
+            "Keep the car STILL and LEVEL until the [B4] line shows cal=level.\n");
+    }
+    else
+    {
+        tm_printf((UB*)"[CAR] B4 IMU NOT running (init %d, start %d); the car runs without terrain data.\n",
+            (int)b4_init_status, (int)b4_start_status);
+    }
     if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
     { tm_printf((UB*)"[CAR] UNQUALIFIED calibration: START is disabled; no automatic motion.\n"); }
 #if APP_CAR_MQTT
@@ -559,8 +724,12 @@ static void supervisor_task(INT code, void *exinf)
     tm_printf((UB*)"        Clear table ~40 cm to each side and ~1 m ahead. Hand on GP21 STOP.\n");
 #endif
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
+#if APP_NO_BARCODE_CAL
+    tm_printf((UB*)"[CAR] Barcode calibration SKIPPED (NO_BARCODE_CAL=1): barcodes ignored.\n");
+#else
     tm_printf((UB*)"[CAR] Sweep the barcode sensor over black/white now (3 s calibration).\n");
     subsystem3_calibrate_barcode();
+#endif
 #if APP_CAR_B2_TRIAL
     tm_printf((UB*)"[CAR] Junctions: barcode route; otherwise STRAIGHT THROUGH, no stop/probe (including T).\n");
 #else

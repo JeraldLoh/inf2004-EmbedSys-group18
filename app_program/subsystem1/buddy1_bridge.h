@@ -33,7 +33,8 @@ int b1_submit_snapshot(const b1_snapshot *snapshot);
  * Returns 0 on invalid input or mutex contention; caller retries later.
  * fault_mask is reserved for agreed hardware/sensor failures; bits not assigned yet. */
 int b1_submit_binary_snapshot(const b1_binary_snapshot *snapshot);
-/* Copy one owner-produced section without erasing other buddies. */
+/* Copy one owner-produced section without erasing other buddies.
+ * id 2, 3, 5: the b1_sN_telemetry struct; id 4: Buddy 4's 17-byte frame. */
 int b1_submit_section(unsigned int id, const void *section, unsigned int at_ms);
 /* Copies only the calling owner's group (2, 3 or 5); nonblocking. */
 int b1_submit_live_status(unsigned id,const void *section);

@@ -22,6 +22,9 @@
 #ifndef APP_OBSTACLE_TABLE
 #define APP_OBSTACLE_TABLE 0 /* trial car on a table: straight drive, bypass, stop */
 #endif
+#ifndef APP_NO_BARCODE_CAL
+#define APP_NO_BARCODE_CAL 0 /* 1 = CAR_RUN skips the start-up barcode sweep */
+#endif
 #ifndef APP_B5_RUN
 #define APP_B5_RUN 0     /* 1 = Buddy 5 obstacle task + controller, motors off */
 #endif

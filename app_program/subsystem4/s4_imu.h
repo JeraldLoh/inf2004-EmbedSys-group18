@@ -43,6 +43,33 @@ IMPORT UW s4_sample_time_us;        /* last acquire+estimate time */
 IMPORT UW s4_sample_time_worst_us;  /* worst since the last range report */
 
 /*
+ * Liveness evidence. s4_loop_count rises every time the task wakes (about
+ * 50 per second); s4_stage is the step it is in now, so a task that stops
+ * shows where it stopped. Written only by the IMU task.
+ */
+enum
+{
+    S4_STAGE_START = 0,  /* before the first wait */
+    S4_STAGE_WAIT,       /* waiting for the 20 ms tick (normal when idle) */
+    S4_STAGE_REQUEST,    /* handling request bits */
+    S4_STAGE_OPEN,       /* opening the I2C device / sensor setup */
+    S4_STAGE_ACCEL,      /* I2C accelerometer read */
+    S4_STAGE_MAG,        /* I2C magnetometer read */
+    S4_STAGE_ODOM,       /* Buddy 2 odometry callback */
+    S4_STAGE_ESTIMATE,   /* estimator step */
+    S4_STAGE_PUBLISH,    /* snapshot publish, failure tracking, cal retry */
+    S4_STAGE_DISPATCH,   /* forwarding events */
+    S4_STAGE_LOG,        /* printing an event to the console */
+    S4_STAGE_COUNT
+};
+IMPORT volatile UW s4_loop_count;
+IMPORT volatile UW s4_accel_samples;   /* good accelerometer reads */
+IMPORT volatile UB s4_stage;
+
+/* Print the IMU task's liveness and kernel state (one line). Any task. */
+IMPORT void s4_print_task_state(void);
+
+/*
  * Optional inputs, bound by the integration code before s4_imu_start().
  * read_odometry_mm: cumulative signed path distance in mm (average of both
  * wheels, reverse counts down); false when unavailable. Called by the IMU
