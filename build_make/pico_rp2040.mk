@@ -383,6 +383,20 @@ CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
 CFLAGS  += -DAPP_NO_BARCODE_CAL=$(NO_BARCODE_CAL)
+BARCODE_STEER_PERCENT ?=
+ifneq ($(strip $(BARCODE_STEER_PERCENT)),)
+CFLAGS  += -DCONTROLLER_BARCODE_STEER_PERCENT=$(strip $(BARCODE_STEER_PERCENT))
+endif
+STRAIGHT_TRIM_LEARN ?= 0
+CFLAGS  += -DB2_STRAIGHT_TRIM_LEARN=$(STRAIGHT_TRIM_LEARN)
+STRAIGHT_RIGHT_TRIM ?=
+ifneq ($(strip $(STRAIGHT_RIGHT_TRIM)),)
+CFLAGS  += -DB2_STRAIGHT_RIGHT_TRIM_PERCENT=$(strip $(STRAIGHT_RIGHT_TRIM))U
+endif
+CRUISE_MM_S ?=
+ifneq ($(strip $(CRUISE_MM_S)),)
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=$(strip $(CRUISE_MM_S))U
+endif
 ifeq ($(CAR_MQTT),1)
 # The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
 # The radio service shares core 0, so keep it below the car's control tasks
@@ -447,6 +461,7 @@ endif
 ################################################################################
 
 PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
+PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-captrace
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

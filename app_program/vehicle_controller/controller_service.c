@@ -16,6 +16,14 @@ static void refresh_status(controller_service_t *service)
     status->authority_generation = service->controller.authority_generation;
 }
 
+/* While a barcode is being captured, scale the steering request to this
+ * percent. A snap correction mid-barcode changes speed and heading across the
+ * bars and breaks the read. 100 = unchanged (main). Corrections still happen
+ * for a big deviation. make BARCODE_STEER_PERCENT=40 */
+#ifndef CONTROLLER_BARCODE_STEER_PERCENT
+#define CONTROLLER_BARCODE_STEER_PERCENT 100
+#endif
+
 /* Line-follow cruise speed; CAR_RUN may lower it with -D for floor tuning. */
 #ifndef CONTROLLER_LINE_CRUISE_MM_S
 #define CONTROLLER_LINE_CRUISE_MM_S 150U
@@ -843,6 +851,12 @@ void controller_service_tick(
     /* Buddy 3: steer > 0 = turn right. Curvature > 0 = turn left. */
     request.curvature_u1_m = -(int32_t)line.steer *
         service->line.curvature_per_steer_u1_m;
+    if (line.barcode_active && (CONTROLLER_BARCODE_STEER_PERCENT != 100))
+    {
+        /* Gentle steering while the barcode is read; see the define above. */
+        request.curvature_u1_m = (int32_t)((int64_t)request.curvature_u1_m *
+            CONTROLLER_BARCODE_STEER_PERCENT / 100);
+    }
     request.analogue_steering = line.analogue_steering;
     request.created_ms = now_ms;
     request.expires_ms = now_ms + service->line.request_life_ms;
