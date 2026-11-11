@@ -2,20 +2,19 @@
 #define GROUP18_DRV_LSM303_H
 
 /*
- * GY-511 / LSM303DLHC driver over the course micro T-Kernel I2C device.
+ * GY-511 / LSM303DLHC driver over a software I2C master on GP2 (SDA) and
+ * GP3 (SCL). The I2C1 hardware block stopped transmitting in Wi-Fi builds;
+ * see drv_lsm303.c for the evidence.
  *
- * Owned by the Buddy 4 IMU task only: no other task may use the I2C1 device
- * (TEAM.md section 3). Every call blocks the caller for one bus transaction
- * (about 0.3 ms at 400 kHz) and returns a kernel error code.
- *
- * Requires DEVCNF_USE_IIC = 1, I2C1 on GP2/GP3 and unit 1 started in
- * kernel/sysdepend/pico_rp2040/devinit.c; otherwise open fails with E_NOEXS.
+ * Owned by the Buddy 4 IMU task only: no other task may use GP2/GP3
+ * (TEAM.md section 3). Every call busy-waits for one bus transaction
+ * (an accelerometer read is about 0.5 ms) and returns a kernel error code:
+ * E_IO if the sensor does not acknowledge or SCL stays low.
  */
 #include <tk/tkernel.h>
 
 typedef struct
 {
-    ID dd;                       /* device descriptor while open */
     unsigned int open : 1;
     unsigned int mag_present : 1;
     unsigned int fs_code : 2;    /* IMU_ACCEL_FS_* in use */
@@ -34,5 +33,12 @@ ER drv_lsm303_read_accel(drv_lsm303_t *dev, UB raw[6], BOOL *fresh);
 
 /* Burst read of OUT_X_H_M..OUT_Y_L_M (register order X, Z, Y). */
 ER drv_lsm303_read_mag(drv_lsm303_t *dev, UB raw[6]);
+
+/*
+ * Diagnostics: print one "[B4 I2C]" line with the step drv_lsm303_open() is
+ * in (or last finished), the SDA/SCL levels found before bus recovery, the
+ * levels now, and the I2C1 controller status. Read-only; safe from any task.
+ */
+void drv_lsm303_print_bus(void);
 
 #endif

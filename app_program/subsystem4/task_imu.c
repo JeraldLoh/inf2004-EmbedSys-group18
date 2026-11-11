@@ -27,6 +27,9 @@ EXPORT UW s4_events_dropped = 0U;
 EXPORT UW s4_bus_errors = 0U;
 EXPORT UW s4_sample_time_us = 0U;
 EXPORT UW s4_sample_time_worst_us = 0U;
+EXPORT volatile UW s4_loop_count = 0U;
+EXPORT volatile UW s4_accel_samples = 0U;
+EXPORT volatile UB s4_stage = S4_STAGE_START;
 
 LOCAL ID s4_cyc_tick = 0;
 LOCAL ID s4_tid_imu = 0;
@@ -221,7 +224,9 @@ LOCAL void s4_dispatch(const s4_events_t *events)
             (void)tk_snd_mbf(s4_mbf_events, &msg, S4_MBF_MSG_BYTES, TMO_POL);
         }
 #if S4_LOG_EVENTS
+        s4_stage = S4_STAGE_LOG;
         s4_log_event(msg);
+        s4_stage = S4_STAGE_DISPATCH;
 #endif
     }
 }
@@ -239,6 +244,7 @@ LOCAL void s4_acquire(s4_input_t *in)
 
     if (!s4_dev.open)
     {
+        s4_stage = S4_STAGE_OPEN;
         if (reopen_wait > 0U)
         {
             reopen_wait--;
@@ -258,6 +264,7 @@ LOCAL void s4_acquire(s4_input_t *in)
 
     if (s4_dev.open)
     {
+        s4_stage = S4_STAGE_ACCEL;
         er = drv_lsm303_read_accel(&s4_dev, raw, &fresh);
         if (er < E_OK)
         {
@@ -279,10 +286,12 @@ LOCAL void s4_acquire(s4_input_t *in)
             {
                 in->accel_ok = 1U;
                 in->accel_saturated = flag ? 1U : 0U;
+                s4_accel_samples++;
             }
         }
     }
 
+    s4_stage = S4_STAGE_MAG;
     if (s4_dev.open && s4_dev.mag_present &&
         (drv_lsm303_read_mag(&s4_dev, raw) >= E_OK) &&
         imu_decode_mag(raw, in->mag, &flag) && !flag)
@@ -295,6 +304,7 @@ LOCAL void s4_acquire(s4_input_t *in)
     {
         int32_t cumulative_mm;
 
+        s4_stage = S4_STAGE_ODOM;
         if (s4_bindings.read_odometry_mm(&cumulative_mm))
         {
             s4_post_odometry(cumulative_mm);
@@ -336,8 +346,11 @@ LOCAL void s4_imu_task(INT stacd, void *exinf)
 
     for (;;)
     {
+        s4_stage = S4_STAGE_WAIT;
         er = tk_wai_flg(s4_flg_request, S4_REQ_ALL | S4_FLG_TICK,
                         TWF_ORW | TWF_BITCLR, &pattern, S4_WAIT_TIMEOUT_MS);
+        s4_loop_count++;
+        s4_stage = S4_STAGE_REQUEST;
         if (er == E_TMOUT)
         {
             pattern = S4_FLG_TICK;   /* keep reporting staleness */
@@ -371,6 +384,7 @@ LOCAL void s4_imu_task(INT stacd, void *exinf)
             s4_est_reset_ranges(&s4_est);
             s4_sample_time_worst_us = 0U;
         }
+        s4_stage = S4_STAGE_DISPATCH;
         s4_dispatch(&events);
 
         if ((pattern & S4_FLG_TICK) == 0U)
@@ -388,7 +402,9 @@ LOCAL void s4_imu_task(INT stacd, void *exinf)
         /* Sampling time = I2C reads + estimation + publish, 1 MHz timer. */
         sample_start = in_w(TIMER_TIMERAWL);
         s4_acquire(&in);
+        s4_stage = S4_STAGE_ESTIMATE;
         s4_est_step(&s4_est, &in, &events);
+        s4_stage = S4_STAGE_PUBLISH;
         s4_shared_publish(s4_est.words);
         s4_track_failures(&s4_est, in.dt_ms);
         s4_retry_calibration(in.dt_ms);
@@ -397,6 +413,7 @@ LOCAL void s4_imu_task(INT stacd, void *exinf)
         {
             s4_sample_time_worst_us = s4_sample_time_us;
         }
+        s4_stage = S4_STAGE_DISPATCH;
         s4_dispatch(&events);
     }
 }
@@ -539,6 +556,74 @@ EXPORT ER s4_imu_bind(const s4_bindings_t *bindings)
 EXPORT UW s4_sensor_failures(void)
 {
     return (UW)S4_LOAD32(&s4_failures);
+}
+
+/*
+ * One line of liveness evidence for the supervisor's status print. A healthy
+ * task shows loops rising about 50/s, samples rising with them, and is
+ * usually WAIT on its event flag. A stopped task shows +0 and the stage and
+ * kernel wait it is stuck in.
+ */
+EXPORT void s4_print_task_state(void)
+{
+    static const char *const stages[S4_STAGE_COUNT] = {
+        "start", "wait-tick", "requests", "i2c-open", "i2c-accel", "i2c-mag",
+        "odometry", "estimate", "publish", "dispatch", "console-print"
+    };
+    static UW last_loops = 0U;
+    static UW last_samples = 0U;
+    UW loops = s4_loop_count;
+    UW samples = s4_accel_samples;
+    UB stage = s4_stage;
+    T_RTSK rtsk;
+    const char *state = "?";
+    const char *wait = "-";
+    ER er;
+
+    if (s4_tid_imu <= 0)
+    {
+        tm_printf((UB *)"[B4 TASK] not started\n");
+        return;
+    }
+    er = tk_ref_tsk(s4_tid_imu, &rtsk);
+    if (er >= E_OK)
+    {
+        switch (rtsk.tskstat & ~TTS_NODISWAI)
+        {
+            case TTS_RUN: state = "RUN"; break;
+            case TTS_RDY: state = "READY"; break;
+            case TTS_WAI: state = "WAIT"; break;
+            case TTS_SUS: state = "SUSPEND"; break;
+            case TTS_WAS: state = "WAIT-SUSPEND"; break;
+            case TTS_DMT: state = "DORMANT"; break;
+            default: break;
+        }
+        switch (rtsk.tskwait)
+        {
+            case 0U: break;
+            case TTW_SLP: wait = "sleep"; break;
+            case TTW_DLY: wait = "delay"; break;
+            case TTW_SEM: wait = "semaphore"; break;
+            case TTW_FLG: wait = "event-flag"; break;
+            case TTW_MBX: wait = "mailbox"; break;
+            case TTW_MTX: wait = "mutex"; break;
+            case TTW_SMBF: wait = "msgbuf-send"; break;
+            case TTW_RMBF: wait = "msgbuf-recv"; break;
+            default: wait = "other"; break;
+        }
+    }
+    tm_printf((UB *)"[B4 TASK] loops=%lu (+%lu) samples=%lu (+%lu) stage=%s "
+              "state=%s wait=%s wid=%d (own flag %d) pri=%d%s\n",
+              (unsigned long)loops, (unsigned long)(loops - last_loops),
+              (unsigned long)samples, (unsigned long)(samples - last_samples),
+              (stage < S4_STAGE_COUNT) ? stages[stage] : "?",
+              state, wait, (er >= E_OK) ? (int)rtsk.wid : -1,
+              (int)s4_flg_request,
+              (er >= E_OK) ? (int)rtsk.tskpri : -1,
+              (er >= E_OK) ? "" : " (tk_ref_tsk failed)");
+    last_loops = loops;
+    last_samples = samples;
+    drv_lsm303_print_bus();
 }
 
 /* Course lifecycle hooks declared in app.h: all inits, then all starts. */

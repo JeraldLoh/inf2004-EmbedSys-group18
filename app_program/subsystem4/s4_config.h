@@ -19,8 +19,9 @@
 #define S4_EVENT_QUEUE_DEPTH 8U   /* 4-byte events held for the controller */
 #define S4_LOG_EVENTS 1           /* print hump/collision/cal events */
 
-/* --- Sensor (GY-511 / LSM303DLHC on I2C1, GP2 SDA / GP3 SCL) ------------ */
-#define S4_I2C_DEVICE "iicb"      /* course driver: unit 1 = I2C1 */
+/* --- Sensor (GY-511 / LSM303DLHC, software I2C on GP2 SDA / GP3 SCL) ---- */
+/* The course "iicb" (I2C1) device is no longer used: the I2C1 block stopped
+   transmitting in Wi-Fi builds, so drv_lsm303.c drives the pins itself. */
 #define S4_ACCEL_ADDR 0x19U       /* SA0 pulled high on the GY-511 */
 #define S4_MAG_ADDR 0x1EU
 #define S4_ACCEL_FS_CODE 1U       /* +/-4 g: 2 mg/LSB, room for 3 g shocks */

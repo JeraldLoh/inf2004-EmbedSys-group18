@@ -99,6 +99,7 @@ static void b4_print_status(void)
     if (!s4_shared_read(w))
     {
         tm_printf((UB*)"[B4] no IMU snapshot yet\n");
+        s4_print_task_state();
         return;
     }
     state = s4_get(w[S4_W_STATUS], S4_ST_TERRAIN_SHIFT, S4_ST_TERRAIN_WIDTH);
@@ -129,6 +130,7 @@ static void b4_print_status(void)
         s4_get(w[S4_W_HUMP], S4_HU_VALID_SHIFT, 1U) ? "valid" : "invalid/none",
         (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_SEQ_SHIFT, S4_HU_SEQ_WIDTH),
         (unsigned long)s4_sample_time_us);
+    s4_print_task_state();   /* is the IMU task alive, and where is it? */
 }
 
 #if APP_CAR_MQTT
