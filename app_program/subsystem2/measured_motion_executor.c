@@ -9,6 +9,18 @@
 #define EXEC_MAX_MS 1800000U /* < half of the raw U32 microsecond domain. */
 static bool reached(uint32_t now, uint32_t deadline)
 { return (now - deadline) < 0x80000000UL; }
+
+/* Straight-line right-wheel trim in 1/100 percent. Fixed unless
+ * B2_STRAIGHT_TRIM_LEARN, then adapted from line corrections (RAM only,
+ * resets at boot). */
+static int32_t b2_trim_x100 = (int32_t)B2_STRAIGHT_RIGHT_TRIM_PERCENT * 100;
+#if B2_STRAIGHT_TRIM_LEARN
+static int32_t b2_prev_sign;
+static int32_t b2_pending_delta;      /* step applied by the current correction */
+static uint32_t b2_last_line_step_us;
+static uint32_t b2_learn_after_us;
+#endif
+int32_t measured_motion_straight_trim_x100(void) { return b2_trim_x100; }
 static bool newer(uint32_t id, uint32_t old)
 { return id != 0U && (old == 0U || ((id - old) != 0U && (id - old) < 0x80000000UL)); }
 static uint32_t magnitude(int32_t value) { return (uint32_t)(value < 0 ? -(int64_t)value : value); }
@@ -416,10 +428,45 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
         /* Tune the inside and outside targets independently after the
          * paired cap, preserving the inside target when the boost is capped. */
+#if B2_STRAIGHT_TRIM_LEARN
+        if (e->continuous.source == MOTION_SOURCE_LINE)
+        {
+            int32_t c = e->continuous.curvature_u1_m;
+            int32_t sign = c > 0 ? 1 : (c < 0 ? -1 : 0);
+            int32_t mag = c < 0 ? -c : c;
+            if ((uint32_t)(now - b2_last_line_step_us) > 300000U)
+            { /* new run or resume: skip the launch transient */
+                b2_learn_after_us = now + B2_TRIM_LEARN_SETTLE_US;
+                b2_prev_sign = 0;
+            }
+            b2_last_line_step_us = now;
+            if (sign == 0) { b2_pending_delta = 0; }   /* correction ended small */
+            if (sign != 0 && b2_prev_sign == 0 &&
+                mag <= B2_TRIM_LEARN_MAX_CURVATURE && reached(now, b2_learn_after_us))
+            {
+                int32_t before = b2_trim_x100;
+                b2_trim_x100 += sign < 0 ? B2_TRIM_LEARN_STEP_X100 : -B2_TRIM_LEARN_STEP_X100;
+                if (b2_trim_x100 < B2_TRIM_LEARN_MIN_X100) { b2_trim_x100 = B2_TRIM_LEARN_MIN_X100; }
+                if (b2_trim_x100 > B2_TRIM_LEARN_MAX_X100) { b2_trim_x100 = B2_TRIM_LEARN_MAX_X100; }
+                b2_pending_delta = b2_trim_x100 - before;
+            }
+            else if (sign != 0 && mag > B2_TRIM_LEARN_MAX_CURVATURE)
+            {
+                /* The correction grew: a real bend, not a steady pull. Undo
+                 * the step it earned and pause learning until it is over. */
+                b2_trim_x100 -= b2_pending_delta;
+                b2_pending_delta = 0;
+                b2_learn_after_us = now + B2_TRIM_LEARN_BEND_PAUSE_US;
+            }
+            b2_prev_sign = sign;
+        }
+#endif
         if (e->continuous.source == MOTION_SOURCE_LINE && e->continuous.curvature_u1_m == 0)
         {
-            /* Small floor-trial trim for the reported left drift. */
-            desired[1] = desired[1] * 95U / 100U;
+            /* Straight-line right-wheel trim. 95 was set at 80 mm/s for a
+             * left drift; at 50 mm/s the car drifts RIGHT, so the trim is a
+             * build setting (make STRAIGHT_RIGHT_TRIM=100). */
+            desired[1] = (uint32_t)((uint64_t)desired[1] * (uint32_t)b2_trim_x100 / 10000U);
         }
         if (e->continuous.source == MOTION_SOURCE_LINE && correction != 0)
         {

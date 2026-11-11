@@ -9,6 +9,9 @@
 #include "../contracts/control_messages.h"
 #include "line_follow.h"
 
+/* Diagnostics: loop counter and last step of the Buddy 3 task (see subsystem3.c). */
+IMPORT void subsystem3_debug(uint32_t *loops, uint32_t *stage);
+
 /* Latest line status (1 packed byte, safe to read from any task/core). */
 IMPORT line_status_t subsystem3_line_status(void);
 

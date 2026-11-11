@@ -18,6 +18,7 @@ static void set_state(line_follow_t *lf, line_state_t state, uint32_t now_ms)
     if (lf->status.state != (uint8_t)state)
     {
         lf->previous_state = lf->status.state;
+        lf->previous_duration_ms = now_ms - lf->state_since_ms;
         lf->status.state = (uint8_t)state;
         lf->state_since_ms = now_ms;
     }
@@ -48,6 +49,7 @@ void line_follow_reset(line_follow_t *lf)
     lf->history_left = 0U;
     lf->history_right = 0U;
     lf->previous_state = (uint8_t)LINE_STATE_CENTRED;
+    lf->previous_duration_ms = 0U;
     lf->both_black_since_ms = 0U;
     lf->state_since_ms = 0U;
     lf->both_black_active = false;
@@ -148,13 +150,19 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
             return clamp_steer(magnitude);
         case LINE_STATE_CENTRED:
             /* Damping after a correction: steer slightly the other way. */
-            if ((age < LINE_DAMP_MS) && (LINE_DAMP_STEER != 0))
+            if (LINE_DAMP_STEER != 0)
             {
-                if (lf->previous_state == (uint8_t)LINE_STATE_STEER_LEFT)
+                uint32_t pulse = lf->previous_duration_ms / 2U;
+
+                if (pulse > LINE_DAMP_MS) { pulse = LINE_DAMP_MS; }
+                if ((pulse < LINE_DAMP_MIN_MS) || (age >= pulse)) { pulse = 0U; }
+                if ((pulse != 0U) &&
+                    (lf->previous_state == (uint8_t)LINE_STATE_STEER_LEFT))
                 {
                     return (int8_t)LINE_DAMP_STEER;
                 }
-                if (lf->previous_state == (uint8_t)LINE_STATE_STEER_RIGHT)
+                if ((pulse != 0U) &&
+                    (lf->previous_state == (uint8_t)LINE_STATE_STEER_RIGHT))
                 {
                     return (int8_t)(-LINE_DAMP_STEER);
                 }

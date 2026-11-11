@@ -133,6 +133,8 @@ void measured_motion_executor_cancel(measured_motion_executor_t *executor, motio
  * current authority only if zero output succeeds. Not an urgent/global STOP;
  * the caller must reject in-flight continuous work before using this API. */
 void measured_motion_executor_pause(measured_motion_executor_t *executor);
+/* Current straight-line right-wheel trim, 1/100 percent (10000 = 100%). */
+int32_t measured_motion_straight_trim_x100(void);
 bool measured_motion_executor_result(const measured_motion_executor_t *executor, motion_goal_result_t *result);
 bool measured_motion_executor_ack(measured_motion_executor_t *executor, goal_id_t id, authority_generation_t generation);
 #endif

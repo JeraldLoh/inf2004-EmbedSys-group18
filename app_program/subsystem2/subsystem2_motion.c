@@ -9,6 +9,9 @@
 #include "b2_line_tuning.h"
 #endif
 #include "../vehicle_controller/controller_task.h"
+#if defined(APP_CAR_RUN) && APP_CAR_RUN
+#include "../subsystem3/subsystem3.h"
+#endif
 
 static car_motion_t motion;
 static b2_trial_io_t io;
@@ -107,14 +110,28 @@ static void diagnostic_worker(INT code, void *exinf)
             unsigned source = (unsigned)motion.rejected_source;
             uint32_t ingress = ingress_diagnostic;
             unlock();
-            tm_printf((UB*)"[B2 TRACK] fw=%s t_ms=%lu steering=%s curve=%ld target=%ld/%ld measured=%lu/%lu mm/s speed_valid=%d effort=%d/%d output_valid=%d floor_mask=0x%x state=%d gen=%lu rejected=%lu\n",
+            tm_printf((UB*)"[B2 TRACK] fw=%s t_ms=%lu steering=%s curve=%ld target=%ld/%ld measured=%lu/%lu mm/s speed_valid=%d effort=%d/%d output_valid=%d floor_mask=0x%x state=%d gen=%lu rejected=%lu trim=%ld\n",
                 B2_FIRMWARE_TAG,(unsigned long)sample_ms,steering,(long)curve,
                 (long)(s.target_um_s[0]/1000),(long)(s.target_um_s[1]/1000),
                 (unsigned long)(s.wheels.speed_um_s[0]/1000U),(unsigned long)(s.wheels.speed_um_s[1]/1000U),
                 (int)s.wheels.speed_valid,(int)outputs.left_effort,(int)outputs.right_effort,
                 (int)have_outputs,(unsigned)s.low_speed_floor_mask,(int)s.state,
-                (unsigned long)s.generation,(unsigned long)count);
+                (unsigned long)s.generation,(unsigned long)count,(long)measured_motion_straight_trim_x100());
             if (tracking) { delay_ms = 50U; }
+#if defined(APP_CAR_RUN) && APP_CAR_RUN
+            {
+                /* Once a second: is Buddy 3's task still running, and where? */
+                static uint32_t s3_print_ms = 0U;
+                if ((uint32_t)(sample_ms - s3_print_ms) >= 1000U)
+                {
+                    uint32_t s3_loops = 0U, s3_stage = 0U;
+                    s3_print_ms = sample_ms;
+                    subsystem3_debug(&s3_loops, &s3_stage);
+                    tm_printf((UB*)"[S3 TASK] t_ms=%lu loops=%lu stage=%lu\n",
+                        (unsigned long)sample_ms,(unsigned long)s3_loops,(unsigned long)s3_stage);
+                }
+            }
+#endif
             if (s.detail_sequence != last_detail) {
                 tm_printf((UB*)"[B2 STOP DETAIL] seq=%lu reason=%s result=%d gen=%lu command=%lu wheel_mask=0x%x before_target=%ld/%ld before_speed=%lu/%lu mm/s speed_valid=%d\n",
                     (unsigned long)s.detail_sequence,measured_motion_detail_name(s.detail_reason),
@@ -142,9 +159,19 @@ static void diagnostic_worker(INT code, void *exinf)
 }
 #endif
 
+/* A controller status read can time out while the controller task holds its
+ * guard (Wi-Fi/USB load). Treating one miss as "controller gone" cancelled the
+ * executor with an inhibit: authority was lost for the current generation, no
+ * stop was latched, and every later line command was refused (car frozen in
+ * AUTO). Only a sustained loss, longer than the 150 ms command lease, cancels.
+ * Physical STOP, motor watchdog, command lease and stop reasons are unchanged. */
+#define B2_STATUS_LOSS_LIMIT_MS 250U
+
 static void executor_task(INT code, void *exinf)
 {
     stop_reason_mask_t fault_pending = STOP_REASON_NONE;
+    uint32_t unknown_since_ms = 0U;
+    bool unknown_active = false;
     (void)code; (void)exinf;
     for (;;)
     {
@@ -160,7 +187,15 @@ static void executor_task(INT code, void *exinf)
              * still independently enforced by the driver's permit ticket. */
             bool current = known && (e->status.generation == 0U ||
                 controller.authority_generation-e->status.generation < 0x80000000UL);
-            if (!known || (current && (controller.mode != SYSTEM_MODE_AUTO ||
+            bool status_lost = false;
+            if (known) { unknown_active = false; }
+            else
+            {
+                uint32_t now = now_ms();
+                if (!unknown_active) { unknown_active = true; unknown_since_ms = now; }
+                status_lost = (now - unknown_since_ms) >= B2_STATUS_LOSS_LIMIT_MS;
+            }
+            if (status_lost || (current && (controller.mode != SYSTEM_MODE_AUTO ||
                 controller.stop_reasons != STOP_REASON_NONE || controller.hardware_faults != 0U)))
             { car_motion_cancel(&motion, MOTION_RESULT_CANCELLED); }
             if (current || (known && controller.authority_generation == 0U))

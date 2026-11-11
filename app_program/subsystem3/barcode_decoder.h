@@ -33,6 +33,13 @@ typedef struct
     bool fail_pending;
     uint8_t fail_count;
     uint32_t fail_run_us[BARCODE_DECODER_MAX_RUNS];
+    /* Trace: the runs of EVERY finished capture, pass or fail. Kept across
+     * reset; the caller prints them and clears trace_pending. */
+    bool trace_pending;
+    bool trace_ok;
+    uint8_t trace_count;
+    uint32_t trace_id;
+    uint32_t trace_run_us[BARCODE_DECODER_MAX_RUNS];
 } barcode_decoder_t;
 
 void barcode_decoder_reset(barcode_decoder_t *decoder);

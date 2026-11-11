@@ -1,13 +1,14 @@
-import {robotEvents,lineSearchEvents,calibrationEvents} from './robot-events.mjs';
-import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs';
-import {encodeLiveStatus} from './live-status.mjs';
-import {encodeTelemetry} from './binary.mjs';
-import {encodeCommand,decodeCommand} from './commands.mjs';
-import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs';
-import {renderSensorHighlights} from './sensor-panels.mjs';
-import {RobotState,validateCommand} from './state.mjs';
-import {MqttConnection,validateConnection} from './mqtt.mjs';
-import {ACTIONS,DEFAULT_MAP,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,mapSummary,sortedEntries,sameMap} from './route-map.mjs';
+import {barcodeEvents,renderBarcodeStatus} from './barcode-status.mjs?v=barcode-digital-8';
+import {robotEvents,lineSearchEvents,calibrationEvents} from './robot-events.mjs?v=barcode-digital-4';
+import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
+import {encodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
+import {encodeTelemetry} from './binary.mjs?v=barcode-digital-4';
+import {encodeCommand,decodeCommand} from './commands.mjs?v=barcode-digital-4';
+import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs?v=barcode-digital-4';
+import {renderSensorHighlights} from './sensor-panels.mjs?v=barcode-digital-4';
+import {RobotState,validateCommand} from './state.mjs?v=barcode-digital-4';
+import {MqttConnection,validateConnection} from './mqtt.mjs?v=barcode-digital-4';
+import {ACTIONS,DEFAULT_MAP,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,mapSummary,sortedEntries,sameMap} from './route-map.mjs?v=barcode-digital-4';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;
 let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=false,simSeq=0,simDistance=0,commandSeq=0,previousStatus='',lastUpdateText='',lastMotorStamp='';
 let buildEvidence=null;
@@ -31,7 +32,7 @@ function receive(topic,payload,time,retained=false){
  try{
   const previousTelemetry=state.telemetry,previousLiveStatus=state.liveStatus;
   if(!state.receive(topic,payload,time,retained))return;
-  if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
+  if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus),...barcodeEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
   if(topic==='telemetry')for(const event of robotEvents(previousTelemetry,state.telemetry))log(event.text,event.type);
   if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';const m=motionView(state.telemetry),b=state.telemetry.buddies?.[2],stamp=b?`${b.updated_ms}:${b.sequence}`:'';if(m.fresh&&stamp!==lastMotorStamp){history.push({time:time-m.age/1000,speed:m.speed});lastMotorStamp=stamp;}if(history.length>305)history.shift();}
   if(topic==='command_result'&&state.result.map!==undefined){
@@ -158,6 +159,8 @@ $('route-clear').onclick=()=>{routeDraft={};saveRoutes();renderRouteList();rende
 buildRouteChoice();renderRouteList();
 function render(){
  const t=now(),status=state.status(t),view=state.telemetryView(t),fresh=view.fresh;
+ // Reader updates independently of the other sensor cards and telemetry.
+ renderBarcodeStatus({...view.values,demo:state.demo,live_status:state.liveStatus,live_status_elapsed_ms:state.liveStatusAt===null?Infinity:(t-state.liveStatusAt)*1000},{stale:status!=='online'&&!!state.liveStatus});
  if(['Waiting for rover connection.','Ready · choose Start rover or Stop.'].includes($('command-feedback').textContent))$('command-feedback').textContent=status==='online'?'Ready · choose Start rover or Stop.':'Waiting for rover connection.';
  const names={disconnected:connecting?'Connecting to broker…':view.values?'Communication Unavailable':'Ready when you are',waiting:'Broker connected · waiting for rover',online:preview?'Preview running · sample data':'Rover heartbeat received',offline:'Communication Unavailable'};
  $('session-status').textContent=names[status];

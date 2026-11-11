@@ -57,6 +57,7 @@ LOCAL uint16_t s3_pid_raw;
 #include "../subsystem1/buddy1_bridge.h"
 static b1_s3_telemetry s3_wifi;
 static uint32_t s3_wifi_at;
+static uint32_t s3_scan_state,s3_scan_character,s3_scan_route,s3_scan_sequence,s3_scan_failures,s3_scan_event_ms;
 static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo; }
 #endif
 
@@ -80,6 +81,19 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #define S3_ROUTE_VALID_MS 10000U /* TBD: measure barcode-to-junction time */
 #define S3_DEBUG_PERIOD_MS 100U
 
+/* Where the task is, for the [S3 TASK] line printed by another task. 0 = asleep,
+ * 1..8 = the step it last reached. A frozen counter with a frozen stage shows
+ * where the task is stuck. */
+static volatile uint32_t s3_dbg_loops;
+static volatile uint32_t s3_dbg_stage;
+EXPORT void subsystem3_debug(uint32_t *loops, uint32_t *stage)
+{
+    if (loops != NULL) { *loops = s3_dbg_loops; }
+    if (stage != NULL) { *stage = s3_dbg_stage; }
+}
+
+LOCAL uint32_t s3_cap_ok = 0U;     /* decoded captures since boot */
+LOCAL uint32_t s3_cap_fail = 0U;   /* captures that did not decode */
 LOCAL ID s3_tid = E_NOEXS;
 LOCAL ID s3_cyc = E_NOEXS;
 LOCAL ID s3_mtx = E_NOEXS;
@@ -362,6 +376,9 @@ LOCAL void s3_task(INT stacd, void *exinf)
     barcode_decoder_reset(&decoder);
     decoder.fail_pending = false;
     decoder.fail_count = 0U;
+    decoder.trace_pending = false;
+    decoder.trace_count = 0U;
+    decoder.trace_id = 0U;
     barcode_sensor_reset(&bar);   /* reads white until calibrated */
 #if S3_BARCODE_FIXED && !APP_S3_LINE_PID
     /* No calibration sweep: the fixed thresholds apply from power-on. */
@@ -378,8 +395,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
     {
         int8_t steer = 0;
         bool analogue_steering = false;
+        s3_dbg_stage = 0U;            /* asleep, waiting for the 1 ms tick */
         (void)tk_slp_tsk(TMO_FEVR);
         (void)tk_can_wup(TSK_SELF);   /* drop missed wake-ups, no catch-up burst */
+        s3_dbg_loops++;
+        s3_dbg_stage = 1U;
 
         now_us = drv_ir_now_us();
         now_ms = now_us / 1000U;
@@ -388,6 +408,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
         s3_reacquire_step(&line, now_ms);
 
         /* ---- Line ---- */
+        s3_dbg_stage = 2U;            /* line sensors, steering */
         drv_ir_read_line(&left_black, &right_black);
 #if APP_S3_LINE_PID
         /* A failed read uses digital steering for this sample only. */
@@ -428,6 +449,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #endif
         }
 
+        s3_dbg_stage = 3U;            /* junction handling */
         if (line_follow_take_junction(&line, &junction, now_ms))
         {
             if (barcode_seen)
@@ -449,7 +471,9 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
         /* ---- Barcode ---- */
         {
+            s3_dbg_stage = 5U;        /* reading the barcode input (ADC) */
             bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
+            s3_dbg_stage = 6U;        /* classify and decode */
 #if APP_CAR_MQTT
             s3_wifi.adc_valid=have_raw;
             s3_wifi.adc=have_raw ? raw : 0U;
@@ -518,8 +542,18 @@ LOCAL void s3_task(INT stacd, void *exinf)
             s3_wifi.scan_counter=(s3_wifi.scan_counter+1U)&65535U;
         }
 #endif
+        s3_dbg_stage = 7U;            /* results and trace */
         if (barcode_decoder_take(&decoder, &command, &character))
         {
+            s3_cap_ok++;
+#if APP_CAR_MQTT
+            /* 2 decoded and mapped, 4 decoded but no action assigned. */
+            s3_scan_state = command == ROUTE_COMMAND_NONE ? 4U : 2U;
+            s3_scan_character = (uint8_t)character;
+            s3_scan_route = command;
+            s3_scan_sequence++;
+            s3_scan_event_ms = s3_kernel_ms();
+#endif
             if (decoder.reversed)
             {
                 tm_printf((UB *)"[S3] (barcode read in reverse)\n");
@@ -538,11 +572,40 @@ LOCAL void s3_task(INT stacd, void *exinf)
             }
         }
 
+        /* One line per finished capture, microseconds, for tools/barcode_replay.py.
+         * ok=1 means the decoder accepted it (see the "[S3] Barcode" lines for
+         * the letter). Printed after the capture so it cannot delay sampling. */
+        if (decoder.trace_pending)
+        {
+            UINT t;
+            decoder.trace_pending = false;
+            if (!decoder.trace_ok) { s3_cap_fail++; }
+            tm_printf((UB *)"[S3 CAP] id=%d ok=%d n=%d pass=%d fail=%d us=",
+                      (INT)decoder.trace_id, (INT)decoder.trace_ok,
+                      (INT)decoder.trace_count, (INT)s3_cap_ok, (INT)s3_cap_fail);
+            for (t = 0U; t < decoder.trace_count; t++)
+            {
+                tm_printf((UB *)(t == 0U ? "%d" : ",%d"),
+                          (INT)decoder.trace_run_us[t]);
+            }
+            tm_printf((UB *)"\n");
+        }
+
         /* A capture that did not decode: print its element widths (ms) so
          * the cause is visible. Few runs = a tape crossing, not a barcode. */
         if (decoder.fail_pending)
         {
             decoder.fail_pending = false;
+#if APP_CAR_MQTT
+            /* Every capture gets a visible outcome, including a short tape
+             * crossing. This is a failed attempt, not proof of a barcode. */
+            s3_scan_state = 3U;
+            s3_scan_character = 0U;
+            s3_scan_route = 0U;
+            s3_scan_sequence++;
+            s3_scan_failures++;
+            s3_scan_event_ms = s3_kernel_ms();
+#endif
             if (decoder.fail_count >= 5U)
             {
                 UINT i;
@@ -592,7 +655,28 @@ LOCAL void s3_task(INT stacd, void *exinf)
         }
 #endif
 
+        s3_dbg_stage = 8U;            /* publish status */
         /* ---- Publish line status and steering ---- */
+#if APP_CAR_MQTT
+        /* Show "Reading" from the first captured bar. It may be a barcode
+         * or a tape crossing; only a successful decode confirms a letter. */
+        if (barcode_decoder_busy(&decoder))
+        {
+            if (s3_scan_state != 1U)
+            {
+                s3_scan_state = 1U;
+                s3_scan_event_ms = s3_kernel_ms();
+            }
+        }
+        else if (s3_scan_state == 1U)
+        {
+            /* The decoder dropped the capture silently (black longer than any
+             * bar = tape). No result was produced, so go back to "ready"
+             * instead of showing "Reading" forever. */
+            s3_scan_state = 0U;
+            s3_scan_event_ms = s3_kernel_ms();
+        }
+#endif
         line_follow_set_barcode_active(&line, barcode_decoder_busy(&decoder));
         s3_line = line.status;
         s3_steering = (uint16_t)((unsigned)(steer + S3_STEER_OFFSET) |
@@ -613,7 +697,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 s3_wifi.calibration_high=bar.threshold_high;
                 /* Pattern is unavailable: do not invent a decoded mask. */
                 b1_live_line report={.at_ms=at,.calibration_state=s3_wifi_calibration_state,
-                    .calibration_reason=s3_wifi_calibration_reason};
+                    .calibration_reason=s3_wifi_calibration_reason,
+                    .barcode_state=s3_scan_state,.barcode_character=s3_scan_character,
+                    .barcode_route=s3_scan_route,.barcode_sequence=s3_scan_sequence,
+                    .barcode_failures=s3_scan_failures,.barcode_event_ms=s3_scan_event_ms,
+                    .barcode_digital=0};
                 (void)b1_submit_live_status(3,&report);
                 if(b1_submit_section(3,&s3_wifi,at)) s3_wifi_at=at;
             }

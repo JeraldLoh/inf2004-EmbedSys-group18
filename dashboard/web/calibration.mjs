@@ -7,6 +7,7 @@ export function calibrationView(id,s,live){
   return {items:[item('Encoder calibration',configured?'configured':'unknown',configured?'Configured':s?'Not reported':'Awaiting data')],note:configured?`L ${live.encoder_left_counts} / R ${live.encoder_right_counts} counts/rev · wheel ${live.wheel_diameter_mm} mm. Stored conversion settings; no live calibration test result.`:'Waiting for active encoder settings; motion qualification is separate.'};
  }
  if(!s)return {items:(id===4?['Level','Magnetometer']:id===5?['Sonar','Scan servo']:['Barcode']).map(name=>item(name,'unknown','Awaiting data')),note:'Calibration results appear when sensor telemetry arrives.'};
+ if(id===3&&live?.barcode_digital)return {items:[item('Barcode input','configured','Digital D0 · GP26')],note:'Black/white threshold comes from the sensor module comparator. Verify its adjustment on your actual barcode.'};
  if(id===3&&live&&live.calibration_state!==4){
   const state=live.calibration_state;
   return {items:[item('Barcode',['pending','running','passed','failed'][state]??'unknown',['Not started','Calibrating','Passed','Failed'][state]??'Not reported')],note:state===1?'Sweep the barcode sensor over black and white.':state===3?(live.calibration_reason===1?'Calibration failed: black/white contrast too low.':'Calibration failed; reason not reported.'):state===2?'Barcode thresholds are calibrated.':'Waiting for a calibration request.'};

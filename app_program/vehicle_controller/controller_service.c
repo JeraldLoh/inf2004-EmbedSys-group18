@@ -16,6 +16,122 @@ static void refresh_status(controller_service_t *service)
     status->authority_generation = service->controller.authority_generation;
 }
 
+/* While a barcode is being captured, scale the steering request to this
+ * percent. A snap correction mid-barcode changes speed and heading across the
+ * bars and breaks the read. 100 = unchanged (main). Corrections still happen
+ * for a big deviation. make BARCODE_STEER_PERCENT=40 */
+#ifndef CONTROLLER_BARCODE_STEER_PERCENT
+#define CONTROLLER_BARCODE_STEER_PERCENT 100
+#endif
+
+/* IMU heading assist (make HDG_ASSIST=1). While the line sensors are both
+ * white the car is not being steered by the tape, so it drifts across the
+ * line and weaves. The compass reference is captured when the run starts and
+ * a small, capped counter-curvature holds the heading within about +/-2 deg.
+ * The tape always wins: while a sensor sees tape the reference simply follows
+ * the car, so curves, junctions and recovery are untouched. */
+#ifndef CONTROLLER_HDG_ASSIST
+#define CONTROLLER_HDG_ASSIST 0
+#endif
+#if CONTROLLER_HDG_ASSIST
+#define HDG_DEADBAND_DDEG 20          /* no correction inside +/-2.0 deg */
+#define HDG_LINE_STEER_MIN 25         /* |steer| above the idle hold = tape seen */
+#define HDG_MAX_TURN_DPS 150          /* faster than this: compass untrusted */
+#define HDG_LOST_DDEG 250             /* >25 deg off: reference is stale */
+#define HDG_BIAS_BASE_U1_M 3600000    /* just above Buddy 2's 3.5/m deadband */
+#define HDG_BIAS_PER_DEG_U1_M 500000  /* +0.5/m per degree beyond the deadband */
+#define HDG_BIAS_MAX_U1_M 8000000     /* cap: 8/m */
+#define HDG_REF_SLEW_MS 25            /* reference follows at 1 deci-deg / 25 ms */
+bool s4_heading_read(int32_t *heading_ddeg, int32_t *turn_dps);
+void s4_heading_report(int state, int32_t ref_ddeg, int32_t err_ddeg, int32_t bias_u1_m);
+
+static bool hdg_ref_set;
+static int32_t hdg_ref_ddeg;
+static uint32_t hdg_last_ms;
+
+static int32_t hdg_wrap(int32_t d)
+{
+    while (d > 1800) { d -= 3600; }
+    while (d < -1800) { d += 3600; }
+    return d;
+}
+
+static void heading_assist_idle(void)
+{
+    hdg_ref_set = false;
+}
+
+/* Extra curvature (1e-6 /m units, + = left) from the compass. */
+static int32_t heading_assist_bias(int32_t steer, uint32_t now_ms)
+{
+    int32_t hdg;
+    int32_t turn;
+    int32_t err;
+    int32_t mag;
+    int32_t bias;
+    int32_t abs_steer = steer < 0 ? -steer : steer;
+
+    if (!s4_heading_read(&hdg, &turn))
+    {
+        hdg_ref_set = false;
+        s4_heading_report(0, 0, 0, 0);          /* still calibrating */
+        return 0;
+    }
+    if (!hdg_ref_set)
+    {
+        hdg_ref_set = true;
+        hdg_ref_ddeg = hdg;
+        hdg_last_ms = now_ms;
+    }
+    err = hdg_wrap(hdg - hdg_ref_ddeg);
+    mag = err < 0 ? -err : err;
+    if ((abs_steer >= HDG_LINE_STEER_MIN) || (mag > HDG_LOST_DDEG) ||
+        (turn > HDG_MAX_TURN_DPS) || (turn < -HDG_MAX_TURN_DPS))
+    {
+        hdg_ref_ddeg = hdg;                     /* the tape (or a turn) leads */
+        hdg_last_ms = now_ms;
+        s4_heading_report(2, hdg_ref_ddeg, 0, 0);
+        return 0;
+    }
+    if ((now_ms - hdg_last_ms) >= HDG_REF_SLEW_MS)
+    {
+        hdg_last_ms = now_ms;                   /* let gentle bends move the reference */
+        hdg_ref_ddeg += err > 0 ? 1 : (err < 0 ? -1 : 0);
+        err = hdg_wrap(hdg - hdg_ref_ddeg);
+        mag = err < 0 ? -err : err;
+    }
+    if (mag <= HDG_DEADBAND_DDEG)
+    {
+        s4_heading_report(1, hdg_ref_ddeg, err, 0);
+        return 0;
+    }
+    bias = HDG_BIAS_BASE_U1_M +
+        ((mag - HDG_DEADBAND_DDEG) * (HDG_BIAS_PER_DEG_U1_M / 10));
+    if (bias > HDG_BIAS_MAX_U1_M) { bias = HDG_BIAS_MAX_U1_M; }
+    bias = err > 0 ? bias : -bias;              /* heading right of ref: steer left */
+    s4_heading_report(1, hdg_ref_ddeg, err, bias);
+    return bias;
+}
+#endif
+
+/* Junction pause (trial policy): stand still this long at a junction. A barcode
+ * route that is live then runs; with none, the car drives straight on.
+ * make JUNCTION_PAUSE_MS=1500 */
+#ifndef CONTROLLER_JUNCTION_PAUSE_MS
+#define CONTROLLER_JUNCTION_PAUSE_MS 1000U
+#endif
+
+/* Turn tuning. The wheels pivot less than they are told (150-160 deg for a
+ * 180 on the car), so the pivot goal is scaled up; the line search then finds
+ * the line. The car also drives further into the junction before pivoting.
+ * make JUNCTION_APPROACH_MM=100 JUNCTION_TURN_COMP_PERCENT=116 */
+#ifndef CONTROLLER_JUNCTION_APPROACH_MM
+#define CONTROLLER_JUNCTION_APPROACH_MM 50
+#endif
+#ifndef CONTROLLER_JUNCTION_TURN_COMP_PERCENT
+#define CONTROLLER_JUNCTION_TURN_COMP_PERCENT 100
+#endif
+
 /* Line-follow cruise speed; CAR_RUN may lower it with -D for floor tuning. */
 #ifndef CONTROLLER_LINE_CRUISE_MM_S
 #define CONTROLLER_LINE_CRUISE_MM_S 150U
@@ -56,14 +172,15 @@ void controller_junction_default_config(controller_junction_config_t *config)
      * the car pivots about the junction centre. A guess: measure it. The
      * probe angle is Buddy 3's (~10 deg). settle_ms covers the last line
      * request expiring (150 ms) plus the car coming to rest. */
-    config->approach_mm = 50;
-    config->turn_mdeg = 90000;
-    config->uturn_mdeg = 180000;
+    config->approach_mm = CONTROLLER_JUNCTION_APPROACH_MM;
+    config->turn_mdeg = 90000 * CONTROLLER_JUNCTION_TURN_COMP_PERCENT / 100;
+    config->uturn_mdeg = 180000 * CONTROLLER_JUNCTION_TURN_COMP_PERCENT / 100;
     config->probe_mdeg = 10000;
     config->goal_speed_mm_s = 100U;
     config->goal_timeout_ms = 0U; /* B2 derives finite distance/speed + ramp/settle bound. */
     config->settle_ms = 250U;
     config->holdoff_ms = 500U;
+    config->pause_ms = CONTROLLER_JUNCTION_PAUSE_MS;
 }
 
 static void execute(
@@ -269,6 +386,14 @@ static bool phase_still_valid(const controller_service_t *service)
 {
     const vehicle_controller_t *controller = &service->controller;
 
+    if (service->junction_phase == CONTROLLER_JUNCTION_PAUSE)
+    {
+        /* Standing still on the line mission: valid until STOP, a mode change
+         * or an obstacle takes the car away. */
+        return (controller->mode == SYSTEM_MODE_AUTO) &&
+            following_line(controller->mission) &&
+            vehicle_controller_motion_allowed(controller, MOTION_SOURCE_LINE);
+    }
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
         !vehicle_controller_motion_allowed(controller, MOTION_SOURCE_JUNCTION))
     {
@@ -498,24 +623,19 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
             service->holdoff = false;
             service->status.junctions_seen++;
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
-            /* Explicit trial policy: no live barcode route means pass through.
-             * Keep the continuous LINE lease alive; do not pause, probe or
-             * submit a finite approach goal that must stop to complete. */
+            /* Trial policy: stand still at the junction, then follow the live
+             * barcode route if there is one, otherwise drive straight on. The
+             * pause uses the normal zero-output stop (never clears a STOP);
+             * junction_tick() makes the choice when it has lasted pause_ms. */
             if (junction.candidate && following_line(controller->mission) &&
                 safety_motion_allowed(&controller->safety) &&
-                vehicle_controller_hardware_faults(controller) == 0U &&
-                ((controller->route_lifecycle != ROUTE_LIFECYCLE_PENDING) ||
-                 (now_ms > controller->route.expires_ms)))
+                vehicle_controller_hardware_faults(controller) == 0U)
             {
-                if (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING)
-                {
-                    controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
-                }
-                controller->mission = MISSION_TRACK_LINE;
-                service->status.last_route = ROUTE_COMMAND_STRAIGHT;
-                service->status.junctions_done++;
-                service->holdoff = true;
-                service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
+                controller_action_t pause_stop = {0};
+                pause_stop.type = CONTROLLER_ACTION_STOP_MOTION;
+                service->pause_junction = junction;
+                execute(service, &pause_stop);
+                set_phase(service, CONTROLLER_JUNCTION_PAUSE, now_ms);
                 return;
             }
 #endif
@@ -541,6 +661,79 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
         set_phase(service, CONTROLLER_JUNCTION_PROBE_SETTLE, now_ms);
         execute(service, &pause);
     }
+}
+
+static void search_start(controller_service_t *service,
+    const controller_line_input_t *line, system_time_ms_t now_ms);
+
+/* After a pivot the car sits wherever the wheels say it turned to, usually a
+ * little short of the line. If neither sensor sees black, hand over to the
+ * line search, which keeps turning the same way first. */
+static void find_line_after_turn(
+    controller_service_t *service,
+    route_command_t command,
+    system_time_ms_t now_ms)
+{
+    controller_line_input_t line = {0};
+
+    if ((command != ROUTE_COMMAND_LEFT) && (command != ROUTE_COMMAND_RIGHT) &&
+        (command != ROUTE_COMMAND_UTURN))
+    {
+        return;   /* STRAIGHT: still on the line */
+    }
+    if ((service->outputs.read_line == NULL) ||
+        (service->controller.mode != SYSTEM_MODE_AUTO))
+    {
+        return;
+    }
+    if (service->outputs.read_line(service->outputs.context, &line) && line.on_line)
+    {
+        return;   /* already on the line */
+    }
+    line.steer = (command == ROUTE_COMMAND_RIGHT) ? 1 : -1;   /* same way as the pivot */
+    search_start(service, &line, now_ms);
+}
+
+/* The pause is over: run the live barcode route, or carry straight on. */
+static void pause_finish(controller_service_t *service, system_time_ms_t now_ms)
+{
+    vehicle_controller_t *controller = &service->controller;
+    controller_action_t action;
+    bool live = (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
+        (now_ms <= controller->route.expires_ms);
+
+    if (live)
+    {
+        action = vehicle_controller_on_junction(controller,
+            &service->pause_junction, now_ms);
+        execute(service, &action);
+        if (action.type == CONTROLLER_ACTION_EXECUTE_ROUTE)
+        {
+            start_route(service, action.route_command, now_ms);
+        }
+        else
+        {
+            set_phase(service, CONTROLLER_JUNCTION_IDLE, now_ms);
+        }
+        return;
+    }
+    if (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING)
+    {
+        controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
+    }
+    /* No command: carry on straight. The pause retired the old LINE
+     * authority, so resume under a fresh generation (as after a turn). */
+    controller->authority_generation++;
+    if (controller->authority_generation == 0U)
+    {
+        controller->authority_generation = 1U;
+    }
+    controller->mission = MISSION_TRACK_LINE;
+    service->status.last_route = ROUTE_COMMAND_STRAIGHT;
+    service->status.junctions_done++;
+    service->holdoff = true;
+    service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
+    set_phase(service, CONTROLLER_JUNCTION_IDLE, now_ms);
 }
 
 static void junction_tick(controller_service_t *service, system_time_ms_t now_ms)
@@ -627,6 +820,35 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
             }
             break;
 
+        case CONTROLLER_JUNCTION_PAUSE:
+        {
+            route_instruction_t pause_route;
+
+            /* A barcode decoded while we wait still counts. */
+            if (out->take_route(out->context, &pause_route))
+            {
+                pause_route.expires_ms = now_ms +
+                    (pause_route.expires_ms - pause_route.decoded_ms);
+                pause_route.decoded_ms = now_ms;
+                if (vehicle_controller_receive_route(&service->controller,
+                        &pause_route, now_ms))
+                {
+                    service->status.routes_accepted++;
+                    service->status.last_route = pause_route.command;
+                }
+                else
+                {
+                    service->status.routes_rejected++;
+                }
+            }
+            if (time_reached(now_ms,
+                    service->phase_since_ms + service->junction.pause_ms))
+            {
+                pause_finish(service, now_ms);
+            }
+            break;
+        }
+
         case CONTROLLER_JUNCTION_APPROACH:
             state = poll_goal(service, &result);
             if (state == GOAL_DONE)
@@ -643,7 +865,10 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
             state = poll_goal(service, &result);
             if (state == GOAL_DONE)
             {
+                route_command_t turned = service->junction_route;
+
                 finish_route(service, &result, now_ms);
+                find_line_after_turn(service, turned, now_ms);
             }
             break;
 
@@ -797,6 +1022,9 @@ void controller_service_tick(
     }
     if (service->searching)
     {
+#if CONTROLLER_HDG_ASSIST
+        heading_assist_idle();
+#endif
         search_tick(service, now_ms);
         return;   /* the line search owns the motion */
     }
@@ -805,6 +1033,9 @@ void controller_service_tick(
         junction_tick(service, now_ms);
         if (service->junction_phase != CONTROLLER_JUNCTION_IDLE)
         {
+#if CONTROLLER_HDG_ASSIST
+            heading_assist_idle();
+#endif
             service->line_seen_ms = now_ms;
             return;   /* a junction step owns the motion */
         }
@@ -815,6 +1046,9 @@ void controller_service_tick(
         !vehicle_controller_motion_allowed(controller, MOTION_SOURCE_LINE) ||
         !service->outputs.read_line(service->outputs.context, &line))
     {
+#if CONTROLLER_HDG_ASSIST
+        heading_assist_idle();
+#endif
         service->line_seen_ms = now_ms;   /* the lost timer runs only while following */
         return;   /* nothing sent: Buddy 2 stops when the last one expires */
     }
@@ -843,6 +1077,15 @@ void controller_service_tick(
     /* Buddy 3: steer > 0 = turn right. Curvature > 0 = turn left. */
     request.curvature_u1_m = -(int32_t)line.steer *
         service->line.curvature_per_steer_u1_m;
+    if (line.barcode_active && (CONTROLLER_BARCODE_STEER_PERCENT != 100))
+    {
+        /* Gentle steering while the barcode is read; see the define above. */
+        request.curvature_u1_m = (int32_t)((int64_t)request.curvature_u1_m *
+            CONTROLLER_BARCODE_STEER_PERCENT / 100);
+    }
+#if CONTROLLER_HDG_ASSIST
+    request.curvature_u1_m += heading_assist_bias(line.steer, now_ms);
+#endif
     request.analogue_steering = line.analogue_steering;
     request.created_ms = now_ms;
     request.expires_ms = now_ms + service->line.request_life_ms;

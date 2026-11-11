@@ -383,6 +383,31 @@ CFLAGS  += -DAPP_CIRCUIT_TEST=$(CIRCUIT_TEST)
 CFLAGS  += -DAPP_B2_MOVE_TEST=$(B2_MOVE_TEST) -DAPP_CAR_B2_TRIAL=$(CAR_B2_TRIAL)
 CFLAGS  += -DAPP_OBSTACLE_TABLE=$(OBSTACLE_TABLE)
 CFLAGS  += -DAPP_NO_BARCODE_CAL=$(NO_BARCODE_CAL)
+BARCODE_STEER_PERCENT ?=
+HEADING_LOG ?= 0
+HDG_ASSIST ?= 0
+JUNCTION_PAUSE_MS ?= 1000
+JUNCTION_APPROACH_MM ?= 100
+JUNCTION_TURN_COMP_PERCENT ?= 116
+CFLAGS  += -DCONTROLLER_JUNCTION_APPROACH_MM=$(JUNCTION_APPROACH_MM) -DCONTROLLER_JUNCTION_TURN_COMP_PERCENT=$(JUNCTION_TURN_COMP_PERCENT)
+CFLAGS  += -DCONTROLLER_JUNCTION_PAUSE_MS=$(JUNCTION_PAUSE_MS)U
+LINE_DAMP_STEER ?= 0
+LINE_DAMP_MS ?= 40
+CFLAGS  += -DCONTROLLER_HDG_ASSIST=$(HDG_ASSIST)
+CFLAGS  += -DB4_HEADING_LOG=$(HEADING_LOG)
+ifneq ($(strip $(BARCODE_STEER_PERCENT)),)
+CFLAGS  += -DCONTROLLER_BARCODE_STEER_PERCENT=$(strip $(BARCODE_STEER_PERCENT))
+endif
+STRAIGHT_TRIM_LEARN ?= 0
+CFLAGS  += -DB2_STRAIGHT_TRIM_LEARN=$(STRAIGHT_TRIM_LEARN)
+STRAIGHT_RIGHT_TRIM ?=
+ifneq ($(strip $(STRAIGHT_RIGHT_TRIM)),)
+CFLAGS  += -DB2_STRAIGHT_RIGHT_TRIM_PERCENT=$(strip $(STRAIGHT_RIGHT_TRIM))U
+endif
+CRUISE_MM_S ?=
+ifneq ($(strip $(CRUISE_MM_S)),)
+CFLAGS  += -DCONTROLLER_LINE_CRUISE_MM_S=$(strip $(CRUISE_MM_S))U
+endif
 ifeq ($(CAR_MQTT),1)
 # The car's motor task runs at priority 6 on core 0 with a 100 ms watchdog.
 # The radio service shares core 0, so keep it below the car's control tasks
@@ -403,7 +428,7 @@ CFLAGS  += -DCNF_TIMER_PERIOD=1
 CFLAGS  += -DMOTION_RIGHT_TRIM_PERMILLE=1300u
 # Explicit measured trial tuning lives in project_config/car_trial_tuning.h.
 # Restore Buddy 3's original testing-branch steering in every CAR_RUN image.
-CFLAGS  += -DLINE_STEER_RAMP_MS=6U -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=0
+CFLAGS  += -DLINE_STEER_RAMP_MS=6U -DLINE_HOLD_STEER=20 -DLINE_DAMP_STEER=$(LINE_DAMP_STEER) -DLINE_DAMP_MS=$(LINE_DAMP_MS)
 ifeq ($(CAR_B2_TRIAL),1)
 # No run limit (2026-11-02): GP21, line loss or a fault ends the run.
 CFLAGS  += -DCAR_RUN_LIMIT_MS=0U
@@ -447,6 +472,7 @@ endif
 ################################################################################
 
 PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
+PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-captrace
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))
