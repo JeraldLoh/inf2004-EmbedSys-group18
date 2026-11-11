@@ -25,6 +25,24 @@
 /* Extra PWM headroom for the outside wheel under bend load. */
 #define B2_LINE_OUTSIDE_MAX_EFFORT 400U
 #define B2_LINE_OUTSIDE_SPEED_PERCENT 115U
+#ifndef B2_STRAIGHT_RIGHT_TRIM_PERCENT
+#define B2_STRAIGHT_RIGHT_TRIM_PERCENT 95U
+#endif
+/* Adaptive straight trim (make STRAIGHT_TRIM_LEARN=1). Each small line
+ * correction nudges the right-wheel trim so a steady pull cancels itself:
+ * a LEFT correction (car drifted right) raises the right wheel, a RIGHT
+ * correction lowers it. Units are 1/100 percent (10000 = 100%). Ignored for
+ * the first 2 s of a run (launch transient) and for big bends. */
+#ifndef B2_STRAIGHT_TRIM_LEARN
+#define B2_STRAIGHT_TRIM_LEARN 0
+#endif
+#define B2_TRIM_LEARN_STEP_X100 25
+#define B2_TRIM_LEARN_MIN_X100 9200
+#define B2_TRIM_LEARN_MAX_X100 10800
+#define B2_TRIM_LEARN_MAX_CURVATURE 4
+#define B2_TRIM_LEARN_SETTLE_US 2000000U
+/* After a correction grows past the limit (a bend), learn nothing for 3 s. */
+#define B2_TRIM_LEARN_BEND_PAUSE_US 3000000U
 #define B2_LINE_FAST_STRAIGHT_MM_S 250U
 #define B2_LINE_FAST_STRAIGHT_MAX_EFFORT 400U
 /* Pre-split speed ceilings for gentle and maximum-curvature bends. */
