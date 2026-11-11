@@ -106,6 +106,7 @@ typedef struct
     uint32_t goal_timeout_ms;
     uint32_t settle_ms;        /* stop before probing; wait for its result */
     uint32_t holdoff_ms;       /* ignore junctions this long after a turn */
+    uint32_t pause_ms;         /* stand still at a junction before choosing (trial policy) */
 } controller_junction_config_t;
 
 typedef enum
@@ -116,7 +117,8 @@ typedef enum
     CONTROLLER_JUNCTION_PROBE_BACK,    /* pivot right */
     CONTROLLER_JUNCTION_PROBE_RESULT,  /* waiting for Buddy 3's verdict */
     CONTROLLER_JUNCTION_APPROACH,      /* forward to the junction centre */
-    CONTROLLER_JUNCTION_TURN
+    CONTROLLER_JUNCTION_TURN,
+    CONTROLLER_JUNCTION_PAUSE          /* stopped at a junction: route or straight on */
 } controller_junction_phase_t;
 
 /* Line-tracking numbers. Placeholders until measured on the track. */
@@ -178,6 +180,7 @@ typedef struct
     controller_junction_phase_t junction_phase;
     system_time_ms_t phase_since_ms;
     route_command_t junction_route;
+    junction_observation_t pause_junction;   /* the junction we are waiting at */
     motion_goal_request_t junction_goal;
     goal_id_t next_goal_id;
     bool holdoff;
