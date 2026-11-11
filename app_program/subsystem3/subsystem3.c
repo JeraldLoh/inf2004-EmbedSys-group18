@@ -6,7 +6,6 @@
  *     |- apply requests from the controller (probe, reacquire)
  *     |- drv_ir_read_line()    -> line_follow_update()  -> steering -100..100
  *     |- barcode: ADC sample   -> barcode_sensor_is_black() -> decoder
- *     |       or: edge buffer  (S3_BARCODE_USE_EDGES)        -> decoder
  *     '- publish line status, route, junction
  *
  * JUNCTIONS: a barcode before a junction decides the direction. With no
@@ -26,13 +25,13 @@
  *
  * TIMING: the kernel tick is CNF_TIMER_PERIOD (config/config.h), currently
  * 10 ms. ADC polling needs a 1 ms period (CNF_TIMER_PERIOD = 1, a shared
- * setting). With S3_BARCODE_USE_EDGES = 1 the barcode is timed by GPIO edge
- * interrupts instead and a 10 ms period is enough.
+ * setting; CAR_RUN builds already use it).
  *
- * BARCODE CALIBRATION runs only when asked (subsystem3_calibrate_barcode(),
- * called by the CAR_RUN startup at its "sweep now" prompt): 3 s of samples
- * set the black/white thresholds, while line following carries on. Until a
- * calibration succeeds every sample reads white, so no barcode is decoded.
+ * BARCODE THRESHOLDS: by default (S3_BARCODE_FIXED = 1) fixed thresholds
+ * apply from power-on, with no calibration sweep. LINE_PID=1 builds (or
+ * S3_BARCODE_FIXED = 0) still sweep when subsystem3_calibrate_barcode() is
+ * called: 3 s of samples set the thresholds while line following carries on,
+ * and until that succeeds every sample reads white, so no barcode is decoded.
  *
  * LINE PID (LINE_PID=1 builds only): the left line module's A0 output, wired
  * to GP28, steers with a PID (line_pid.c) along the tape's left edge. It is
@@ -45,16 +44,12 @@
 #include "drv_ir.h"
 #include "barcode_sensor.h"
 #include "barcode_decoder.h"
-#include "barcode_edges.h"
 
 #ifndef APP_S3_LINE_PID
 #define APP_S3_LINE_PID 0
 #endif
 #if APP_S3_LINE_PID
 #include "line_pid.h"
-#if S3_BARCODE_USE_EDGES
-#error "LINE_PID=1 calibrates in the ADC barcode sweep: needs S3_BARCODE_USE_EDGES=0"
-#endif
 LOCAL line_pid_t s3_pid;          /* written only by s3_task */
 LOCAL uint16_t s3_pid_raw;
 #endif
@@ -65,18 +60,11 @@ static uint32_t s3_wifi_at;
 static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo; }
 #endif
 
-#ifndef S3_BARCODE_USE_EDGES
-#define S3_BARCODE_USE_EDGES 0   /* 1 = digital D0 + GPIO edge interrupts */
-#endif
 #ifndef S3_DEBUG_RAW
 #define S3_DEBUG_RAW 0           /* 1 = print raw sensor values every 100 ms */
 #endif
 
-#if S3_BARCODE_USE_EDGES
-#define S3_SAMPLE_MS 10U
-#else
 #define S3_SAMPLE_MS 1U
-#endif
 #define S3_TASK_PRIORITY 10      /* TBD: agree the schedule as a team */
 #define S3_TASK_STACK 1024
 #define S3_CALIBRATION_MS 3000U  /* sweep the barcode sensor during this */
@@ -132,7 +120,7 @@ LOCAL BOOL s3_calibrate_request = FALSE;
 LOCAL volatile BOOL s3_barcode_ready = FALSE;
 /* Capture diagnostics (darkest reading per element, sample gaps, 2 ms
  * waveform dump) cost ~6 KB of RAM: S3_DEBUG_RAW=1 builds only. */
-#define S3_CAPTURE_DIAG (!S3_BARCODE_USE_EDGES && S3_DEBUG_RAW)
+#define S3_CAPTURE_DIAG S3_DEBUG_RAW
 #if S3_CAPTURE_DIAG
 /* Diagnostics only (s3_task): darkest reading per element of a capture. */
 LOCAL uint16_t s3_peak[BARCODE_DECODER_MAX_RUNS];
@@ -154,9 +142,6 @@ LOCAL uint32_t s3_wave_last_ms = 0U;
 static uint32_t s3_wifi_calibration_state,s3_wifi_calibration_reason;
 #endif
 
-#if S3_BARCODE_USE_EDGES
-LOCAL barcode_edges_t s3_edges;
-#endif
 
 LOCAL void s3_cyclic_handler(void *exinf)
 {
@@ -164,7 +149,6 @@ LOCAL void s3_cyclic_handler(void *exinf)
     (void)tk_wup_tsk(s3_tid);   /* interrupt context: just wake the task */
 }
 
-#if !S3_BARCODE_USE_EDGES
 /* One sample of the barcode calibration sweep. Starts on a request from
  * subsystem3_calibrate_barcode() and ends S3_CALIBRATION_MS later; line
  * following carries on meanwhile. Returns true while calibrating: the sample
@@ -181,21 +165,6 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
     s3_calibrate_request = FALSE;
     (void)tk_unl_mtx(s3_mtx);
 
-#if S3_BARCODE_FIXED && !APP_S3_LINE_PID   /* PID builds still need the sweep */
-    if (requested)
-    {
-        barcode_sensor_set_fixed(bar, S3_BARCODE_FIXED_LOW, S3_BARCODE_FIXED_HIGH);
-        barcode_decoder_reset(decoder);
-        s3_barcode_ready = TRUE;
-#if APP_CAR_MQTT
-        s3_wifi_calibration_state=2U;
-#endif
-        tm_printf((UB *)"[S3] Barcode OK: fixed thresholds %d/%d (no calibration sweep)\n",
-                  (INT)bar->threshold_low, (INT)bar->threshold_high);
-    }
-    (void)have_raw; (void)raw; (void)now_ms; (void)active; (void)start_ms;
-    return false;
-#endif
     if (requested)
     {
         tm_printf((UB *)"[S3] Calibrating: sweep barcode sensor over black and white for %d ms\n",
@@ -262,7 +231,6 @@ LOCAL bool s3_calibrate_step(barcode_sensor_t *bar, barcode_decoder_t *decoder,
     }
     return true;
 }
-#endif
 
 LOCAL void s3_publish_junction(const junction_observation_t *junction)
 {
@@ -375,12 +343,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
     bool right_black;
     uint32_t now_us;
     uint32_t now_ms;
-#if S3_BARCODE_USE_EDGES
-    uint32_t edge_us;
-#else
     barcode_sensor_t bar;
     uint16_t raw = 0U;
-#endif
 #if S3_DEBUG_RAW
     uint32_t last_debug_ms = 0U;
 #endif
@@ -398,8 +362,16 @@ LOCAL void s3_task(INT stacd, void *exinf)
     barcode_decoder_reset(&decoder);
     decoder.fail_pending = false;
     decoder.fail_count = 0U;
-#if !S3_BARCODE_USE_EDGES
     barcode_sensor_reset(&bar);   /* reads white until calibrated */
+#if S3_BARCODE_FIXED && !APP_S3_LINE_PID
+    /* No calibration sweep: the fixed thresholds apply from power-on. */
+    barcode_sensor_set_fixed(&bar, S3_BARCODE_FIXED_LOW, S3_BARCODE_FIXED_HIGH);
+    s3_barcode_ready = TRUE;
+#if APP_CAR_MQTT
+    s3_wifi_calibration_state = 2U;
+#endif
+    tm_printf((UB *)"[S3] Barcode ready: fixed thresholds %d/%d (no calibration)\n",
+              (INT)bar.threshold_low, (INT)bar.threshold_high);
 #endif
 
     for (;;)
@@ -476,20 +448,6 @@ LOCAL void s3_task(INT stacd, void *exinf)
         }
 
         /* ---- Barcode ---- */
-#if S3_BARCODE_USE_EDGES
-        /* Exact edge times from the ISR, then one call at "now" so the
-         * decoder can notice the quiet zone that ends the barcode. */
-        while (barcode_edges_pop(&s3_edges, &barcode_black, &edge_us))
-        {
-            barcode_decoder_feed(&decoder, barcode_black, edge_us);
-        }
-        if (s3_edges.overflow != 0U)
-        {
-            s3_edges.overflow = 0U;
-            barcode_decoder_reset(&decoder);   /* lost edges: discard read */
-        }
-        barcode_decoder_feed(&decoder, barcode_black, now_us);
-#else
         {
             bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
 #if APP_CAR_MQTT
@@ -548,7 +506,6 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #endif
             }
         }
-#endif
 #if APP_CAR_MQTT
         /* Duration is copied from the actual most recent completed run. */
         if(decoder.run_count>0U){
@@ -652,17 +609,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
                 s3_wifi.black=barcode_black;
                 s3_wifi.calibrated=s3_barcode_ready!=FALSE;
                 s3_wifi.decoder_state=decoder.state;
-#if !S3_BARCODE_USE_EDGES
                 s3_wifi.calibration_low=bar.threshold_low;
                 s3_wifi.calibration_high=bar.threshold_high;
-#endif
                 /* Pattern is unavailable: do not invent a decoded mask. */
-#if !S3_BARCODE_USE_EDGES
                 b1_live_line report={.at_ms=at,.calibration_state=s3_wifi_calibration_state,
                     .calibration_reason=s3_wifi_calibration_reason};
-#else
-                b1_live_line report={.at_ms=at,.calibration_state=4U};
-#endif
                 (void)b1_submit_live_status(3,&report);
                 if(b1_submit_section(3,&s3_wifi,at)) s3_wifi_at=at;
             }
@@ -673,16 +624,10 @@ LOCAL void s3_task(INT stacd, void *exinf)
         if ((now_ms - last_debug_ms) >= S3_DEBUG_PERIOD_MS)
         {
             last_debug_ms = now_ms;
-#if S3_BARCODE_USE_EDGES
-            tm_printf((UB *)"[S3 RAW] L=%d R=%d steer=%d barcode=%d\n",
-                      (INT)left_black, (INT)right_black,
-                      (INT)steer, (INT)barcode_black);
-#else
             tm_printf((UB *)"[S3 RAW] L=%d R=%d steer=%d adc=%d dark=%d thr=%d/%d\n",
                       (INT)left_black, (INT)right_black, (INT)steer,
                       (INT)raw, (INT)barcode_sensor_darkness(raw),
                       (INT)bar.threshold_low, (INT)bar.threshold_high);
-#endif
 #if APP_S3_LINE_PID
             tm_printf((UB *)"[S3 PID] adc=%d dark=%d err=%d cal=%d\n",
                       (INT)s3_pid_raw, (INT)line_pid_darkness(s3_pid_raw),
@@ -706,9 +651,6 @@ EXPORT ER subsystem3_init(void)
     {
         return er;
     }
-#if S3_BARCODE_USE_EDGES
-    barcode_edges_reset(&s3_edges);
-#endif
 
     cmtx.mtxatr = TA_INHERIT;   /* priority inheritance avoids priority inversion */
     s3_mtx = tk_cre_mtx(&cmtx);
@@ -847,28 +789,13 @@ EXPORT void subsystem3_reacquire(line_side_t side_hint)
 
 EXPORT void subsystem3_calibrate_barcode(void)
 {
-#if !S3_BARCODE_USE_EDGES
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
     s3_calibrate_request = TRUE;
     (void)tk_unl_mtx(s3_mtx);
-#endif
 }
 
 EXPORT BOOL subsystem3_barcode_calibrated(void)
 {
-#if S3_BARCODE_USE_EDGES
-    return TRUE;   /* digital D0: thresholded by the sensor itself */
-#else
     return s3_barcode_ready;
-#endif
 }
 
-#if S3_BARCODE_USE_EDGES
-/* Called by the team's shared GPIO interrupt dispatcher on every edge of
- * the barcode D0 pin. Interrupt context: no waiting, no printing. */
-EXPORT void subsystem3_barcode_edge_isr(void)
-{
-    (void)barcode_edges_push(&s3_edges, drv_ir_read_barcode_digital(),
-                             drv_ir_now_us());
-}
-#endif

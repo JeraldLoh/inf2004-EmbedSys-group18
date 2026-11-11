@@ -28,8 +28,7 @@ Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
 | `line_pid.c/.h` | Pico + host | Opt-in PID steering from the left line sensor's analogue output |
 | `barcode_sensor.c/.h` | Pico + host | ADC to black/white: calibration, hysteresis, adaptation |
 | `barcode_decoder.c/.h` | Pico + host | Full Code 39 (A-Z, 0-9), both directions, validated |
-| `barcode_map.c/.h` | Pico + host | Letter-to-command map, set at run time with `MAP` over MQTT |
-| `barcode_edges.c/.h` | Pico + host | Optional ISR-to-task edge buffer (lock-free) |
+| `barcode_map.c/.h` | Pico + host | Letter-to-command map, set at run time from the dashboard |
 | `subsystem3.c/.h` | Pico | Task, cyclic handler, published interface |
 
 ## Behaviour
@@ -46,11 +45,11 @@ Status: DRAFT. The host tests and the `S3_BENCH` images were removed on
   should hold a steady speed until it clears.
 - `subsystem3_reacquire()` searches for the line after a bypass.
 - Sensor polarity: `S3_LINE_BLACK_LEVEL` in `drv_ir.h`.
-- Barcode calibration runs only when `subsystem3_calibrate_barcode()` is
-  called (the `CAR_RUN` startup does it when it prints "Sweep the barcode
-  sensor now"): sweep the sensor over black and white for 3 s. Line following
-  runs throughout. Until it succeeds barcodes are ignored and every junction
-  uses the probe; `subsystem3_barcode_calibrated()` says which.
+- No barcode calibration at startup: fixed thresholds (350/450,
+  `S3_BARCODE_FIXED`) apply from power-on and the console prints
+  `[S3] Barcode ready: fixed thresholds 350/450 (no calibration)`. Lower the
+  sensor to about 2-3 mm above the floor. `LINE_PID=1` builds still run a 3 s
+  sweep at startup, for the line PID.
 
 ## Line PID (opt-in, `LINE_PID=1`)
 
@@ -85,37 +84,39 @@ trial flags).
 
 ## Demo day: setting the barcode letters over MQTT
 
-The letters are announced on the day, so nothing is hardcoded. Send a `MAP`
-message on the command topic before `START`:
+The letters are announced on the day, so nothing is hardcoded. Use the
+dashboard's **05 Barcode routes** panel: type a letter, pick Left, Right,
+Straight or U-turn, add the rest, then **Send to rover**. It works before
+`START` or mid-run; the next barcode read uses the new map. **Read from rover**
+shows what the car actually holds, and the panel says whether your draft is in
+sync. The draft is kept in the browser between page loads.
 
-```
-MAP CLEAR K LEFT Q RIGHT Z STRAIGHT M UTURN
-```
+Wire format (binary, on `/command`, see `subsystem1/buddy1_protocol.h`):
 
-The reply is the whole map, e.g. `OK K=L M=U Q=R Z=S`. Also accepted:
-`MAP K=L, Q=R` (short names), `MAP SHOW`, `MAP DEFAULT` (A=L B=R C=S D=U,
-the power-on map), `MAP CLEAR`, `MAP K NONE`. Commands: LEFT/L, RIGHT/R,
-STRAIGHT/S, UTURN/U, NONE/X. A bad message changes nothing and replies
-`ERR <reason>: <word>`. A letter that is read but not mapped prints a warning
-and is treated like no barcode (the junction probe runs).
+| Command | Bytes | Layout |
+|---|---|---|
+| MAP_SET | 22 | `B1 02 03 03` + command ID (u32 LE) + 14 map bytes |
+| MAP_SHOW | 8 | `B1 02 03 04` + command ID (u32 LE) |
+
+The 14 map bytes are 36 entries (A-Z then 0-9) of 3 bits each, LSB-first:
+0 none, 1 left, 2 right, 3 straight, 4 U-turn (`route_command_t`). MAP_SET
+replaces the whole table. Any entry above 4, nonzero spare bits, a zero ID or a
+wrong length rejects the whole command and nothing changes. The reply on
+`/command_result` is JSON with `"status":"applied"` and `"map"`: the 28 hex
+characters of the table the car now holds (power-on map A=L B=R C=S D=U is
+`d108000000000000000000000000`).
+
+Applying runs on the comms task. Each entry is one byte in `barcode_map.c`, so
+the S3 task sees either the old or the new command for a letter, never a torn
+value. A letter that is read but not mapped is treated like no barcode (the
+junction probe runs).
 
 The map is in RAM, so it resets to the defaults on power-up: send it again
 after any reset.
 
-Buddy 1 integration (in `b1_telemetry_task`, before `b1_parse`):
-
-```c
-if (barcode_map_is_command(m.data, m.length)) {
-    char reply[BARCODE_MAP_REPLY_MAX];
-    (void)barcode_map_command(m.data, m.length, reply, sizeof(reply));
-    put(B1_RESULT, reply, now);   /* or wrap it in the JSON result */
-    continue;
-}
-```
-
 ## Integration checklist (shared items, need team agreement)
 
-- [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1 (or use `S3_BARCODE_USE_EDGES`).
+- [ ] `config/config.h`: `CNF_TIMER_PERIOD` 10 -> 1.
       `CAR_RUN=1` already builds with 1 ms (D11)
 - [x] `device/adc/sysdepend/rp2040/adc_cnf_sysdep.h`: `DEVCONF_ADC_PIN_INIT_0` TRUE
       in `CAR_RUN` builds only (GP26 analogue mode)
@@ -125,7 +126,7 @@ if (barcode_map_is_command(m.data, m.length)) {
       pivot, slow speed on `barcode_active` (`CAR_RUN`, decision D14; not yet
       run on the car)
 - [ ] Buddy 5: call `subsystem3_reacquire()` at the end of a bypass
-- [ ] Buddy 1: forward `MAP ...` messages to `barcode_map_command()` (snippet above)
+- [x] Buddy 1: binary MAP_SET / MAP_SHOW on `/command` applied to the barcode map (dashboard panel 05)
 
 ## Data representation (Change Requirement 1)
 
@@ -142,6 +143,7 @@ if (barcode_map_is_command(m.data, m.length)) {
 | Junction type | 3 values | 2 | `junction_type_t` |
 | Barcode edge (ISR to task) | time + level | 32 | `uint32_t`: bits 31..1 time in us, bit 0 level |
 | Barcode ADC sample | 0-4095 | 12 | `uint16_t`, masked `& 0x0FFF` |
+| Barcode route map entry (MQTT) | 0-4 (none, L, R, S, U) | 3 | 36 entries x 3 bits = 14 bytes; MAP_SET is 22 bytes vs about 30 for `MAP K=L Q=R Z=S M=U` text |
 
 Still to do for Week 13: RAM and message-size before/after measurements, and
 packing `route_instruction_t` / `junction_observation_t` (shared contracts,

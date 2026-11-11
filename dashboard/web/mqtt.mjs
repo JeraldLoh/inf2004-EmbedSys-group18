@@ -88,9 +88,10 @@ export class MqttConnection {
   }else if(type===3){if(this.ready)this.onMessage(decodePublish(frame));}
   else if(type===13){if(b.length!==0)throw Error('Invalid PINGRESP');this.pingAt=0;}
  }
- publish(command,id){
+ publish(command,id){this.publishBytes(encodeCommand(command,id));}
+ publishBytes(bytes){
   if(!this.ready||!this.socket||this.socket.readyState!==WebSocket.OPEN)throw Error('Broker is disconnected');
   if(this.socket.bufferedAmount>4096)throw Error('Network busy; command was not queued');
-  this.socket.send(packet(0x30,join(mqttString(this.prefix+'/command'),encodeCommand(command,id))));
+  this.socket.send(packet(0x30,join(mqttString(this.prefix+'/command'),bytes)));
  }
 }

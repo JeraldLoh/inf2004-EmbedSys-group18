@@ -1,5 +1,4 @@
-# Buddy 3 host build: line following, barcode sampling, edge timing and
-# Code 39 decoding.
+# Buddy 3 host build: line following, barcode sampling and Code 39 decoding.
 #
 # Not built here (they need the micro T-Kernel or the IR/ADC hardware, so the
 # course Make builds them): subsystem3.c, drv_ir.c. Add new
@@ -9,7 +8,6 @@ add_library(subsystem3_host STATIC
     line_follow.c
     line_pid.c
     barcode_sensor.c
-    barcode_edges.c
     barcode_decoder.c
     barcode_map.c
 )

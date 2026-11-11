@@ -218,6 +218,7 @@ endforeach()
 add_executable(buddy1_heartbeat_tests
     test_buddy1_heartbeat.c
     ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem3/barcode_map.c
     ../../app_program/subsystem1/buddy1_live_status.c
     ../../app_program/subsystem1/buddy1_protocol.c
     ../../app_program/subsystem1/buddy1_diagnostics.c
@@ -252,6 +253,7 @@ add_test(NAME buddy1_diagnostics_tests COMMAND buddy1_diagnostics_tests)
 # Live Buddy 1 integration: sections merge without stealing producer events.
 add_executable(buddy1_car_tests test_buddy1_car.c
     ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem3/barcode_map.c
     ../../app_program/subsystem1/buddy1_live_status.c
     ../../app_program/subsystem1/buddy1_binary.c
     ../../app_program/subsystem1/buddy1_diagnostics.c
@@ -284,3 +286,20 @@ else()
  target_compile_options(buddy1_live_status_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
 endif()
 add_test(NAME buddy1_live_status_tests COMMAND buddy1_live_status_tests)
+
+# Barcode route map set live from the dashboard (Buddy 1 bridge + Buddy 3 map).
+add_executable(buddy1_map_tests test_buddy1_map.c
+    ../../app_program/subsystem1/buddy1_bridge.c
+    ../../app_program/subsystem3/barcode_map.c
+    ../../app_program/subsystem1/buddy1_live_status.c
+    ../../app_program/subsystem1/buddy1_binary.c
+    ../../app_program/subsystem1/buddy1_diagnostics.c
+    ../../app_program/subsystem1/buddy1_protocol.c)
+target_include_directories(buddy1_map_tests PRIVATE buddy1_stubs)
+target_compile_definitions(buddy1_map_tests PRIVATE B1_DEMO=0)
+if(MSVC)
+    target_compile_options(buddy1_map_tests PRIVATE /W4 /WX /UNDEBUG)
+else()
+    target_compile_options(buddy1_map_tests PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+endif()
+add_test(NAME buddy1_map_tests COMMAND buddy1_map_tests)

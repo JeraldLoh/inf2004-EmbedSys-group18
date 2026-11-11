@@ -143,9 +143,6 @@ line_status_t line_follow_update(
 /* Steering proposal, -100 (left) .. 0 (straight) .. +100 (right). */
 int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms);
 
-/* How long the current state has lasted. */
-uint32_t line_follow_state_age_ms(const line_follow_t *lf, uint32_t now_ms);
-
 /* Set by the task while the barcode decoder is capturing. */
 void line_follow_set_barcode_active(line_follow_t *lf, bool active);
 
@@ -158,7 +155,6 @@ void line_follow_reacquire_start(
     line_follow_t *lf,
     line_side_t side_hint,
     uint32_t now_ms);
-bool line_follow_reacquiring(const line_follow_t *lf);
 
 /* ---- Junctions --------------------------------------------------------- */
 

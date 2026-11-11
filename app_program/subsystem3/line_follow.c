@@ -185,11 +185,6 @@ int8_t line_follow_steer(const line_follow_t *lf, uint32_t now_ms)
     }
 }
 
-uint32_t line_follow_state_age_ms(const line_follow_t *lf, uint32_t now_ms)
-{
-    return (lf == NULL) ? 0U : (now_ms - lf->state_since_ms);
-}
-
 void line_follow_set_barcode_active(line_follow_t *lf, bool active)
 {
     if (lf != NULL)
@@ -215,11 +210,6 @@ void line_follow_reacquire_start(
     lf->history_right = 0U;
     lf->both_black_active = false;
     set_state(lf, LINE_STATE_REACQUIRE, now_ms);
-}
-
-bool line_follow_reacquiring(const line_follow_t *lf)
-{
-    return (lf != NULL) && (lf->status.state == (uint8_t)LINE_STATE_REACQUIRE);
 }
 
 bool line_follow_take_junction(
