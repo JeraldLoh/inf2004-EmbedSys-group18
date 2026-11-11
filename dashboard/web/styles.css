@@ -25,6 +25,8 @@
 
 .calibration-badge.failed{color:#efb0a3;background:#392622;border-color:#754b41}
 
+.barcode-status{margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:8px;background:#151b14}.barcode-status strong{display:block;margin-top:8px;font-size:16px;line-height:1.4}.barcode-status p{font-size:11px;line-height:1.7;color:var(--muted);margin:8px 0 0}.barcode-status[data-state=scanning]{border-color:#aa8845}.barcode-status[data-state=scanning] strong{color:#f0cf86}.barcode-status[data-state=decoded]{border-color:#667b41}.barcode-status[data-state=decoded] strong{color:var(--lime)}.barcode-status[data-state=failed],.barcode-status[data-state=unmapped]{border-color:#754b41}.barcode-status[data-state=failed] strong,.barcode-status[data-state=unmapped] strong{color:#efb0a3}.barcode-status[data-state=stale]{opacity:.6}
+
 /* Barcode routes (Buddy 3) */
 .route-panel{margin-top:20px}.route-body{display:grid;grid-template-columns:1fr 1.25fr}.route-add{padding:25px 24px 22px;border-right:1px solid var(--line)}.route-add>.eyebrow{font-size:8px}.route-add h3{font-size:22px;font-weight:500;letter-spacing:-.6px;margin:10px 0 8px}.route-add>p{font-size:11px;line-height:1.8;color:var(--muted);margin:0 0 18px;max-width:420px}
 .route-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}.route-letter-label{display:flex;flex-direction:column;gap:6px;font:8px Consolas,monospace;letter-spacing:1px;color:var(--muted);text-transform:uppercase}.route-letter-label input{width:62px;height:42px;border:1px solid var(--line);border-radius:7px;background:#121612;color:var(--lime);text-align:center;font:600 20px Consolas,monospace;text-transform:uppercase}

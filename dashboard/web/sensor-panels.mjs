@@ -1,6 +1,6 @@
-import {liveGroup,lineHeadline,lineSearching,bypassProgress} from './live-status.mjs';
-import {lineNames,terrainNames,avoidanceNames,rangeNames,motionSpeed,systemNames} from './telemetry-view.mjs';
-import {renderCalibration} from './calibration.mjs';
+import {liveGroup,lineHeadline,lineSearching,bypassProgress} from './live-status.mjs?v=barcode-digital-4';
+import {lineNames,terrainNames,avoidanceNames,rangeNames,motionSpeed,systemNames} from './telemetry-view.mjs?v=barcode-digital-4';
+import {renderCalibration} from './calibration.mjs?v=barcode-digital-4';
 // Only presentation; all data validity and age remain visible in sensor details.
 export function renderSensorHighlights(id,packet,view,fresh,elapsed){
  const $=key=>document.getElementById(key),s=packet?.buddies?.[id],available=!!s,stale=available&&(!fresh||view.stale);

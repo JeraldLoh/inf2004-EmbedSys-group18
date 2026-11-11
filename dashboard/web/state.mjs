@@ -1,7 +1,7 @@
-import {decodeLiveStatus} from './live-status.mjs';
-import {decodeTelemetry} from './binary.mjs';
-import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs';
-import {mapFromHex} from './route-map.mjs';
+import {decodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
+import {decodeTelemetry} from './binary.mjs?v=barcode-digital-4';
+import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
+import {mapFromHex} from './route-map.mjs?v=barcode-digital-4';
 export function validateCommand(command) {
  if(command==='START'||command==='STOP') return command;
  throw new Error('Only START and STOP are supported');
