@@ -7,7 +7,7 @@
 #define BARCODE_QUIET_START_US 8000U
 #define BARCODE_QUIET_END_US 28000U   /* lower bound for the end quiet zone */
 #define BARCODE_MIN_RUN_US 400U
-#define BARCODE_MAX_SCAN_US 6000000U  /* 141 mm barcode at ~25 mm/s */
+#define BARCODE_MAX_SCAN_US 10000000U /* largest printed copy ~270 mm: 5.4 s at 50 mm/s */
 #define BARCODE_ABANDON_MIN_US 600000U /* shortest white that ends a partial read */
 #define BARCODE_MAX_BAR_US 1500000U    /* longer black is tape, not a bar */
 #define BARCODE_WIDE_NUMERATOR 17U
@@ -220,9 +220,22 @@ static void push_run(barcode_decoder_t *decoder, uint32_t width_us)
 
 static void finish_or_reset(barcode_decoder_t *decoder)
 {
+    {
+        uint8_t k;
+
+        for (k = 0U; k < decoder->run_count; k++)
+        {
+            decoder->trace_run_us[k] = decoder->run_us[k];
+        }
+        decoder->trace_count = decoder->run_count;
+        decoder->trace_id++;
+        decoder->trace_ok = false;
+        decoder->trace_pending = true;
+    }
     if (decode_complete_symbol(decoder))
     {
         decoder->state = BARCODE_DECODER_COMPLETE;
+        decoder->trace_ok = true;
     }
     else
     {
