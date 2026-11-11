@@ -19,15 +19,29 @@ function readerGroup(packet){
  const g=s.line,age=((s.uptime_ms-g.at_ms)>>>0)+Math.max(0,packet.live_status_elapsed_ms??0);
  return age<5000?{group:g,late:age>=1500}:null;
 }
+// Say WHICH side went quiet, so "Waiting" is not a guess.
+function whyWaiting(packet){
+ const s=packet?.live_status;
+ if(!packet)return 'No data from the broker at all (dashboard not receiving MQTT).';
+ if(!s)return 'No live_status packet received from the Pico (Wi-Fi/MQTT silent or Pico rebooting).';
+ if(s.demo!==packet.demo)return 'Packet is from the simulator, not the real Pico.';
+ if(!(s.present&2))return 'The Pico is sending status, but Buddy 3 (line/barcode) has not published yet.';
+ const pico=(s.uptime_ms-s.line.at_ms)>>>0,link=Math.max(0,packet.live_status_elapsed_ms??0);
+ if(pico>=5000)return `Pico is online but Buddy 3's reader data is ${(pico/1000).toFixed(1)} s old: its task stopped publishing.`;
+ return `Reader data is fresh on the Pico, but the last packet arrived ${(link/1000).toFixed(1)} s ago: the Wi-Fi/MQTT link is stalling.`;
+}
 export function barcodeView(packet,{stale=false}={}){
  const found=readerGroup(packet),line=found?found.group:null;
  if(stale)return {state:'stale',headline:'Barcode reader · readings stale',detail:'Waiting for fresh Pico data. Previous results do not describe the current scan.'};
- if(!line)return {state:'waiting',headline:'Waiting for barcode reader',detail:'Connect the Pico and wait for fresh reader status.'};
+ if(!line)return {state:'waiting',headline:'Waiting for barcode reader',detail:whyWaiting(packet)};
  if(line.barcode_state===null||line.barcode_state===undefined)return {state:'waiting',headline:'Reader status update needed',detail:'Flash the firmware supplied with this dashboard to report scanning, decoded letters and failed reads.'};
  if(line.calibration_state===1)return {state:'waiting',headline:'Calibrating barcode reader',detail:'Sweep the sensor across black and white as prompted before scanning.'};
  if(line.calibration_state===3)return {state:'failed',headline:'Barcode reader not ready',detail:'Calibration failed. Recalibrate before scanning barcodes.'};
  const view=result(line),age=((packet.live_status.uptime_ms-line.barcode_event_ms)>>>0)+Math.max(0,packet.live_status_elapsed_ms??0);
  if([2,3,4].includes(line.barcode_state))view.detail+=` Last result ${(age/1000).toFixed(1)} s ago · ${line.barcode_failures} unreadable attempts this boot.`;
+ // The firmware keeps the last result until the next capture. After 10 s show "ready" again
+ // (keeping the old result visible) so the panel does not look stuck on a stale failure.
+ if([2,3,4].includes(line.barcode_state)&&age>(line.barcode_state===3?3000:10000)){const last=view.headline;view.state='waiting';view.headline='Ready · waiting for the next barcode';view.detail=`Last result: ${last} (${(age/1000).toFixed(0)} s ago) · ${line.barcode_failures} unreadable attempts this boot. Move a barcode across the sensor.`;}
  const sensor=packet?.buddies?.[3];
  if(line.barcode_digital&&sensor)view.detail+=` Digital D0 on GP26: ${sensor.black?'black':'white'} detected.`;
  if(sensor?.adc_valid)view.detail+=` Sensor: ${sensor.black?'black':'white'} · ADC ${sensor.adc}.`;

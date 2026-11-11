@@ -1,4 +1,4 @@
-import {barcodeEvents,renderBarcodeStatus} from './barcode-status.mjs?v=barcode-digital-5';
+import {barcodeEvents,renderBarcodeStatus} from './barcode-status.mjs?v=barcode-digital-8';
 import {robotEvents,lineSearchEvents,calibrationEvents} from './robot-events.mjs?v=barcode-digital-4';
 import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
 import {encodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';

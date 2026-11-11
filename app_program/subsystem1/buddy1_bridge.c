@@ -17,6 +17,43 @@ static b1_packet slots[B1_SLOT_COUNT];
 static int occupied[B1_SLOT_COUNT], have_snapshot;
 static b1_diagnostics diagnostic;
 static atomic_uint busy_submissions;
+
+/* Buddy 3's reader status. Single writer (Buddy 3's 1 kHz task), lock-free
+ * seqlock, so a busy guard mutex or one invalid field can no longer leave the
+ * dashboard's reader data stale for many seconds. Buddy 1 merges and clamps it
+ * into the live packet at encode time. */
+static b1_live_line s3_line_buf;
+static atomic_uint s3_line_seq;     /* odd while the writer is mid-update */
+static atomic_uint s3_line_ever;
+static void s3_line_publish(const b1_live_line *l) {
+ unsigned q=atomic_load_explicit(&s3_line_seq,memory_order_relaxed);
+ atomic_store_explicit(&s3_line_seq,q+1U,memory_order_release);
+ atomic_thread_fence(memory_order_seq_cst);
+ s3_line_buf=*l;
+ atomic_thread_fence(memory_order_seq_cst);
+ atomic_store_explicit(&s3_line_seq,q+2U,memory_order_release);
+ atomic_store_explicit(&s3_line_ever,1U,memory_order_release);
+}
+static int s3_line_read(b1_live_line *out) {
+ for(unsigned t=0;t<4U;t++){
+  unsigned a=atomic_load_explicit(&s3_line_seq,memory_order_acquire);
+  if(a&1U)continue;
+  atomic_thread_fence(memory_order_seq_cst);
+  *out=s3_line_buf;
+  atomic_thread_fence(memory_order_seq_cst);
+  if(atomic_load_explicit(&s3_line_seq,memory_order_acquire)==a)return 1;
+ }
+ return 0;
+}
+static void s3_line_clamp(b1_live_line *l) {
+ if(l->paused>1U)l->paused=1U;
+ if(l->calibration_state>4U)l->calibration_state=0U;
+ if(l->calibration_reason>1U)l->calibration_reason=0U;
+ if(l->barcode_state>4U)l->barcode_state=3U;
+ if(l->barcode_character>127U)l->barcode_character=0U;
+ if(l->barcode_route>4U)l->barcode_route=0U;
+ if(l->barcode_digital>1U)l->barcode_digital=1U;
+}
 #if defined(_PICO_RP2040_) && TK_SUPPORT_SMP
 static T_SPLOCK busy_lock;
 #endif
@@ -108,6 +145,7 @@ int b1_submit_binary_snapshot(const b1_binary_snapshot *s) {
 int b1_submit_live_status(unsigned id,const void *section) {
  static b1_live_status candidate;
  if(!section || (id!=2 && id!=3 && id!=5))return 0;
+ if(id==3){s3_line_publish((const b1_live_line*)section);return 1;}
  if(!lock()){count_busy();return 0;}
  candidate=live_latest;
  if(id==2){candidate.motion=*(const b1_live_motion*)section;candidate.present|=1;}
@@ -214,9 +252,13 @@ void b1_telemetry_task(int stacd,void *exinf) {
    }
   }
   if((unsigned int)(now-live_at)>=200){
-   b1_live_status s={0};
-   if(lock()){s=live_latest;tk_unl_mtx(guard);}
-   if(s.present){s.uptime_ms=now;
+   b1_live_status s={0};int locked=0;
+   if(lock()){s=live_latest;tk_unl_mtx(guard);locked=1;}
+   if(locked && atomic_load_explicit(&s3_line_ever,memory_order_acquire)){
+    b1_live_line l;
+    if(s3_line_read(&l)){s3_line_clamp(&l);s.line=l;s.present|=2;}
+   }
+   if(locked && s.present){s.uptime_ms=now;
     unsigned n=b1_encode_live_status((unsigned char*)text,sizeof(text),&s,B1_DEMO);
     if(n && put_bytes(B1_LIVE_STATUS,text,n,now))live_at=now;
    }

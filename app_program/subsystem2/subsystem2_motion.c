@@ -9,6 +9,9 @@
 #include "b2_line_tuning.h"
 #endif
 #include "../vehicle_controller/controller_task.h"
+#if defined(APP_CAR_RUN) && APP_CAR_RUN
+#include "../subsystem3/subsystem3.h"
+#endif
 
 static car_motion_t motion;
 static b2_trial_io_t io;
@@ -115,6 +118,20 @@ static void diagnostic_worker(INT code, void *exinf)
                 (int)have_outputs,(unsigned)s.low_speed_floor_mask,(int)s.state,
                 (unsigned long)s.generation,(unsigned long)count,(long)measured_motion_straight_trim_x100());
             if (tracking) { delay_ms = 50U; }
+#if defined(APP_CAR_RUN) && APP_CAR_RUN
+            {
+                /* Once a second: is Buddy 3's task still running, and where? */
+                static uint32_t s3_print_ms = 0U;
+                if ((uint32_t)(sample_ms - s3_print_ms) >= 1000U)
+                {
+                    uint32_t s3_loops = 0U, s3_stage = 0U;
+                    s3_print_ms = sample_ms;
+                    subsystem3_debug(&s3_loops, &s3_stage);
+                    tm_printf((UB*)"[S3 TASK] t_ms=%lu loops=%lu stage=%lu\n",
+                        (unsigned long)sample_ms,(unsigned long)s3_loops,(unsigned long)s3_stage);
+                }
+            }
+#endif
             if (s.detail_sequence != last_detail) {
                 tm_printf((UB*)"[B2 STOP DETAIL] seq=%lu reason=%s result=%d gen=%lu command=%lu wheel_mask=0x%x before_target=%ld/%ld before_speed=%lu/%lu mm/s speed_valid=%d\n",
                     (unsigned long)s.detail_sequence,measured_motion_detail_name(s.detail_reason),
