@@ -9,8 +9,12 @@ produces the following:
 - **Terrain:** the state LEVEL / ASCENDING / CREST / DESCENDING / SETTLING,
   plus a speed cap for the controller.
 - **Humps:** detection with peak height, uncertainty, length and validity.
-- **Motion:** classification as stationary, moving, rough or impact;
-  acceleration and braking; collision detection with the side that was hit.
+- **Motion:** classification as stationary, moving, rough or impact (a
+  jolt); acceleration and braking.
+- **End of run:** the car lifted at least 20 cm, at any tilt, or overturned.
+  The motors stop and stay stopped until the car is back on its wheels and
+  START is given again. This replaces IMU collision detection, which the
+  lecturer removed from the requirements (2026-11-11).
 - **Turns:** completed-turn events with direction and angle.
 
 All shared data uses minimum-bit packed fields (Change Requirement 1). See
@@ -44,9 +48,9 @@ builds one level below `app_program/`.
 | [s4_packed.h](s4_packed.h) | no | Every packed field: shift, width, enums, fault bits, compile-time checks |
 | [s4_shared.h](s4_shared.h) / [.c](s4_shared.c) | no | Seqlock snapshot, odometry input, MQTT frame/command, `terrain_report_t` adapter |
 | [s4_atomic.h](s4_atomic.h) | no | 32-bit load/store and the cross-core fence |
-| [terrain_estimator.h](terrain_estimator.h) / [.c](terrain_estimator.c) | no | The algorithm: calibration, filters, state machine, hump height, collision, turn |
+| [terrain_estimator.h](terrain_estimator.h) / [.c](terrain_estimator.c) | no | The algorithm: calibration, filters, state machine, hump height, end of run (lift/overturn), turn |
 | [imu_math.h](imu_math.h) / [.c](imu_math.c) | no | Fixed-point decode, axis mapping, atan2, isqrt, sine, heading |
-| [drv_lsm303.h](drv_lsm303.h) / [.c](drv_lsm303.c) | yes | LSM303DLHC over the course `"iicb"` (I2C1) device |
+| [drv_lsm303.h](drv_lsm303.h) / [.c](drv_lsm303.c) | yes | LSM303DLHC over a software I2C master on GP2/GP3 (the I2C1 block stalled in Wi-Fi builds) |
 | [task_imu.c](task_imu.c) | yes | The IMU task, cyclic tick, request flag, event queue, bus fault recovery |
 | [s4_selftest.c](s4_selftest.c) | yes | On-target checks, built only with `TEST=1` |
 | [s4_config.h](s4_config.h) | no | All tuning values, periods, priority, mounting |
@@ -66,7 +70,7 @@ them be tested on a PC.
         seqlock snapshot (4 packed words)      s4_mbf_events (message buffer)
            |               |            |                 |
    controller (IF-03)  Buddy 1 MQTT    any ISR      Vehicle Controller
-   s4_terrain_report_  s4_telemetry_   s4_shared_   hump / collision /
+   s4_terrain_report_  s4_telemetry_   s4_shared_   hump / end of run /
    from_words()        pack() 17 B     read()       turn / fault / cal
 ```
 
@@ -121,7 +125,7 @@ them be tested on a PC.
 ```
 
 - `cal=RUNNING-keep still` / `none`: level calibration is running or failed; it retries every 2 s once the car is still.
-- `faults` is the 7-bit detail mask: 0x01 I2C, 0x02 magnetometer, 0x04 stale, 0x08 uncalibrated, 0x10 saturated, 0x20 tilt, 0x40 collision. 0x2 alone is normal until the magnetometer is calibrated or if it is absent.
+- `faults` is the 7-bit detail mask: 0x01 I2C, 0x02 magnetometer, 0x04 stale, 0x08 uncalibrated, 0x10 saturated, 0x20 tilt (0x40 is reserved, formerly collision). 0x2 alone is normal until the magnetometer is calibrated or if it is absent.
 - `vib` is the vibration level while driving. Host simulation shows no false humps up to about 30 mg of noise; if it reads well above that and you see `INVALID` humps on flat floor, raise `S4_RAISE_ON_MM` to 5 or `S4_PITCH_SMOOTH_SHIFT` to 4. At 45 mg, simulation gave about one INVALID episode a minute and no valid ones.
 - `odom=1` means the height came from Buddy 2's wheel speeds; 0 means the fallback speed was used.
 
@@ -153,7 +157,7 @@ Week 8 tribunal decisions applied here:
 
 - **One DATA_VALID bit per message** (status bit 31) replaces per-field
   invalid codes, and CLAMPED (bit 30) flags an out-of-range value.
-- **Explicit hump and collision flags.**
+- **Explicit hump and end-of-run flags** (the collision flag was replaced).
 - **A 3-bit motion class:** stationary, moving, accelerating, braking, turn
   left, turn right, rough, impact.
 - **A 2-bit calibration status:** none, running, level, level plus
@@ -165,9 +169,15 @@ Week 8 tribunal decisions applied here:
   Buddy 4 reports evidence instead (detail mask and `S4_EV_FAULT` events),
   and the controller task still needs an event to receive it.
 
-Collision is reported as an event, a flag and a latched bit in Buddy 4's
-detail mask. Whether it triggers an urgent stop (IF-07) is the controller's
-policy decision.
+**End of run → motors stop.** Buddy 4 publishes the end-of-run latch (status
+bit 24, cause in bits 26..25, lift height in motion bits 23..16) and an
+`S4_EV_END_RUN` event. The car supervisor (`car_run_target.c`) reads the
+snapshot every 5 ms with `s4_end_of_run_from_words()`. While the latch is set
+it halts the motors and posts `CONTROLLER_EVENT_LATCH_STOP` with
+`STOP_REASON_PHYSICAL` every 100 ms, and refuses GP20 and MQTT START. That is
+the same stop reason as the GP21 STOP button: an operator's physical action,
+so no new telemetry field is needed and a fresh START clears it once the car
+is back down.
 
 ## How it works
 
@@ -272,11 +282,35 @@ INVALID, tilt over 25°, and the impact hold all use 100 mm/s. The official
 car (`CAR_RUN=1`) cruises at 60 mm/s, so the caps only take effect on faster
 profiles.
 
-**Motion and collision.** The vibration level is the filtered deviation of
-|a| from 1 g. A horizontal jolt above 1000 mg relative to the slow filter is
-a collision. The side that was hit comes from the jolt direction, because the
-car is pushed away from the impact. Collision samples are kept out of the
-attitude filters, so a hit cannot start a false hump.
+**Motion and jolts.** The vibration level is the filtered deviation of |a|
+from 1 g. A horizontal jolt above 1000 mg relative to the slow filter (a knock
+or bump) is kept out of the attitude filters and pauses hump integration for
+0.5 s, so it cannot start a false hump. It is not reported: IMU collision
+detection was removed from the requirements.
+
+**End of run: lifted or overturned.** Two independent triggers; either one
+latches the stop.
+
+- *Lifted ≥ 20 cm.* Lifted straight up with acceleration a, the accelerometer
+  reads |f| = g + a whatever its orientation. So the rise is the double
+  integral of |f| − g, and it needs no attitude: it works at whatever angle
+  the car is held. |f| is low-pass filtered (about 140 ms) to remove driving
+  vibration. The filter keeps the area under the curve, so the integral is
+  only delayed. g is the filtered |f| tracked while at rest, which absorbs
+  the sensor's scale error. To stop drift, integration only runs in an
+  episode that starts with 40 mg of upward acceleration. The episode ends
+  after 1.2 s, or once the car has dropped 5 cm below its start. A jolt
+  cancels it.
+- *Overturned.* The filtered gravity vector is more than 60° from the
+  calibrated UP axis for 0.3 s. Ramps are far below that.
+
+The latch clears once the car rests upright (within 30°) and still for 1 s.
+The controller keeps its own stop until START. Host tests (`ctest -L
+subsystem4`): lifts of 23 to 30 cm trigger in 0.46 to 0.60 s, upright,
+tilted 45° or 90°, or turned upside down. Overturning 120° in place triggers
+as "overturned". A 12 cm lift, a 25° tilt on the floor and a 1.4 g sideways
+knock do not trigger. Five minutes of driving at 30 mg vibration produced a
+false rise of 0 mm.
 
 **Heading and turns.** The heading is tilt-compensated (east = m × a,
 north = a × east) and comes from the magnetometer, since the LSM303DLHC has
@@ -297,6 +331,12 @@ differential is the more reliable turn source.
 4. Measure the real hump with a ruler. Append the comparison to
    `testing/subsystem4/TEST_LOG.md` (test S4-H01) and tune `s4_config.h`
    from it.
+5. **End the run by lifting the car** at least 20 cm in one deliberate
+   movement (under about 1 s), at any angle, or by turning it over. Expect
+   `[B4] END OF RUN: car lifted 2x cm` and `[CAR] END OF RUN: ... motors
+   stopped`. The dashboard shows "End of run · car lifted .. cm". Put it down
+   upright and keep it still for 1 s (`[CAR] Buddy 4: car back on its
+   wheels`), then GP20 or MQTT START runs again.
 
 ## Known limitations
 
@@ -315,6 +355,13 @@ differential is the more reliable turn source.
 - Pitch includes linear acceleration: 0.1 g of acceleration reads as about
   5.7° of pitch. Hard acceleration while on a hump inflates the height. The
   hump speed cap limits this.
+- End of run: a lift spread over more than about 1.2 s (gentler than 40 mg)
+  is not counted, by design, so vibration cannot add up to a false lift. Lift
+  the car deliberately. Horizontal acceleration adds a little to |f| (300 mg
+  sideways reads as +44 mg), so a hard sideways knock that is not caught as a
+  jolt could add some rise. A large tilt changes the accelerometer's offset
+  error and so the rise estimate; the overturn trigger covers that case. Not
+  yet measured on the car: record real lifts in TEST_LOG.md (S4-L01).
 - Flat-spin magnetometer calibration cannot separate hard iron from the
   vertical field leaking in through a tilted mounting. Mount the board flat.
   Soft-iron distortion is not corrected.

@@ -101,8 +101,15 @@ void s4_est_default_config(s4_cfg_t *cfg)
     cfg->caster_arm_mm = S4_CASTER_ARM_MM;
     cfg->track_mm = S4_TRACK_MM;
     cfg->rough_vib_mg = S4_ROUGH_VIB_MG;
-    cfg->collision_mg = S4_COLLISION_MG;
-    cfg->collision_hold_ms = S4_COLLISION_HOLD_MS;
+    cfg->jolt_mg = S4_JOLT_MG;
+    cfg->jolt_hold_ms = S4_JOLT_HOLD_MS;
+    cfg->lift_height_mm = S4_LIFT_HEIGHT_MM;
+    cfg->lift_window_ms = S4_LIFT_WINDOW_MS;
+    cfg->lift_start_mg = S4_LIFT_START_MG;
+    cfg->lift_lpf_shift = S4_LIFT_LPF_SHIFT;
+    cfg->overturn_ddeg = S4_OVERTURN_DDEG;
+    cfg->overturn_ms = S4_OVERTURN_MS;
+    cfg->rest_ms = S4_REST_MS;
     cfg->stale_ms = S4_STALE_MS;
     cfg->fallback_speed_mm_s = S4_FALLBACK_SPEED_MM_S;
     cfg->turn_on_ddps = S4_TURN_ON_DDPS;
@@ -130,7 +137,13 @@ bool s4_est_config_valid(const s4_cfg_t *cfg)
         (cfg->track_mm >= 20U) && (cfg->track_mm <= 1000U) &&
         (cfg->min_length_mm < cfg->max_length_mm) &&
         (cfg->settle_ms > 0U) &&
-        (cfg->collision_mg > 0U) &&
+        (cfg->jolt_mg > 0U) &&
+        (cfg->lift_height_mm > 0U) &&
+        (cfg->lift_window_ms > 0U) &&
+        (cfg->lift_start_mg > 0U) &&
+        (cfg->lift_lpf_shift >= 1U) && (cfg->lift_lpf_shift <= 6U) &&
+        (cfg->overturn_ddeg <= 1800U) &&
+        (cfg->rest_ms > 0U) &&
         (cfg->stale_ms > 0U) &&
         (cfg->turn_off_ddps < cfg->turn_on_ddps);
 }
@@ -189,6 +202,8 @@ void s4_est_begin_calibration(s4_est_t *est)
     est->cal_retries = 0U;
     est->in_episode = 0U;
     est->pitch_smooth_primed = 0U;
+    est->lift_primed = 0U;      /* re-reference g after the new calibration */
+    est->lift_active = 0U;
     reset_cal_window(est);
     set_terrain(est, TERRAIN_UNKNOWN);
 }
@@ -197,7 +212,12 @@ void s4_est_clear_latched(s4_est_t *est)
 {
     if (est != NULL)
     {
-        est->faults &= ~(unsigned)S4_FAULT_COLLISION;
+        est->end_latched = 0U;
+        est->end_cause = S4_END_NONE;
+        est->end_lift_cm = 0U;
+        est->rest_ms = 0U;
+        est->overturn_ms = 0U;
+        est->lift_active = 0U;
     }
 }
 
@@ -369,59 +389,223 @@ static void calibration_step(
     finish_calibration(est, true, events);
 }
 
-static bool collision_check(
-    s4_est_t *est,
-    const int32_t vehicle[3],
-    bool saturated,
-    s4_events_t *events)
+/*
+ * Filter protection: a horizontal jolt (a knock or a bump) is kept out of the
+ * filters and pauses hump integration for jolt_hold_ms, so it cannot look
+ * like a pitch change and start a false hump. Nothing is reported: IMU
+ * collision detection was removed from the requirements.
+ */
+static bool jolt_check(s4_est_t *est, const int32_t vehicle[3], bool saturated)
 {
     int32_t d_fwd = vehicle[IMU_FWD] - asr32(est->acc_slow[IMU_FWD], FX);
     int32_t d_right = vehicle[IMU_RIGHT] - asr32(est->acc_slow[IMU_RIGHT], FX);
     uint32_t jolt = imu_isqrt_u64((uint64_t)(((int64_t)d_fwd * d_fwd) +
                                              ((int64_t)d_right * d_right)));
-    s4_event_msg_t msg;
-    uint32_t direction;
 
-    if (saturated && (jolt < est->cfg.collision_mg))
+    if (saturated && (jolt < est->cfg.jolt_mg))
     {
-        jolt = est->cfg.collision_mg;
+        jolt = est->cfg.jolt_mg;
     }
-    if (jolt < est->cfg.collision_mg)
+    if (jolt < est->cfg.jolt_mg)
     {
         return false;
     }
-
-    if (est->impact_ms > 0U)
+    if ((est->impact_ms == 0U) || (jolt > est->jolt_mg))
     {
-        /* Same impact: keep the peak. */
-        if (jolt > est->shock_mg)
-        {
-            est->shock_mg = (uint16_t)min_u32(jolt, UINT16_MAX);
-        }
-        return true;
+        est->jolt_mg = (uint16_t)min_u32(jolt, UINT16_MAX);
     }
+    est->impact_ms = est->cfg.jolt_hold_ms;
+    return true;
+}
 
-    /* The car is pushed away from the side that was hit. */
-    if (abs32(d_fwd) >= abs32(d_right))
+/* ------------------------------------------------------------------------
+ * End of run: the car lifted >= lift_height_mm, or overturned.
+ *
+ * Rise. The accelerometer reads the specific force f = a - g. Lifted
+ * straight up with acceleration a_v, |f| = g + a_v whatever the orientation,
+ * so h = double integral of (|f| - g) needs no attitude at all: it works at
+ * whatever angle the car is held. |f| is low-pass filtered (removes driving
+ * vibration; the filter keeps the area under the curve, so the integral is
+ * only delayed) and g is the filtered |f| tracked while at rest, which
+ * absorbs the sensor's scale error for the current orientation.
+ *
+ * Drift control: integration runs only in an episode that starts with an
+ * upward acceleration of lift_start_mg and lasts at most lift_window_ms, or
+ * until the car has dropped LIFT_DROP_UM below where it started. A deliberate
+ * lift reaches 20 cm well inside the window; vibration while driving, double
+ * integrated for that short time, stays far below it (host tests).
+ *
+ * Limits. Horizontal acceleration adds a little to |f| (second order: 300 mg
+ * sideways reads as +44 mg), so a hard knock could add rise; a jolt sample
+ * therefore cancels the episode. A large tilt changes the sensor's offset
+ * error; the overturn trigger covers that case.
+ *
+ * Overturned: the filtered gravity vector more than overturn_ddeg from the
+ * calibrated UP axis for overturn_ms.
+ *
+ * The latch holds until the car rests upright (within REST_TILT_DDEG) and
+ * still for rest_ms, i.e. it is back on its wheels.
+ * ------------------------------------------------------------------------ */
+#define LIFT_REST_BAND_MG 15       /* | |f| - g | this small: at rest */
+#define LIFT_GREF_SHIFT 5U         /* g reference EMA while at rest (~0.6 s) */
+#define LIFT_DROP_UM 50000         /* 5 cm below the start: not a lift */
+#define LIFT_CLAMP_MG 1500         /* bound one sample's |f| - g */
+#define REST_TILT_DDEG 300         /* upright enough to count as resting */
+#define REST_VIB_MG 30U            /* steady enough: sensor noise, no driving */
+#define MG_TO_UM_S2_X1000 9807     /* 1 mg = 9.807 mm/s^2 = 9807 um/s^2 / 1000 */
+
+/* Is the vehicle's filtered gravity vector more than limit_ddeg from UP? */
+static bool tilted_beyond(const s4_est_t *est, uint32_t limit_ddeg)
+{
+    int32_t f[3];
+    uint32_t mag;
+    unsigned axis;
+
+    for (axis = 0U; axis < 3U; axis++)
     {
-        direction = (d_fwd < 0) ? S4_HIT_FRONT : S4_HIT_REAR;
+        f[axis] = asr32(est->acc_fast[axis], FX);
+    }
+    mag = imu_isqrt_u64((uint64_t)(((int64_t)f[0] * f[0]) + ((int64_t)f[1] * f[1]) +
+                                   ((int64_t)f[2] * f[2])));
+    if (mag < 100U)
+    {
+        return false;   /* falling or no data: no gravity to measure tilt by */
+    }
+    /* tilt > limit  <=>  cos(tilt) = up / |f| < cos(limit) = sin(90 - limit) */
+    return ((int64_t)f[IMU_UP] * 32768) <
+        ((int64_t)mag * imu_sin_q15(900 - (int32_t)limit_ddeg));
+}
+
+static void end_run_latch(s4_est_t *est, uint32_t cause, s4_events_t *events)
+{
+    int32_t cm = (est->lift_peak_um > 0) ? ((est->lift_peak_um + 5000) / 10000) : 0;
+    s4_event_msg_t msg;
+
+    est->end_latched = 1U;
+    est->end_cause = cause;
+    est->end_count++;
+    est->end_lift_cm = (uint8_t)min_u32((uint32_t)cm, S4_MASK(S4_MO_LIFT_WIDTH));
+    est->rest_ms = 0U;
+    est->lift_active = 0U;
+
+    msg = event_header(S4_EV_END_RUN);
+    msg = s4_put(msg, S4_EV_END_CAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH, cause);
+    msg = s4_put(msg, S4_EV_END_LIFT_SHIFT, S4_MO_LIFT_WIDTH, est->end_lift_cm);
+    push_event(events, msg);
+}
+
+static void end_run_step(
+    s4_est_t *est,
+    const int32_t vehicle[3],
+    bool jolt,
+    uint16_t dt_ms,
+    s4_events_t *events)
+{
+    uint32_t mag = imu_isqrt_u64((uint64_t)(((int64_t)vehicle[0] * vehicle[0]) +
+                                            ((int64_t)vehicle[1] * vehicle[1]) +
+                                            ((int64_t)vehicle[2] * vehicle[2])));
+    int32_t a_mg;
+
+    if (!est->lift_primed)
+    {
+        est->lift_mag_x16 = (int32_t)mag * 16;
+        est->lift_gref_x16 = (int32_t)est->g0_mg * 16;
+        est->lift_primed = 1U;
+    }
+    est->lift_mag_x16 += asr32(((int32_t)mag * 16) - est->lift_mag_x16,
+                               est->cfg.lift_lpf_shift);
+    a_mg = clamp32(asr32(est->lift_mag_x16 - est->lift_gref_x16 + 8, 4),
+                   -LIFT_CLAMP_MG, LIFT_CLAMP_MG);
+
+    if ((est->cfg.overturn_ddeg > 0U) && tilted_beyond(est, est->cfg.overturn_ddeg))
+    {
+        est->overturn_ms = add_sat_u16(est->overturn_ms, dt_ms);
     }
     else
     {
-        direction = (d_right < 0) ? S4_HIT_RIGHT : S4_HIT_LEFT;
+        est->overturn_ms = 0U;
     }
-    est->shock_mg = (uint16_t)min_u32(jolt, UINT16_MAX);
-    est->collision_dir = direction;
-    est->collision_count++;
-    est->faults |= S4_FAULT_COLLISION;
-    est->impact_ms = est->cfg.collision_hold_ms;
 
-    msg = event_header(S4_EV_COLLISION);
-    msg = s4_put(msg, S4_EV_COLL_DIR_SHIFT, S4_ST_COLLDIR_WIDTH, direction);
-    msg = s4_put(msg, S4_EV_COLL_MAG_SHIFT, S4_MO_SHOCK_WIDTH,
-                 min_u32(jolt / S4_SHOCK_UNIT_MG, S4_MASK(S4_MO_SHOCK_WIDTH)));
-    push_event(events, msg);
-    return true;
+    if (est->end_latched)
+    {
+        /* Back on its wheels: upright, no vertical motion, no vibration. */
+        if (!tilted_beyond(est, REST_TILT_DDEG) && (abs32(a_mg) <= LIFT_REST_BAND_MG) &&
+            ((uint32_t)asr32(est->vib_x16, FX) <= REST_VIB_MG))
+        {
+            est->rest_ms = add_sat_u16(est->rest_ms, dt_ms);
+        }
+        else
+        {
+            est->rest_ms = 0U;
+        }
+        if (est->rest_ms >= est->cfg.rest_ms)
+        {
+            s4_est_clear_latched(est);
+            est->lift_gref_x16 = est->lift_mag_x16;   /* fresh rest reference */
+        }
+        return;
+    }
+
+    if ((est->cfg.overturn_ddeg > 0U) && (est->overturn_ms >= est->cfg.overturn_ms))
+    {
+        end_run_latch(est, S4_END_OVERTURNED, events);
+        return;
+    }
+
+    if (jolt)
+    {
+        est->lift_active = 0U;   /* a knock is not a lift */
+        return;
+    }
+    if (!est->lift_active)
+    {
+        if (abs32(a_mg) <= LIFT_REST_BAND_MG)
+        {
+            est->lift_gref_x16 += asr32(est->lift_mag_x16 - est->lift_gref_x16,
+                                        LIFT_GREF_SHIFT);
+        }
+        if (a_mg < (int32_t)est->cfg.lift_start_mg)
+        {
+            return;
+        }
+        est->lift_active = 1U;
+        est->lift_ms = 0U;
+        est->lift_v_um_s = 0;
+        est->lift_h_um = 0;
+        est->lift_peak_um = 0;
+    }
+
+    est->lift_ms = add_sat_u16(est->lift_ms, dt_ms);
+    est->lift_v_um_s += (int32_t)(((int64_t)a_mg * MG_TO_UM_S2_X1000 * dt_ms) / 1000);
+    est->lift_h_um += (int32_t)(((int64_t)est->lift_v_um_s * dt_ms) / 1000);
+    if (est->lift_h_um > est->lift_peak_um)
+    {
+        est->lift_peak_um = est->lift_h_um;
+    }
+    log_max(&est->ranges.lift_mm, (uint32_t)(est->lift_peak_um / 1000));
+
+    if (est->lift_h_um >= (int32_t)est->cfg.lift_height_mm * 1000)
+    {
+        end_run_latch(est, S4_END_LIFTED, events);
+    }
+    else if ((est->lift_ms >= est->cfg.lift_window_ms) || (est->lift_h_um <= -LIFT_DROP_UM))
+    {
+        est->lift_active = 0U;
+    }
+}
+
+/* Height for the packed LIFT field, cm: live rise, or the rise at trigger. */
+static uint32_t lift_report_cm(const s4_est_t *est)
+{
+    if (est->end_latched)
+    {
+        return est->end_lift_cm;
+    }
+    if (est->lift_active && (est->lift_h_um > 0))
+    {
+        return (uint32_t)((est->lift_h_um + 5000) / 10000);
+    }
+    return 0U;
 }
 
 static void accel_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
@@ -457,9 +641,9 @@ static void accel_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
         est->filters_primed = 1U;
     }
 
-    /* Collision samples are kept out of the filters so a jolt does not look
-       like a pitch change and start a false hump. */
-    spike = collision_check(est, vehicle, in->accel_saturated, events);
+    /* Jolt samples are kept out of the filters so a knock does not look like
+       a pitch change and start a false hump. */
+    spike = jolt_check(est, vehicle, in->accel_saturated);
     if (!spike)
     {
         for (axis = 0U; axis < 3U; axis++)
@@ -508,6 +692,8 @@ static void accel_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
         {
             est->faults &= ~(unsigned)S4_FAULT_TILT;
         }
+        end_run_step(est, vehicle, spike,
+                     (uint16_t)clamp32((int32_t)in->dt_ms, 1, 1000), events);
     }
 }
 
@@ -1455,9 +1641,8 @@ static void pack_words(s4_est_t *est)
                                S4_MO_TURNRATE_WIDTH, &clamped));
     motion = s4_put(motion, S4_MO_LIVEH_SHIFT, S4_MO_LIVEH_WIDTH,
                     fit_unsigned((uint32_t)live_mm, S4_MO_LIVEH_WIDTH, &clamped));
-    motion = s4_put(motion, S4_MO_SHOCK_SHIFT, S4_MO_SHOCK_WIDTH,
-                    fit_unsigned(est->shock_mg / S4_SHOCK_UNIT_MG, S4_MO_SHOCK_WIDTH,
-                                 &clamped));
+    motion = s4_put(motion, S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH,
+                    fit_unsigned(lift_report_cm(est), S4_MO_LIFT_WIDTH, &clamped));
     motion = s4_put(motion, S4_MO_VIB_SHIFT, S4_MO_VIB_WIDTH,
                     fit_unsigned(vibration_mg / S4_VIB_UNIT_MG, S4_MO_VIB_WIDTH,
                                  &clamped));
@@ -1470,9 +1655,9 @@ static void pack_words(s4_est_t *est)
     status = s4_put(status, S4_ST_CAL_SHIFT, S4_ST_CAL_WIDTH, calibration_status(est));
     status = s4_put(status, S4_ST_ODOM_SHIFT, 1U, est->dist_odometry);
     status = s4_put(status, S4_ST_HUMP_SHIFT, 1U, on_hump ? 1U : 0U);
-    status = s4_put(status, S4_ST_COLL_SHIFT, 1U, (est->impact_ms > 0U) ? 1U : 0U);
-    status = s4_put(status, S4_ST_COLLCNT_SHIFT, S4_ST_COLLCNT_WIDTH, est->collision_count);
-    status = s4_put(status, S4_ST_COLLDIR_SHIFT, S4_ST_COLLDIR_WIDTH, est->collision_dir);
+    status = s4_put(status, S4_ST_END_SHIFT, 1U, est->end_latched);
+    status = s4_put(status, S4_ST_ENDCAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH, est->end_cause);
+    status = s4_put(status, S4_ST_ENDCNT_SHIFT, S4_ST_ENDCNT_WIDTH, est->end_count);
     status = s4_put(status, S4_ST_CLAMPED_SHIFT, 1U, clamped ? 1U : 0U);
     status = s4_put(status, S4_ST_VALID_SHIFT, 1U, data_valid ? 1U : 0U);
 
@@ -1480,7 +1665,7 @@ static void pack_words(s4_est_t *est)
     log_max(&est->ranges.turn_rate_dps, (uint32_t)abs32(turn_dps));
     log_max(&est->ranges.pitch_ddeg, (uint32_t)abs32(est->pitch_ddeg));
     log_max(&est->ranges.roll_ddeg, (uint32_t)abs32(est->roll_ddeg));
-    log_max(&est->ranges.shock_mg, est->shock_mg);
+    log_max(&est->ranges.jolt_mg, est->jolt_mg);
     log_max(&est->ranges.vibration_mg, vibration_mg);
     if (clamped && (est->ranges.clamp_count < UINT16_MAX))
     {
@@ -1502,7 +1687,7 @@ void s4_est_reset_ranges(s4_est_t *est)
 
 void s4_est_step(s4_est_t *est, const s4_input_t *in, s4_events_t *events)
 {
-    const unsigned reportable = ~(unsigned)(S4_FAULT_SATURATED | S4_FAULT_COLLISION);
+    const unsigned reportable = ~(unsigned)S4_FAULT_SATURATED;
     uint32_t prev_status;
     unsigned prev_faults;
     uint16_t dt_ms;

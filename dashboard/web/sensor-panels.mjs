@@ -33,7 +33,7 @@ export function renderSensorHighlights(id,packet,view,fresh,elapsed){
   put('terrain-pitch',valid?`${s.pitch_deg}°`:'—');put('terrain-roll',valid?`${s.roll_deg}°`:'—');put('terrain-heading',s?.heading_valid?`${s.heading_deg}°`:'—');
   $('attitude-horizon').style.transform=`translateY(${valid?Math.max(-25,Math.min(25,s.pitch_deg)):0}px) rotate(${valid?-s.roll_deg:0}deg)`;
   $('attitude-horizon').style.opacity=valid?'1':'.25';
-  put('sensor-caption-4',s?.hump_valid?`Last hump ${s.hump_mm} mm · ±${s.uncertainty_mm} mm estimate`:s?(valid?(s.heading_valid?'Attitude and magnetic heading available.':'Attitude available · heading needs magnetometer calibration.'):'Awaiting valid calibration and sensor readings.'):'Pitch, roll and terrain bring the road into view.');
+  put('sensor-caption-4',s?.run_ended?(s.run_end_cause===1?`End of run · car lifted ${s.lift_cm} cm · motors stopped`:'End of run · car overturned · motors stopped'):s?.hump_valid?`Last hump ${s.hump_mm} mm · ±${s.uncertainty_mm} mm estimate`:s?(valid?(s.heading_valid?'Attitude and magnetic heading available.':'Attitude available · heading needs magnetometer calibration.'):'Awaiting valid calibration and sensor readings.'):'Pitch, roll and terrain bring the road into view.');
  }
  if(id===5){
   const ok=s?.front_status===0,lastOK=s?.last_status===0;

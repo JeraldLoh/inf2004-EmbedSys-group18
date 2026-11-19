@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "s4_config.h"
 #include "s4_shared.h"
 #include "terrain_estimator.h"
 
@@ -48,6 +49,8 @@ typedef struct
     unsigned last_width_mm;     /* profile width estimate, 0 = none */
     unsigned final_terrain;
     int32_t final_height_um;
+    int end_runs;               /* END_RUN events: must stay 0 while driving */
+    unsigned max_lift_mm;       /* largest false lift-episode rise */
 } result_t;
 
 static unsigned long lcg_state;
@@ -145,7 +148,7 @@ static result_t drive(const drive_t *d)
     s4_est_t est;
     s4_input_t in;
     s4_events_t ev;
-    result_t r = {0, 0, 0U, 0U, 0U, 0U, 0};
+    result_t r = {0, 0, 0U, 0U, 0U, 0U, 0, 0, 0U};
     double axle = -300.0, odom_frac = 0.0, t = 0.0, speed = 0.0;
     double brake_t = -1.0;
     double seconds = d->seconds;
@@ -191,6 +194,10 @@ static result_t drive(const drive_t *d)
 
         for (i = 0U; i < ev.count; i++)
         {
+            if (s4_get(ev.msg[i], S4_EV_TYPE_SHIFT, S4_EV_TYPE_WIDTH) == S4_EV_END_RUN)
+            {
+                r.end_runs++;
+            }
             if (s4_get(ev.msg[i], S4_EV_TYPE_SHIFT, S4_EV_TYPE_WIDTH) == S4_EV_HUMP)
             {
                 uint32_t hump = ev.msg[i] >> S4_EV_PAYLOAD_SHIFT;
@@ -209,6 +216,7 @@ static result_t drive(const drive_t *d)
     }
     r.final_terrain = est.terrain;
     r.final_height_um = est.height_um;
+    r.max_lift_mm = est.ranges.lift_mm;
     return r;
 }
 
@@ -219,7 +227,7 @@ static void expect_one_hump(const drive_t *d, const char *what, unsigned width_t
     result_t r = drive(d);
     int width_err = (int)r.last_width_mm - (int)HUMP_W_MM;
 
-    if (r.humps != 1 || r.valid_humps != 1 ||
+    if (r.humps != 1 || r.valid_humps != 1 || r.end_runs != 0 ||
         r.last_height_mm < 8U || r.last_height_mm > 12U ||
         r.final_terrain != TERRAIN_LEVEL ||
         ((width_tol_mm > 0U) &&
@@ -227,9 +235,9 @@ static void expect_one_hump(const drive_t *d, const char *what, unsigned width_t
           (r.last_len_cm != (r.last_width_mm + 5U) / 10U))))
     {
         fprintf(stderr, "FAIL %s arm=%.0f front=%d v=%.0f shape=%d: humps=%d valid=%d h=%u "
-                "width=%u len=%u terrain=%u\n", what, d->caster_mm, d->caster_front,
+                "width=%u len=%u terrain=%u end_runs=%d\n", what, d->caster_mm, d->caster_front,
                 d->speed_mm_s, d->shape, r.humps, r.valid_humps, r.last_height_mm,
-                r.last_width_mm, r.last_len_cm, r.final_terrain);
+                r.last_width_mm, r.last_len_cm, r.final_terrain, r.end_runs);
         assert(0);
     }
 }
@@ -306,9 +314,14 @@ static void test_flat_and_braking(void)
     result_t r = drive(&flat);
 
     assert(r.humps == 0);
+    assert(r.end_runs == 0);   /* vibration never adds up to a 20 cm "lift" */
+    printf("  largest false lift rise in 5 min of 30 mg vibration: %u mm (limit %u mm)\n",
+           r.max_lift_mm, (unsigned)S4_LIFT_HEIGHT_MM);
+    assert(r.max_lift_mm < S4_LIFT_HEIGHT_MM / 2U);   /* at least 2x margin */
     r = drive(&brake);
     assert(r.humps == 0);
-    puts("PASS flat 5 min at 30 mg vibration and a 0.1 s stop: no hump episode");
+    assert(r.end_runs == 0);
+    puts("PASS flat 5 min at 30 mg vibration and a 0.1 s stop: no hump episode, no end of run");
 }
 
 static void test_tilted_floor(void)
@@ -326,7 +339,166 @@ static void test_tilted_floor(void)
                 r.valid_humps, r.final_terrain, (long)r.final_height_um);
         assert(0);
     }
+    assert(r.end_runs == 0);
     puts("PASS 1.5 deg floor tilt for 60 s: LEVEL, no valid false hump, no height drift");
+}
+
+/* ---- End of run: lifted >= 20 cm or overturned --------------------------
+ * A calibrated car rests on the floor, is lifted by rise_mm over lift_s
+ * along a smooth (cosine) path while pitching to tilt_deg, is held, and
+ * optionally put back down upright and left still. The accelerometer reads
+ * the specific force (1 g + vertical acceleration) along the body axes. */
+typedef struct
+{
+    double rise_mm;
+    double lift_s;
+    double tilt_deg;
+    double hold_s;
+    double noise_mg;
+    int put_back;            /* 1: lower it again and rest it 2 s */
+    double knock_mg;         /* > 0: one sideways sample of this size at rest */
+} lift_t;
+
+typedef struct
+{
+    int end_runs;
+    unsigned cause;
+    unsigned lift_cm;        /* from the event */
+    double trigger_s;        /* time after the lift began */
+    int latched_at_end;
+    int latched_after_lift;  /* latched just before being put back */
+} lift_result_t;
+
+/* Smooth step 0 -> 1 over [0, 1]. */
+static double ease(double x)
+{
+    if (x <= 0.0) { return 0.0; }
+    if (x >= 1.0) { return 1.0; }
+    return 0.5 * (1.0 - cos(PI_D * x));
+}
+
+static double ease_acc(double x, double duration_s)
+{
+    /* Second derivative of ease(t / duration) with respect to t. */
+    if (x <= 0.0 || x >= 1.0) { return 0.0; }
+    return 0.5 * (PI_D / duration_s) * (PI_D / duration_s) * cos(PI_D * x);
+}
+
+static lift_result_t lift_car(const lift_t *l)
+{
+    drive_t base = {130.0, 0, 60.0, SHAPE_TRAPEZOID, RAMP_NONE, 0.0, 0.0, -1.0, 0.0};
+    lift_result_t r = {0, 0U, 0U, -1.0, 0, 0};
+    s4_est_t est;
+    s4_input_t in;
+    s4_events_t ev;
+    const double rest_s = 1.0;
+    double t = 0.0;
+    double down_at = rest_s + l->lift_s + l->hold_s;
+    double end_s = l->put_back ? (down_at + l->lift_s + 2.0) : down_at;
+    unsigned i;
+
+    lcg_state = 777UL;
+    calibrated_estimator(&est, &base);
+    while (t < end_s)
+    {
+        double x_up = (t - rest_s) / l->lift_s;
+        double x_down = (t - down_at) / l->lift_s;
+        double frac = ease(x_up) - (l->put_back ? ease(x_down) : 0.0);
+        double a_mm_s2 = l->rise_mm * (ease_acc(x_up, l->lift_s) -
+                                       (l->put_back ? ease_acc(x_down, l->lift_s) : 0.0));
+        double phi = l->tilt_deg * PI_D / 180.0 * frac;
+        double f = 1000.0 * (1.0 + a_mm_s2 / 9806.65);   /* specific force, mg */
+        double n = l->noise_mg;
+
+        memset(&in, 0, sizeof(in));
+        in.dt_ms = 20U;
+        in.accel_mg[0] = (int16_t)lround(n * noise_unit());
+        in.accel_mg[1] = (int16_t)lround(f * sin(phi) + n * noise_unit());
+        in.accel_mg[2] = (int16_t)lround(f * cos(phi) + n * noise_unit());
+        if (l->knock_mg > 0.0 && t >= 0.5 && t < 0.52)
+        {
+            in.accel_mg[0] = (int16_t)lround(l->knock_mg);   /* one sideways jolt */
+        }
+        in.accel_ok = 1U;
+        in.odom_valid = 1U;
+        s4_est_step(&est, &in, &ev);
+        for (i = 0U; i < ev.count; i++)
+        {
+            if (s4_get(ev.msg[i], S4_EV_TYPE_SHIFT, S4_EV_TYPE_WIDTH) == S4_EV_END_RUN)
+            {
+                r.end_runs++;
+                r.cause = s4_get(ev.msg[i], S4_EV_END_CAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH);
+                r.lift_cm = s4_get(ev.msg[i], S4_EV_END_LIFT_SHIFT, S4_MO_LIFT_WIDTH);
+                r.trigger_s = t - rest_s;
+            }
+        }
+        if (t < down_at)
+        {
+            r.latched_after_lift = (int)s4_get(est.words[S4_W_STATUS], S4_ST_END_SHIFT, 1U);
+        }
+        t += 0.020;
+    }
+    r.latched_at_end = (int)s4_get(est.words[S4_W_STATUS], S4_ST_END_SHIFT, 1U);
+    return r;
+}
+
+static void expect_lift(const lift_t *l, int want_end, unsigned want_cause, const char *what)
+{
+    lift_result_t r = lift_car(l);
+    int ok = want_end ? (r.end_runs == 1 && (want_cause == S4_END_NONE || r.cause == want_cause))
+                      : (r.end_runs == 0);
+
+    printf("  %-44s end_runs=%d cause=%u lift=%u cm at %.2f s\n",
+           what, r.end_runs, r.cause, r.lift_cm, r.trigger_s);
+    if (!ok)
+    {
+        fprintf(stderr, "FAIL %s\n", what);
+        assert(0);
+    }
+}
+
+static void test_end_of_run(void)
+{
+    /* rise, lift time, tilt, hold, noise, put back, knock */
+    lift_t upright = {300.0, 0.6, 0.0, 1.0, 15.0, 0, 0.0};
+    lift_t tilted = {300.0, 0.7, 45.0, 1.0, 15.0, 0, 0.0};
+    lift_t sideways = {300.0, 0.7, 90.0, 1.0, 15.0, 0, 0.0};
+    lift_t flipped = {300.0, 0.8, 180.0, 1.0, 15.0, 0, 0.0};
+    lift_t just_over = {230.0, 0.6, 0.0, 1.0, 15.0, 0, 0.0};
+    lift_t low = {120.0, 0.5, 0.0, 1.0, 15.0, 0, 0.0};
+    lift_t ramp_tilt = {0.0, 0.5, 25.0, 3.0, 15.0, 0, 0.0};
+    lift_t knock = {0.0, 0.5, 0.0, 3.0, 15.0, 0, 1400.0};
+    lift_t back_down = {300.0, 0.6, 0.0, 1.0, 15.0, 1, 0.0};
+    lift_result_t r;
+
+    puts("End of run (lifted >= 20 cm or overturned):");
+    expect_lift(&upright, 1, S4_END_LIFTED, "30 cm lift in 0.6 s, upright");
+    expect_lift(&just_over, 1, S4_END_LIFTED, "23 cm lift in 0.6 s, upright");
+    expect_lift(&tilted, 1, S4_END_LIFTED, "30 cm lift while tilting to 45 deg");
+    expect_lift(&sideways, 1, S4_END_NONE, "30 cm lift while tilting to 90 deg");
+    expect_lift(&flipped, 1, S4_END_NONE, "30 cm lift while turning upside down");
+    expect_lift(&low, 0, S4_END_NONE, "12 cm lift: below the limit");
+    /* Known limit: a lift spread over 2 s accelerates too gently to start an
+       episode, so lift the car deliberately (under about 1 s). */
+    {
+        lift_t slow = {300.0, 2.0, 0.0, 1.0, 15.0, 0, 0.0};
+        expect_lift(&slow, 0, S4_END_NONE, "30 cm lift spread over 2 s (not counted)");
+    }
+    expect_lift(&ramp_tilt, 0, S4_END_NONE, "25 deg tilt on the floor (steep ramp)");
+    expect_lift(&knock, 0, S4_END_NONE, "1.4 g sideways knock at rest");
+
+    /* Overturned without any rise still ends the run. */
+    {
+        lift_t roll_over = {0.0, 0.8, 120.0, 1.0, 15.0, 0, 0.0};
+        expect_lift(&roll_over, 1, S4_END_OVERTURNED, "turned over 120 deg in place");
+    }
+
+    /* The latch holds while the car is held, and clears once it rests upright. */
+    r = lift_car(&back_down);
+    printf("  %-44s latched while held=%d, after 2 s on the floor=%d\n",
+           "30 cm lift, put back down", r.latched_after_lift, r.latched_at_end);
+    assert(r.end_runs == 1 && r.latched_after_lift == 1 && r.latched_at_end == 0);
+    puts("PASS end of run: lift at any tilt, overturn, no false trigger, latch clears on the floor");
 }
 
 static void test_shared_and_payloads(void)
@@ -374,6 +546,20 @@ static void test_shared_and_payloads(void)
     assert(report.estimate_valid);
     assert(report.observed_ms == 1234U);
 
+    /* End of run decoded from the snapshot. */
+    {
+        uint32_t ended[S4_WORDS] = {0U, 0U, 0U, 0U};
+        uint32_t cause = 9U, cm = 9U;
+        assert(!s4_end_of_run_from_words(words, &cause, &cm));
+        ended[S4_W_STATUS] = s4_put(0U, S4_ST_END_SHIFT, 1U, 1U);
+        ended[S4_W_STATUS] = s4_put(ended[S4_W_STATUS], S4_ST_ENDCAUSE_SHIFT,
+                                    S4_ST_ENDCAUSE_WIDTH, S4_END_LIFTED);
+        ended[S4_W_MOTION] = s4_put(0U, S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH, 27U);
+        assert(s4_end_of_run_from_words(ended, &cause, &cm));
+        assert(cause == S4_END_LIFTED && cm == 27U);
+        assert(s4_end_of_run_from_words(ended, NULL, NULL));
+    }
+
     memset(&reader, 0, sizeof(reader));
     s4_post_odometry(65530);
     assert(s4_take_odometry(&reader, 10U, &delta) && delta == 0);   /* primes */
@@ -388,12 +574,14 @@ static void test_shared_and_payloads(void)
 
 int main(void)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);   /* keep output that precedes a failed assert */
     test_shared_and_payloads();
     test_config();
     test_one_sided_ramp();
     test_full_width_hump();
     test_flat_and_braking();
     test_tilted_floor();
+    test_end_of_run();
     puts("Buddy 4 host tests: all passed");
     return 0;
 }
