@@ -6,11 +6,13 @@ import {encodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {encodeCommand,decodeCommand} from './commands.mjs?v=barcode-digital-4';
 import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs?v=barcode-digital-4';
 import {renderSensorHighlights} from './sensor-panels.mjs?v=barcode-digital-4';
+import {createHumpLog,updateHumpLog,renderHumpLog} from './hump-log.mjs?v=humps-1';
+let humpLog=createHumpLog();
 import {RobotState,validateCommand} from './state.mjs?v=barcode-digital-4';
 import {MqttConnection,validateConnection} from './mqtt.mjs?v=barcode-digital-4';
 import {ACTIONS,DEFAULT_MAP,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,mapSummary,sortedEntries,sameMap} from './route-map.mjs?v=barcode-digital-4';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;
-let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=false,simSeq=0,simDistance=0,commandSeq=0,previousStatus='',lastUpdateText='',lastMotorStamp='';
+let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=false,simSeq=0,simDistance=0,simHumps=0,commandSeq=0,previousStatus='',lastUpdateText='',lastMotorStamp='';
 let buildEvidence=null;
 fetch('./build-memory.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{buildEvidence=v;render();}).catch(()=>{});
 let prefix='group18/robot1',endpoint='ws://localhost:9001';
@@ -34,6 +36,7 @@ function receive(topic,payload,time,retained=false){
   if(!state.receive(topic,payload,time,retained))return;
   if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus),...barcodeEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
   if(topic==='telemetry')for(const event of robotEvents(previousTelemetry,state.telemetry))log(event.text,event.type);
+  if(topic==='telemetry'){const r=updateHumpLog(humpLog,state.telemetry);humpLog=r.log;for(const event of r.events)log(event.text,event.type);}
   if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';const m=motionView(state.telemetry),b=state.telemetry.buddies?.[2],stamp=b?`${b.updated_ms}:${b.sequence}`:'';if(m.fresh&&stamp!==lastMotorStamp){history.push({time:time-m.age/1000,speed:m.speed});lastMotorStamp=stamp;}if(history.length>305)history.shift();}
   if(topic==='command_result'&&state.result.map!==undefined){
    $('route-feedback').textContent=(preview?'Preview · simulated rover map.':'Rover confirmed its map')+' · command #'+state.result.command_id+'.';
@@ -49,7 +52,7 @@ function receive(topic,payload,time,retained=false){
  }catch(error){log('Ignored message: '+error.message,'warning');}
  render();
 }
-function reset(){state=new RobotState();pendingRoute=0;if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
+function reset(){state=new RobotState();humpLog=createHumpLog();pendingRoute=0;if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
 function setPreview(value){
  clearInterval(previewTimer);client.disconnect();preview=value;reset();
  document.body.classList.toggle('preview',preview);
@@ -63,6 +66,9 @@ function setPreview(value){
    const raw=new Uint8Array(17);raw[0]=0x21;const w=new DataView(raw.buffer);
    w.setUint32(1,(0x80000000|1|(3<<20))>>>0,true);
    w.setUint32(5,((simSeq%32)<<27)>>>0,true);
+   if(simRunning&&simSeq%40===39)simHumps++;   /* preview: a sample hump every 8 s */
+   {const mm=8+simHumps%5,unc=4+simHumps%3,pitch=3+simHumps%2,cm=18+simHumps%4;
+    w.setUint32(13,(mm|(unc<<8)|(pitch<<14)|(cm<<20)|(1<<28)|((simHumps%8)<<29))>>>0,true);}
    const distance=82+Math.round(Math.sin(simSeq/5)*9);
    if(simRunning)simDistance+=6;
    receive('telemetry',encodeTelemetry({demo:true,seq:simSeq,uptime_ms:ms,fault_mask:0,
@@ -189,6 +195,7 @@ function render(){
  $('chart-empty').hidden=samples.length>0;
  $('chart-freshness').textContent=fresh&&motor.fresh?(preview?'SIMULATED SAMPLES':'RECEIVING TELEMETRY'):samples.length?'LAST RECEIVED SAMPLES':'NO SAMPLES YET';
  renderBuddies(view,t);
+ renderHumpLog($('hump-log-4'),humpLog);
  renderRouteSync();
  renderDiagnostics(state,t,buildEvidence);
  $('clock').textContent=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';

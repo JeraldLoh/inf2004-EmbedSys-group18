@@ -39,3 +39,11 @@
 .route-onboard{display:flex;gap:12px;align-items:baseline;font:8px Consolas,monospace;letter-spacing:1px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}.route-onboard code{font-size:11px;letter-spacing:.5px;color:var(--text)}.route-feedback{font-size:9px;color:#b4bfa6;line-height:1.7;min-height:15px}
 @media(max-width:900px){.route-body{grid-template-columns:1fr}.route-add{border-right:0;border-bottom:1px solid var(--line)}}
 @media(max-width:420px){.route-choice button{padding:0 8px}.route-choice button span{display:none}.route-links{margin-left:0}}
+/* Buddy 4: humps recorded this run */
+.hump-log{min-height:0;padding-bottom:8px}
+.hump-count{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.hump-count strong{font-size:28px;font-weight:450;letter-spacing:-1px;color:var(--lime)}
+.hump-count span{font-size:9px;color:#98a68c}
+.hump-list{list-style:none;margin:0;padding:0;max-height:168px;overflow:auto}
+.hump-list .calibration-row{margin:6px 0}
+.hump-list .invalid{color:#e5b59b}
