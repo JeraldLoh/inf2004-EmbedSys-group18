@@ -129,6 +129,61 @@ static void test_turn_becomes_authority_stamped_pivot(void)
     b5_motion_service(&m, 200U);
     assert(f.last_goal.type == MOTION_GOAL_PIVOT_RIGHT);
     assert(f.last_goal.target_mdeg == 45000);
+
+    /* A pivot speed of its own; straight moves keep goal_speed_mm_s. */
+    m.config.pivot_speed_mm_s = 80U;
+    b5_motion_turn(&m, 30000, 300U);
+    b5_motion_service(&m, 300U);
+    assert(f.last_goal.max_speed_mm_s == 80U);
+    b5_motion_straight(&m, 100, false, 400U);
+    b5_motion_service(&m, 400U);
+    assert(f.last_goal.type == MOTION_GOAL_FORWARD);
+    assert(f.last_goal.max_speed_mm_s == m.config.goal_speed_mm_s);
+}
+
+/* Left wheel stalls in reverse: left turns arc round it, right turns pivot. */
+static void test_left_turn_arcs_right_turn_pivots(void)
+{
+    setup();
+    m.config.left_arc_curvature_u1_m = 16000000;
+    m.config.left_arc_speed_mm_s = 70;
+    m.config.turn_lag_ms = 250U;
+    b5_motion_turn(&m, 64000, 0U);              /* not allowed: a pivot */
+    assert(m.state == B5_MOVE_PENDING);
+
+    setup();
+    m.config.left_arc_curvature_u1_m = 16000000;
+    m.config.left_arc_speed_mm_s = 70;
+    m.config.turn_lag_ms = 250U;
+    m.left_arc_allowed = true;
+    b5_motion_turn(&m, 64000, 0U);              /* 64 deg left */
+    assert(m.state == B5_MOVE_ARC);
+    b5_motion_service(&m, 0U);
+    assert(f.goals == 0 && f.continuous == 1);
+    assert(f.last_request.speed_mm_s == 70);
+    assert(f.last_request.curvature_u1_m == 16000000);
+    /* 70 mm/s x 16 /m = 64.17 deg/s: 997 ms + 250 ms. */
+    assert(m.arc_ms >= 1240U && m.arc_ms <= 1255U);
+
+    /* Outer wheel 70 x 1.896 = 132.7 over a 120 cap: the car turns at
+     * 70 x 120/132.7 = 63.3 mm/s centre, 58 deg/s: 1104 ms + 250. */
+    setup();
+    m.config.left_arc_curvature_u1_m = 16000000;
+    m.config.left_arc_speed_mm_s = 70;
+    m.config.turn_lag_ms = 250U;
+    m.config.arc_wheel_cap_mm_s = 120;
+    m.left_arc_allowed = true;
+    b5_motion_turn(&m, 64000, 0U);
+    assert(m.arc_ms >= 1345U && m.arc_ms <= 1365U);
+
+    setup();
+    m.config.left_arc_curvature_u1_m = 16000000;
+    m.config.left_arc_speed_mm_s = 70;
+    m.left_arc_allowed = true;
+    b5_motion_turn(&m, -64000, 0U);             /* right: a pivot goal */
+    assert(m.state == B5_MOVE_PENDING);
+    b5_motion_service(&m, 0U);
+    assert(f.continuous == 0 && f.last_goal.type == MOTION_GOAL_PIVOT_RIGHT);
 }
 
 /* Default: a turn is a timed forward arc (pivots stalled on the car). */
@@ -358,6 +413,7 @@ int main(void)
     test_without_ops_service_is_a_no_op();
     test_turn_becomes_authority_stamped_pivot();
     test_turn_is_a_timed_forward_arc();
+    test_left_turn_arcs_right_turn_pivots();
     test_arc_waits_for_authority_then_fails();
     test_straight_moves();
     test_zero_moves_complete_at_once();

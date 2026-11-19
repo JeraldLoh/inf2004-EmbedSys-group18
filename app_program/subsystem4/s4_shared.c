@@ -171,6 +171,29 @@ bool s4_command_decode(uint8_t byte, uint8_t *command)
     return true;
 }
 
+bool s4_end_of_run_from_words(
+    const uint32_t words[S4_WORDS],
+    uint32_t *cause,
+    uint32_t *lift_cm)
+{
+    bool ended;
+
+    if (words == NULL)
+    {
+        return false;
+    }
+    ended = s4_get(words[S4_W_STATUS], S4_ST_END_SHIFT, 1U) != 0U;
+    if (cause != NULL)
+    {
+        *cause = s4_get(words[S4_W_STATUS], S4_ST_ENDCAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH);
+    }
+    if (lift_cm != NULL)
+    {
+        *lift_cm = s4_get(words[S4_W_MOTION], S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH);
+    }
+    return ended;
+}
+
 void s4_terrain_report_from_words(
     const uint32_t words[S4_WORDS],
     system_time_ms_t observed_ms,

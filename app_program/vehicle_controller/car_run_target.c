@@ -107,7 +107,8 @@ static void b4_print_status(void)
     roll = s4_get_signed(w[S4_W_ATTITUDE], S4_AT_ROLL_SHIFT, S4_AT_ROLL_WIDTH) * 5;
     tm_printf((UB*)"[B4] valid=%d cal=%s terrain=%s cap=%lu pitch=%ld.%ld roll=%ld.%ld deg "
         "vib=%lu mg motion=%lu odom=%d faults=0x%lx fail=0x%lx i2c_err=%lu live_h=%lu mm | "
-        "last hump %lu mm +/-%lu peak %lu deg %lu cm %s #%lu | %lu us/sample\n",
+        "last hump %lu mm +/-%lu peak %lu deg %lu cm %s #%lu | end=%s lift=%lu cm | "
+        "%lu us/sample\n",
         (int)s4_get(w[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U),
         cal[s4_get(w[S4_W_STATUS], S4_ST_CAL_SHIFT, S4_ST_CAL_WIDTH)],
         (state < 7U) ? terrain[state] : "?",
@@ -129,6 +130,10 @@ static void b4_print_status(void)
         (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_LEN_SHIFT, S4_HU_LEN_WIDTH),
         s4_get(w[S4_W_HUMP], S4_HU_VALID_SHIFT, 1U) ? "valid" : "invalid/none",
         (unsigned long)s4_get(w[S4_W_HUMP], S4_HU_SEQ_SHIFT, S4_HU_SEQ_WIDTH),
+        !s4_get(w[S4_W_STATUS], S4_ST_END_SHIFT, 1U) ? "no" :
+            (s4_get(w[S4_W_STATUS], S4_ST_ENDCAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH) == S4_END_LIFTED
+                ? "LIFTED" : "OVERTURNED"),
+        (unsigned long)s4_get(w[S4_W_MOTION], S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH),
         (unsigned long)s4_sample_time_us);
     s4_print_task_state();   /* is the IMU task alive, and where is it? */
 }
@@ -520,6 +525,57 @@ static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)
     *running = false;
 }
 
+/* ---- Buddy 4 end of run: car lifted >= 20 cm or overturned --------------
+ * Lifting the car signals the end of the demo run. While Buddy 4 reports it,
+ * stop the motors and latch STOP_REASON_PHYSICAL in the controller: the same
+ * reason as the GP21 STOP button, an operator's physical action, so it needs
+ * no new telemetry field and a fresh START can clear it once the car is back
+ * down. The stop is re-asserted every B4_END_REPEAT_MS, and START is refused,
+ * until Buddy 4 sees the car resting upright on its wheels again. */
+#define B4_END_REPEAT_MS 100U
+
+static bool b4_end_of_run(bool *running, uint32_t t)
+{
+    static bool announced;
+    static uint32_t last_post;
+    uint32_t w[S4_WORDS];
+    uint32_t cause = S4_END_NONE;
+    uint32_t lift_cm = 0U;
+
+    if (!b4_ready || !s4_shared_read(w) || !s4_end_of_run_from_words(w, &cause, &lift_cm))
+    {
+        if (announced)
+        {
+            tm_printf((UB*)"[CAR] Buddy 4: car back on its wheels. Hold GP20 (or MQTT START) to run again.\n");
+        }
+        announced = false;
+        return false;
+    }
+    if (!announced || ((t - last_post) >= B4_END_REPEAT_MS))
+    {
+        subsystem2_motion_halt();
+        if (post(CONTROLLER_EVENT_LATCH_STOP, SYSTEM_MODE_STOPPED, STOP_REASON_PHYSICAL))
+        {
+            last_post = t;
+        }
+    }
+    if (!announced)
+    {
+        announced = true;
+        if (cause == S4_END_LIFTED)
+        {
+            tm_printf((UB*)"[CAR] END OF RUN: car lifted %lu cm (Buddy 4 IMU); motors stopped.\n",
+                (unsigned long)lift_cm);
+        }
+        else
+        {
+            tm_printf((UB*)"[CAR] END OF RUN: car overturned (Buddy 4 IMU); motors stopped.\n");
+        }
+    }
+    *running = false;
+    return true;
+}
+
 static void supervise(void)
 {
     b2_platform_events_t events = {0};
@@ -558,6 +614,9 @@ static void supervise(void)
             { (void)b2_platform_ack_events(events.stop_events); }
         }
 
+        /* Lifted >= 20 cm or overturned: end of run, motors off. */
+        bool b4_ended = b4_end_of_run(&running, t);
+
 #if APP_CAR_MQTT
         {
             b1_command command;unsigned choice=0U;uint32_t id=0U;bool start_queued=false;
@@ -569,6 +628,8 @@ static void supervise(void)
             if(choice==B1_STOP){
                 wifi_command_id=id;remote_start_waiting=false;
                 stop_run(&running,"MQTT STOP",STOP_REASON_REMOTE);
+            } else if(choice==B1_START && b4_ended){
+                tm_printf((UB*)"[CAR] MQTT START refused: car still lifted/overturned (Buddy 4).\n");
             } else if(choice==B1_START && events.reasons==STOP_REASON_NONE && !events.cutoff_fired &&
                       !controller_urgent_stop_pending() && controller_get_status(&status) &&
                       (status.mode==SYSTEM_MODE_STARTUP || status.mode==SYSTEM_MODE_IDLE || status.mode==SYSTEM_MODE_STOPPED) &&
@@ -604,6 +665,11 @@ static void supervise(void)
                 if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
                 {
                     tm_printf((UB*)"[CAR] START refused: measured PID/load/STOP/pivot calibration unqualified.\n");
+                }
+                else if (b4_ended)
+                {
+                    tm_printf((UB*)"[CAR] START refused: car still lifted/overturned. "
+                        "Put it down upright and keep it still for 1 s.\n");
                 }
                 else if ((status.stop_reasons & ~OPERATOR_CLEARABLE) != 0U)
                 {

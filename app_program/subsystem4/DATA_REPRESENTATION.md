@@ -28,13 +28,13 @@ outgrows its field.
 | Terrain state | 0..6 (`terrain_state_t`: UNKNOWN, LEVEL, ASCENDING, CREST, DESCENDING, SETTLING, INVALID) | 3 | bits 2..0 |
 | Speed cap | 0 = none, 10..1270 mm/s | 7 | bits 9..3, units of 10 mm/s, rounded down (stricter) |
 | Motion class | STATIONARY, MOVING, ACCELERATING, BRAKING, TURN_LEFT, TURN_RIGHT, ROUGH, IMPACT | 3 | bits 12..10; the highest-priority condition wins (tribunal: 3-bit motion class) |
-| Detail fault mask | I2C, MAG, STALE, UNCAL, SATURATED, TILT, COLLISION | 7 | bits 19..13, one bit each |
+| Detail fault mask | I2C, MAG, STALE, UNCAL, SATURATED, TILT, (reserved) | 7 | bits 19..13, one bit each; bit 19 (formerly COLLISION) is always 0 |
 | Calibration status | NONE, RUNNING, LEVEL, LEVEL_MAG | 2 | bits 21..20 (tribunal: 2-bit calibration status) |
 | Distance from odometry | 0 = fallback estimate, 1 = Buddy 2 odometry | 1 | bit 22 |
 | Hump flag | 0/1: on a hump now (ASCENDING..SETTLING) | 1 | bit 23; Buddy 3 pauses its line-lost timeout and barcode decoding while it is set |
-| Collision flag | 0/1: impact in progress | 1 | bit 24 |
-| Collision counter | 0..7, wraps | 3 | bits 27..25; a change means a new hit |
-| Last collision side | FRONT, REAR, LEFT, RIGHT | 2 | bits 29..28 |
+| END OF RUN | 0/1: lifted ≥ 20 cm or overturned; the motors must stay stopped | 1 | bit 24; clears once the car rests upright and still for 1 s |
+| End-of-run cause | NONE, LIFTED, OVERTURNED | 2 | bits 26..25 |
+| End-of-run counter | 0..7, wraps | 3 | bits 29..27; a change means a new end of run |
 | CLAMPED | 0/1: some field in this message was saturated to fit | 1 | bit 30 (explicit out-of-range status) |
 | DATA_VALID | 0/1: level-calibrated and no bus/stale fault | 1 | bit 31; **the single validity bit for the whole message** |
 
@@ -56,7 +56,7 @@ No field uses a reserved "invalid" code.
 |---|---|---|---|
 | Turn rate | −256..+254 °/s, clockwise positive | 8 | signed, **2 °/s units**, bits 7..0 (tribunal: ±250 °/s at 2 °/s = 8 bits); beyond that it saturates and sets CLAMPED |
 | Live hump height | 0..255 mm | 8 | bits 15..8, current episode only |
-| Last shock magnitude | 0..4080 mg | 8 | bits 23..16, units of 16 mg (±4 g full scale = 4000 mg) |
+| Lift height | 0..255 cm | 8 | bits 23..16: live rise while lifting, held at the trigger height while END OF RUN is set |
 | Vibration level | 0..504 mg | 6 | bits 29..24, units of 8 mg |
 | Reserved | 0 | 2 | bits 31..30 |
 
@@ -75,10 +75,10 @@ No field uses a reserved "invalid" code.
 
 | Field | Valid range | Bits | Representation |
 |---|---|---|---|
-| Type | TERRAIN, HUMP, COLLISION, TURN, FAULT, CAL | 3 | bits 2..0 |
+| Type | TERRAIN, HUMP, END_RUN, TURN, FAULT, CAL | 3 | bits 2..0 |
 | TERRAIN payload | state 0..6, cap 0..127 | 3 + 7 | bits 5..3, 12..6 |
 | HUMP payload | word-3 bits 28..0 | 29 | bits 31..3 |
-| COLLISION payload | side 0..3, magnitude 0..255 (×16 mg) | 2 + 8 | bits 4..3, 12..5 |
+| END_RUN payload | cause 1..2 (LIFTED, OVERTURNED), lift height 0..255 cm | 2 + 8 | bits 4..3, 12..5 |
 | TURN payload | right 0/1, angle 0..511° | 1 + 9 | bit 3, bits 12..4 |
 | FAULT payload | fault mask | 7 | bits 9..3 |
 | CAL payload | kind (0 level, 1 mag), ok | 1 + 1 | bits 3, 4 |
@@ -115,8 +115,8 @@ failure and are candidates for the shared mask:
 | STALE | No fresh accelerometer sample for 200 ms |
 | MAG | Magnetometer missing, failing or overflowing |
 
-UNCAL, SATURATED, TILT and COLLISION are calibration, measurement or vehicle
-status, not hardware failures. When I2C/STALE or MAG evidence lasts 1 s, the
+UNCAL, SATURATED and TILT are calibration, measurement or vehicle status, not
+hardware failures. When I2C/STALE or MAG evidence lasts 1 s, the
 IMU task latches it in a single-writer word read with `s4_sensor_failures()`.
 In the whole-car build the controller polls that word every tick and latches
 the **provisional** `HARDWARE_FAULT_IMU` / `HARDWARE_FAULT_MAG` bits (12 and 13).
@@ -127,10 +127,10 @@ the **provisional** `HARDWARE_FAULT_IMU` / `HARDWARE_FAULT_MAG` bits (12 and 13)
 |---|---|---|
 | Terrain state, pending state | 0..6 | 3 each |
 | Confirm counter, turn-quiet counter | 0..15 | 4 each |
-| Motion, longitudinal, turn state, collision side | 0..3 | 2 each |
+| Motion, longitudinal, turn state, end-of-run cause | 0..3 | 2 each |
 | Fault mask | 7 flags | 7 |
 | Calibration retries | 0..7 | 3 |
-| Collision counter, hump counter | 0..7 | 3 each |
+| End-of-run counter, hump counter | 0..7 | 3 each |
 | Sample counter | 0..31 | 5 |
 | Calibration sample count | 0..255 | 8 |
 | 11 boolean flags (calibrated, cal active, mag cal active, ...) | 0/1 | 1 each |
@@ -151,14 +151,14 @@ the **provisional** `HARDWARE_FAULT_IMU` / `HARDWARE_FAULT_MAG` bits (12 and 13)
 
 The tribunal asked for real turn-rate and hump ranges to be logged before
 the widths are fixed. The estimator keeps a range log: the maximum
-|turn rate|, |pitch|, |roll|, hump height and length, shock and vibration,
+|turn rate|, |pitch|, |roll|, hump height and length, jolt, lift rise and vibration,
 measured **before** packing, plus a count of clamped messages. Send command 5
 (`S4_CMD_REPORT_RANGES`) after a test run and the IMU task prints the log,
 then resets it:
 
 ```text
 S4 ranges: turn <max> dps (field +/-254), pitch <max> deg, roll <max> deg
-S4 ranges: hump <max> mm / <max> mm long, shock <max> mg, vibration <max> mg, clamped <n>
+S4 ranges: hump <max> mm / <max> mm long, jolt <max> mg, lift <max> mm, vibration <max> mg, clamped <n>
 S4 sample time: last <us> us, worst <us> us (period 20 ms)
 ```
 
@@ -210,7 +210,7 @@ Make/WSL target build, which this change did not run.
 
 | Message | Path | Before | After | Saving |
 |---|---|---:|---:|---:|
-| Event (hump, collision, turn, ...) | IMU task → controller queue | 48 B struct | 4 B | 92% |
+| Event (hump, end of run, turn, ...) | IMU task → controller queue | 48 B struct | 4 B | 92% |
 | Snapshot copy | IMU task → any reader | 96 B | 16 B | 83% |
 | Odometry | Buddy 2 → Buddy 4 | 12 B | 4 B | 67% |
 | Terrain report (IF-03) | Buddy 4 → controller | 24 B (`terrain_report_t`) | 4 B status word + 4 B hump word | 67% |
@@ -240,10 +240,10 @@ fields, so the reduced widths are exercised end to end.
 | 70 mm hump, 500 mm long | measured 69 mm, ±8, valid |
 | 40 mm hump without odometry | 39 mm, uncertainty widened to ±26, valid |
 | 90° right pivot at 90 °/s | rate 88 °/s, event "right 89°" |
-| Head-on and side collisions | correct side, latched, no false hump afterwards |
+| End of run (2026-11-19) | lifts of 23 to 30 cm trigger in 0.46 to 0.60 s, upright, tilted 45° or 90°, or turned upside down; overturned 120° in place gives OVERTURNED; a 12 cm lift, a 25° floor tilt and a 1.4 g sideways knock do not trigger; 5 min at 30 mg vibration gave a false rise of 0 mm; the latch clears 1 s after the car is put back down |
 | Bus fault, stale data, dropout mid-hump | INVALID state, degraded cap, aborted hump marked invalid, recovery |
 | Pack/unpack boundaries | −180 and +179 in 9-bit signed fields; no spill into neighbouring fields |
-| Tribunal fields | Calibration status RUNNING → LEVEL → LEVEL_MAG, and NONE after a failure; DATA_VALID drops on one bus error; hump flag set only on the hump; collision flag only during the impact; a 383 °/s spin saturates the 8-bit turn rate at +127 (254 °/s), sets CLAMPED, and the range log keeps 383 |
+| Tribunal fields | Calibration status RUNNING → LEVEL → LEVEL_MAG, and NONE after a failure; DATA_VALID drops on one bus error; hump flag set only on the hump; a 383 °/s spin saturates the 8-bit turn rate at +127 (254 °/s), sets CLAMPED, and the range log keeps 383 |
 
 The run used the team host build (`app_program/CMakeLists.txt`) and `ctest`.
 All 4 suites passed together: subsystems 3, 4 and 5, plus Buddy 5's bridge

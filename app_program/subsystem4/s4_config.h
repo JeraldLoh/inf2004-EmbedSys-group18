@@ -17,7 +17,7 @@
 #define S4_TASK_PRIORITY 12       /* below kernel services 1-4 */
 #define S4_TASK_STACK_BYTES 2048U /* tm_printf needs about 1 KB */
 #define S4_EVENT_QUEUE_DEPTH 8U   /* 4-byte events held for the controller */
-#define S4_LOG_EVENTS 1           /* print hump/collision/cal events */
+#define S4_LOG_EVENTS 1           /* print hump/end-of-run/cal events */
 
 /* --- Sensor (GY-511 / LSM303DLHC, software I2C on GP2 SDA / GP3 SCL) ---- */
 /* The course "iicb" (I2C1) device is no longer used: the I2C1 block stopped
@@ -101,16 +101,43 @@
 /* --- Speed caps sent to the controller (0 = no cap) ---------------------- */
 /* Below the controller's 150 mm/s cruise so the cap takes effect on a hump. */
 #define S4_HUMP_CAP_MM_S 100U
-#define S4_DEGRADED_CAP_MM_S 100U   /* unknown/invalid terrain, tilt, impact */
+#define S4_DEGRADED_CAP_MM_S 100U   /* unknown/invalid terrain, tilt, jolt */
 #define S4_TILT_LIMIT_DDEG 250U
 
-/* --- Motion classification and collision --------------------------------- */
+/* --- Motion classification ----------------------------------------------- */
 #define S4_STILL_VIB_MG 12U
 #define S4_ROUGH_VIB_MG 150U
 #define S4_LONG_ACCEL_MG 60U
-#define S4_COLLISION_MG 1000U       /* horizontal jolt that counts as a hit */
-#define S4_COLLISION_HOLD_MS 500U
+/* A horizontal jolt this large (a knock or bump) is kept out of the filters
+   and pauses hump integration for the hold time, so it cannot fake a pitch
+   change. Filter protection only: collisions are no longer reported. */
+#define S4_JOLT_MG 1000U
+#define S4_JOLT_HOLD_MS 500U
 #define S4_STALE_MS 200U
+
+/* --- End of run: lifted or overturned (motors stop) ---------------------- *
+ * Lifting the car is the demo's end-of-run signal. Two independent triggers,
+ * either one latches the stop:
+ *
+ *  1. Lifted: vertical rise >= S4_LIFT_HEIGHT_MM within S4_LIFT_WINDOW_MS.
+ *     The rise is the double integral of (|a| - g). The magnitude of the
+ *     accelerometer vector does not depend on how the IMU is oriented, so
+ *     this works at whatever angle the car is held. Lift it deliberately: a
+ *     slow lift spread over more than the window is not counted, which keeps
+ *     driving vibration from adding up to a false trigger.
+ *  2. Overturned: tilted more than S4_OVERTURN_DDEG from upright for
+ *     S4_OVERTURN_MS. Ramps are far below this. 0 disables this trigger.
+ *
+ * The latch clears once the car rests upright and still for S4_REST_MS
+ * (back on the floor); the controller keeps its own stop until START.
+ */
+#define S4_LIFT_HEIGHT_MM 200U
+#define S4_LIFT_WINDOW_MS 1200U     /* a lift must reach the height this fast */
+#define S4_LIFT_START_MG 40U        /* upward |a| - g that starts a lift */
+#define S4_LIFT_LPF_SHIFT 3U        /* |a| EMA 1/8 (~140 ms): removes vibration */
+#define S4_OVERTURN_DDEG 600U       /* 60 deg from upright */
+#define S4_OVERTURN_MS 300U
+#define S4_REST_MS 1000U
 
 /* --- Turn detection (magnetometer heading rate) -------------------------- */
 #define S4_TURN_ON_DDPS 200U        /* 20 deg/s starts a turn */
