@@ -48,6 +48,8 @@ typedef struct {
     bool force;
     range_status_t forced_status;
     int spikes; // next N readings are a 5 cm spike
+    int miss_center; // next N straight-ahead readings miss the obstacle
+    int miss_rel, miss_count; // next N readings at servo angle miss_rel: no echo
 
     bool motion_active;
     uint32_t motion_end;
@@ -81,6 +83,9 @@ typedef struct {
     bool line_at_heading_on;   // line seen once settled at this heading (sweep)
     int line_heading;
     int bypass_turns;
+    const av_t *av;         // set by tests that classify turns
+    int rounding_turns;     // av_turn_rounds_obstacle() at the turn
+    int other_turns;
     bool bypassing;
 
     int turns_since_return; // turns from the start of the return to the line search
@@ -133,6 +138,14 @@ static range_reading_t s_measure(void *ctx) {
     }
     int rel = 90 + servo_left_offset(s);
     int world = rel + s->heading;
+    if (s->miss_count > 0 && rel == s->miss_rel) {
+        s->miss_count--;
+        return (range_reading_t){RANGE_NO_ECHO, 0.0f};
+    }
+    if (s->miss_center > 0 && rel == 90) {
+        s->miss_center--;
+        return (range_reading_t){RANGE_OK, s->bg_cm};
+    }
     if (s->side_face_cm > 0.0f && s->bypassing && s->forwards == 2 &&
         s->t - s->forward_start < s->side_face_ms) {
         int toward_obstacle = s->last_bypass == SIDE_LEFT ? -servo_left_offset(s) : servo_left_offset(s);
@@ -168,6 +181,10 @@ static void s_turn(void *ctx, float deg) {
     s->turns++;
     s->turns_since_return++;
     if (s->bypassing) s->bypass_turns++;
+    if (s->av) {
+        if (av_turn_rounds_obstacle(s->av)) s->rounding_turns++;
+        else s->other_turns++;
+    }
     s->refused = s->refuse_kind == 1;
     s->heading += (int)(deg < 0.0f ? deg - 0.5f : deg + 0.5f);
     if (abs(s->heading) > s->max_abs_heading) s->max_abs_heading = abs(s->heading);
@@ -970,6 +987,27 @@ static void far_reading_beyond_edge_does_not_block(void) {
     CHECK_INT(count_events(&s, AV_EVT_SIDE_BLOCKED), 0);
 }
 
+// Car trial 2026-11-19: up close the cone caught the box's own face 30 deg
+// off centre (18 cm at servo 120 and 60), so both sides read blocked and
+// the car scanned twice and reversed. With the beam correction the face
+// echo sits on the obstacle, not in the strip beyond it.
+static void own_face_echo_does_not_block(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.strip_extra_cm = 10.0f;
+    s.cfg.beam_half_deg = 12.0f;
+    s.cfg.left_deg = 150;  // car sweep: coarse at 30, 60, 90, 120, 150
+    s.cfg.right_deg = 30;
+    s.cfg.fine_half_range_deg = 60;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){58, 122, 19.0f, true}; // cone-widened face
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    CHECK_INT(count_events(&s, AV_EVT_SIDE_BLOCKED), 0);
+    CHECK_INT(av_metrics(&av)->reverses, 0);
+}
+
 static void edge_beyond_turn_range_is_partial(void) {
     sim_t s;
     av_t av;
@@ -1033,6 +1071,51 @@ static void obstacle_gone_on_rescan_resumes(void) {
     CHECK_INT(s.searches, 0);
     CHECK_INT(s.resumes, 1);
     CHECK_INT(count_events(&s, AV_EVT_OBSTACLE_CLEARED), 1);
+}
+
+// Car trial 2026-11-19: left turns arc round the left wheel, which carried
+// the car off the line when turning along it and during the line search.
+// Only the three turns round the obstacle may arc.
+static void only_bypass_turns_round_the_obstacle(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.av = &av;
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    CHECK(run_encounter(&s, &av));
+    CHECK_INT(s.rounding_turns, 3);
+    CHECK(s.other_turns >= 1); // the straighten-up onto the line
+    CHECK(!av_turn_rounds_obstacle(&av));
+}
+
+// Car trial 2026-11-19: the first fine step left (servo 100) got no echo
+// off the angled face; the left edge went in at 3 deg and the car drove
+// left into a box that reached well left of the line.
+static float left_edge_after_miss(int misses, bool fix) {
+    static sim_t s;
+    static av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.beam_half_deg = 12.0f;
+    s.cfg.scan_from_center = true;
+    s.cfg.left_deg = 150;
+    s.cfg.right_deg = 30;
+    s.cfg.fine_half_range_deg = 60;
+    s.cfg.fine_no_echo_retries = fix ? 2 : 0;
+    s.cfg.fine_confirm_open = fix;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){55, 135, 15.0f, true}; // out to 45 deg left
+    s.miss_rel = 100;
+    s.miss_count = misses;
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 30000));
+    return av_profile(&av)->left.angle_deg;
+}
+
+static void missed_echo_does_not_end_fine_scan(void) {
+    CHECK(left_edge_after_miss(1, false) < 10.0f);  // old: edge at the miss
+    CHECK(left_edge_after_miss(1, true) > 25.0f);   // retried
+    CHECK(left_edge_after_miss(3, true) > 25.0f);   // retries spent: next step hits
+    CHECK(left_edge_after_miss(0, true) > 25.0f);   // no miss: unchanged
 }
 
 static void boxed_in_rescans_reverses_then_fails(void) {
@@ -1671,6 +1754,203 @@ static void emergency_stop_replans_and_rejoins(void) {
     check_hygiene(&s);
 }
 
+// Car trial 2026-11-10: the rescan after an emergency stop ran 4 cm from the
+// box and never found its far edge. With estop_backoff_cm set, the car
+// backs straight off (no pivot) before scanning again.
+static void emergency_stop_backs_off_before_rescan(void) {
+    sim_t s;
+    av_t av;
+    sim_setup(&s, &av, 0);
+    s.cfg.estop_backoff_cm = 12.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){80, 100, 12.0f, true};
+    s.late_obstacle = (blob_t){85, 95, 4.0f, false};
+    s.vanish_late_on_estop = true;
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    int reverses0 = s.reverses;
+    float rev_cm0 = s.reverse_total_cm;
+    uint32_t end = s.t + 30000;
+    while (count_events(&s, AV_EVT_EMERGENCY_STOP) == 0 && (int32_t)(s.t - end) < 0) {
+        av_tick(&av);
+        s.t += TICK_MS;
+    }
+    CHECK_INT(count_events(&s, AV_EVT_EMERGENCY_STOP), 1);
+    int turns0 = s.turns;
+    CHECK_INT(av_state(&av), AV_STATE_REVERSE); // backs off, does not scan yet
+    s.obstacle.present = false;
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 10000));
+    CHECK_INT(s.reverses, reverses0 + 1);
+    CHECK(s.reverse_total_cm - rev_cm0 > 11.9f && s.reverse_total_cm - rev_cm0 < 12.1f);
+    CHECK_INT(s.turns, turns0); // straight back along the current heading
+    CHECK(run_until(&s, &av, AV_STATE_MONITOR, 60000));
+    CHECK_INT(av_metrics(&av)->failures, 0);
+}
+
+static void estop_backoff_config_checked(void) {
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.estop_backoff_cm == 0.0f); // off unless the car build sets it
+    c.estop_backoff_cm = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+// Car trial 2026-11-11: something nearer on the right took the scan and the
+// box straight ahead was never profiled. scan_from_center starts there.
+static float profile_centre_x(bool from_center) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.scan_from_center = from_center;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){85, 95, 18.0f, true}; // the box ahead
+    s.wall = (blob_t){50, 60, 14.0f, true};     // nearer, 30-40 deg right
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    return av_profile(&av)->center.x_cm;
+}
+
+static void scan_starts_at_centre_obstacle(void) {
+    CHECK(profile_centre_x(false) > 5.0f);  // old: profiles the right object
+    float x = profile_centre_x(true);
+    CHECK(x > -2.0f && x < 2.0f);           // new: the box ahead
+}
+
+static const obstacle_profile_t *beam_profile(int lo, int hi, float beam) {
+    static sim_t s;
+    static av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.beam_half_deg = beam;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){lo, hi, 15.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    return av_profile(&av);
+}
+
+static void beam_correction_narrows_edges(void) {
+    const obstacle_profile_t *p = beam_profile(70, 110, 0.0f);
+    float wide = p->width_cm;
+    CHECK(p->left.angle_deg > 20.0f && p->right.angle_deg < -20.0f);
+    p = beam_profile(70, 110, 12.0f);
+    CHECK(p->left.angle_deg > 10.0f && p->left.angle_deg < 16.0f);
+    CHECK(p->right.angle_deg < -10.0f && p->right.angle_deg > -16.0f);
+    CHECK(p->width_cm < wide - 5.0f);
+    // A narrow obstacle: edges stop at the scan direction, never cross.
+    p = beam_profile(85, 95, 12.0f);
+    CHECK(p->left.angle_deg >= 0.0f && p->right.angle_deg <= 0.0f);
+    CHECK(p->width_cm < 1.0f);
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.beam_half_deg == 0.0f && !c.scan_from_center); // car build turns them on
+    c.beam_half_deg = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+// The sidestep never drops below bypass_min_lateral_cm, whatever the edge.
+static void bypass_min_lateral_floor(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.bypass_side_margin_cm = 2.0f;
+    s.cfg.bypass_min_lateral_cm = 14.0f;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){85, 95, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_BYPASS, 20000));
+    CHECK(s.last_plan.lateral_cm > 13.9f);
+    CHECK(s.last_plan.out_cm >= 14.0f);
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.bypass_min_lateral_cm == 0.0f);
+    c.bypass_min_lateral_cm = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+// Buddy 2 gives no mid-drive odometry on the car. A small box the side ray
+// never catches must still end the pass at the planned length (by time),
+// not after the whole planned + extra distance.
+static void pass_unseen_ends_by_time_without_odometry(void) {
+    for (int est = 0; est < 2; est++) {
+        sim_t s;
+        av_t av;
+        sim_setup_pass(&s, &av, false);
+        s.odometry = false;
+        s.cfg.drive_estimate_cm_s = est ? 20.0f : 0.0f; // sim drives 20 cm/s
+        av_platform_t p = platform_for(&s);
+        CHECK(av_init(&av, &s.cfg, &p));
+        CHECK(run_encounter(&s, &av));
+        const av_metrics_t *m = av_metrics(&av);
+        if (est) {
+            CHECK_INT(m->pass_unseen, 1);
+            CHECK_INT(m->pass_capped, 0);
+        } else {
+            CHECK_INT(m->pass_unseen, 0); // old: ran on to the cap
+            CHECK_INT(m->pass_capped, 1);
+        }
+    }
+    av_config_t c;
+    av_config_default(&c);
+    CHECK(c.drive_estimate_cm_s == 0.0f);
+    c.drive_estimate_cm_s = -1.0f;
+    CHECK(av_config_check(&c) != NULL);
+}
+
+// Car trial 2026-11-11: one missed centre echo in the sweep made the car
+// resume into the box. With clear_confirm_count, extra pings keep it.
+// Car trial 2026-11-19: a hand in front for a second, then gone. With the
+// clear confirmation on, the servo ran on to 180, 210, 240, 270 deg and the
+// car died. It must stay in the sweep range and resume line following.
+static void obstacle_removed_with_confirm_resumes(void) {
+    sim_t s;
+    av_t av;
+    sim_defaults(&s, 0);
+    s.cfg.clear_confirm_count = 3;
+    av_platform_t p = platform_for(&s);
+    CHECK(av_init(&av, &s.cfg, &p));
+    s.obstacle = (blob_t){85, 95, 12.0f, true};
+    CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+    s.obstacle.present = false; // hand taken away
+    uint32_t end = s.t + 20000;
+    while (av_state(&av) == AV_STATE_COARSE_SCAN && (int32_t)(s.t - end) < 0) {
+        av_tick(&av);
+        s.t += TICK_MS;
+    }
+    CHECK_INT(av_state(&av), AV_STATE_MONITOR);
+    CHECK_INT(av_metrics(&av)->obstacle_cleared, 1);
+    CHECK(s.max_angle <= s.cfg.left_deg && s.min_angle >= s.cfg.right_deg);
+}
+
+static void missed_centre_echo_does_not_clear(void) {
+    for (int confirm = 0; confirm < 2; confirm++) {
+        sim_t s;
+        av_t av;
+        sim_defaults(&s, 0);
+        s.cfg.clear_confirm_count = confirm ? 3 : 0;
+        av_platform_t p = platform_for(&s);
+        CHECK(av_init(&av, &s.cfg, &p));
+        s.obstacle = (blob_t){85, 95, 12.0f, true};
+        CHECK(run_until(&s, &av, AV_STATE_COARSE_SCAN, 5000));
+        s.miss_center = 1; // the sweep's centre reading misses it
+        uint32_t end = s.t + 20000;
+        while (av_state(&av) == AV_STATE_COARSE_SCAN && (int32_t)(s.t - end) < 0) {
+            av_tick(&av);
+            s.t += TICK_MS;
+        }
+        if (confirm) {
+            CHECK_INT(av_metrics(&av)->obstacle_cleared, 0);
+            CHECK(av_state(&av) != AV_STATE_MONITOR);
+        } else {
+            CHECK_INT(av_metrics(&av)->obstacle_cleared, 1); // old behaviour
+        }
+    }
+    av_config_t c;
+    av_config_default(&c);
+    CHECK_INT(c.clear_confirm_count, 0);
+    c.clear_confirm_count = -1;
+    CHECK(av_config_check(&c) != NULL);
+}
+
 static void replan_mid_bypass_still_ends_on_line_heading(void) {
     // Emergency stop while turned out; obstacle still there, so a second
     // bypass is planned from the new heading. It must still end facing the
@@ -1821,10 +2101,21 @@ void run_avoidance_tests(void) {
     RUN(return_drive_runs_past_expected_crossing);
     RUN(sweep_config_checked);
     RUN(far_reading_beyond_edge_does_not_block);
+    RUN(own_face_echo_does_not_block);
+    RUN(only_bypass_turns_round_the_obstacle);
+    RUN(missed_echo_does_not_end_fine_scan);
     RUN(rescan_without_backoff_can_clear);
     RUN(reacquire_retries_alternate_direction);
     RUN(reacquire_gives_up);
     RUN(emergency_stop_replans_and_rejoins);
+    RUN(emergency_stop_backs_off_before_rescan);
+    RUN(estop_backoff_config_checked);
+    RUN(scan_starts_at_centre_obstacle);
+    RUN(beam_correction_narrows_edges);
+    RUN(bypass_min_lateral_floor);
+    RUN(pass_unseen_ends_by_time_without_odometry);
+    RUN(missed_centre_echo_does_not_clear);
+    RUN(obstacle_removed_with_confirm_resumes);
     RUN(replan_mid_bypass_still_ends_on_line_heading);
     RUN(persistent_sensor_fault_fails);
     RUN(intermittent_fault_does_not_fail);

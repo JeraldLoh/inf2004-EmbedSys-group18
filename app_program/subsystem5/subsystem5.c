@@ -40,19 +40,62 @@ static uint32_t b5_wifi_at;
  * the edge (bypass_side_margin_cm), so a face square to the car under 30 cm
  * is the obstacle. Rear clearance ~ half the car length plus a margin. One
  * forward collision ping after every 3 side pings (~1.2 s at 50 mm/s). */
-#define B5_PASS_BESIDE_CM 30.0f
-#define B5_PASS_MAX_EXTRA_CM 40.0f
-#define B5_PASS_CLEAR_MARGIN_CM 8.0f
-#define B5_PASS_GUARD_EVERY 3
+#define B5_PASS_BESIDE_CM 22.0f
+#define B5_PASS_MAX_EXTRA_CM 25.0f /* boxes are small: never watch 40 cm past plan */
+/* Car trial 2026-11-11: turned back too soon after the back corner. The
+ * sonar sits at the front, so the rest of the car is still beside the box
+ * when the side reading opens up: cover the body behind the sensor too. */
+#define B5_PASS_CLEAR_MARGIN_CM 14.0f
+/* Never step out less than half the car (~7 cm) plus 7 cm from the line. */
+#define B5_BYPASS_MIN_LATERAL_CM 14.0f
+/* Pivots at 80 mm/s instead of 50. Buddy 2 ramps at 100 mm/s^2, so a 60 deg
+ * pivot drops from ~1.7 s to ~1.5 s; distances and angles are unchanged. */
+/* Left turns: forward arc at 16 /m (radius ~6 cm, about the left wheel).
+ * 60 mm/s centre -> right wheel ~114 (under Buddy 2's 120 cap), left ~6
+ * mm/s forward; ~55 deg/s. */
+#define B5_LEFT_ARC_CURVATURE_U1_M 16000000
+#define B5_LEFT_ARC_SPEED_MM_S 60
+#define B5_LEFT_ARC_LAG_MS 250U
+#define B5_PIVOT_SPEED_MM_S 120U
+/* Avoidance drives at 80 mm/s (was 50, slower than the 70 mm/s line
+ * follow). The line search arc stays at 50 so it does not sweep past. */
+#define B5_DRIVE_SPEED_MM_S 120U
+/* Drives that may stop on the line: at 200 mm/s^2, 70 mm/s stops in ~1 cm. */
+#define B5_LINE_DRIVE_SPEED_MM_S 70U
+/* The watched pass leg: fast enough, slow enough for ~3 readings on 8 cm. */
+#define B5_PASS_DRIVE_SPEED_MM_S 60U
+/* Pass-leg distance from time while Buddy 2 gives no mid-drive odometry:
+ * 80 mm/s less the 100 mm/s^2 ramp, rounded down so the estimate runs
+ * short and the car never turns back early. */
+#define B5_DRIVE_ESTIMATE_CM_S 5.5f /* pass leg runs at 60 mm/s */
+/* One forward collision ping per 6 side pings (was 3): each forward ping
+ * swings the servo 65 deg away and back, a gap where the side is unseen. */
+#define B5_PASS_GUARD_EVERY 6
 /* Car trial 2026-11-10: side readings were 44-74 cm at 70 deg (41+ cm
  * square), never under the fixed 30 cm, so the pass never saw the face.
  * Also count out to the planned side distance + 20 cm, and look closer to
  * square for a firmer echo. 85 deg (servo 5/175) left the servo stuck at
  * its end stop; 75 deg (15/165) stays clear of it. */
-#define B5_PASS_BESIDE_SLACK_CM 20.0f
+/* 10 (was 20): with the sensor tilted down, a floor echo ~30 cm out read as
+ * 'beside', so the pass never saw the corner and ran to the cap. */
+#define B5_PASS_BESIDE_SLACK_CM 10.0f
 #define B5_BYPASS_SIDE_MARGIN_CM 10.0f
 #define B5_MIN_CLEARANCE_CM 25.0f
-#define B5_PASS_SIDE_DEG 75
+/* Car trial 2026-11-11: the sensor tilts down at the servo's ends and reads
+ * the floor. Sweep only +/-60 (servo 30..150) and watch the side at 65.
+ * Obstacles are at most 20 cm wide (course rules): seen from 18 cm their
+ * edges are within ~30 deg, ~45 with the sonar cone, inside +/-60. */
+#define B5_PASS_SIDE_DEG 65
+#define B5_SWEEP_LEFT_DEG 150
+#define B5_SWEEP_RIGHT_DEG 30
+#define B5_FINE_HALF_RANGE_DEG 60
+/* Car trial 2026-11-10: after an emergency stop the rescan ran 4 cm from
+ * the box and never found its far edge. Back off this far first. */
+#define B5_ESTOP_BACKOFF_CM 12.0f
+/* Car trial 2026-11-11: an 8 cm box profiled 18-22 cm wide. The HC-SR04
+ * cone is ~30 deg; each edge is pulled back by half of it. Calibrate by
+ * comparing [B5 PROFILE] width_mm to a ruler (see TEST_LOG S5-W). */
+#define B5_BEAM_HALF_DEG 12.0f
 static subsystem5_bindings_t bindings;
 static bool bound;
 static bool initialized;
@@ -175,6 +218,9 @@ static void cb_motion_turn(void *ctx, float deg)
         refuse("turn (deg)", (int)deg);
         return;
     }
+    /* Arc left only round the obstacle; the line align and the line search
+     * pivot so the sensors stay over the line (car trial 2026-11-19). */
+    motion.left_arc_allowed = av_turn_rounds_obstacle(&av);
     b5_motion_turn(&motion, (int32_t)(deg * 1000.0f), cb_now_ms(NULL));
 }
 
@@ -186,6 +232,13 @@ static void cb_motion_forward(void *ctx, float cm)
         refuse("forward (cm)", (int)cm);
         return;
     }
+    /* Out and pass legs at the fast speed; drives that may cross the line
+     * slower, so stopping on it does not carry the car past (80 mm/s at
+     * Buddy 2's 100 mm/s^2 needs ~3 cm to stop, 50 mm/s ~1 cm). */
+    /* The watched pass leg too: at 80 mm/s an 8 cm box got one side reading
+     * (car trial 2026-11-11); at 50 it gets about twice as many. */
+    motion.config.goal_speed_mm_s = (av.pass_phase == 1) ? B5_PASS_DRIVE_SPEED_MM_S
+        : av_line_expected(&av) ? B5_LINE_DRIVE_SPEED_MM_S : B5_DRIVE_SPEED_MM_S;
     b5_motion_straight(&motion, (int32_t)(cm * 10.0f), false, cb_now_ms(NULL));
 }
 
@@ -275,6 +328,47 @@ static const char *edges_name(const obstacle_profile_t *p)
     return "none";
 }
 
+/* One [B5 PROFILE] line per decision, so every scan's edges are in the log,
+ * not just the last one's (in [B5 RESULT]). x > 0 is right, y is ahead,
+ * both from where the car stood when it scanned. */
+static uint32_t profile_scans; /* decisions in this encounter */
+
+static void print_edge(const char *name, const obstacle_edge_t *e, float clear_cm)
+{
+    if (e->found)
+    {
+        tm_printf((UB*)" %s=found dir=%d x_mm=%d y_mm=%d clear_mm=%d", name,
+            (int)e->angle_deg, cm_to_mm(e->pt.x_cm), cm_to_mm(e->pt.y_cm),
+            cm_to_mm(clear_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" %s=missing", name);
+    }
+}
+
+static void print_profile(const av_event_t *e)
+{
+    const obstacle_profile_t *p = e->profile;
+    if (p == NULL) { return; }
+    profile_scans++;
+    tm_printf((UB*)"[B5 PROFILE] n=%lu scan=%lu ahead_mm=%d",
+        (unsigned long)av_metrics(&av)->detections, (unsigned long)profile_scans,
+        cm_to_mm(p->distance_cm));
+    print_edge("L", &p->left, (e->choice != NULL) ? e->choice->left_clear_cm : 0.0f);
+    print_edge("R", &p->right, (e->choice != NULL) ? e->choice->right_clear_cm : 0.0f);
+    if (p->left.found && p->right.found)
+    {
+        tm_printf((UB*)" width_mm=%d centre_x_mm=%d", cm_to_mm(p->width_cm),
+            cm_to_mm(p->center.x_cm));
+    }
+    else
+    {
+        tm_printf((UB*)" width_mm=- centre_x_mm=-");
+    }
+    tm_printf((UB*)" side=%s backoffs=%d\n", side_name(e->side), av.backoffs);
+}
+
 static void print_result(const char *outcome, uint32_t ms, const char *reason)
 {
     const av_metrics_t *m = av_metrics(&av);
@@ -285,9 +379,19 @@ static void print_result(const char *outcome, uint32_t ms, const char *reason)
         (unsigned long)(enc_profile ? m->last_scan_ms : 0U));
     if (enc_profile && (p != NULL))
     {
-        tm_printf((UB*)" ahead_mm=%d width_mm=%d edges=%s centre_x_mm=%d",
-            cm_to_mm(p->distance_cm), cm_to_mm(p->width_cm), edges_name(p),
-            cm_to_mm(p->center.x_cm));
+        /* Width and centre need both edges; with one, they would be
+         * computed against a stand-in point and mean nothing. */
+        if (p->left.found && p->right.found)
+        {
+            tm_printf((UB*)" ahead_mm=%d width_mm=%d edges=%s centre_x_mm=%d",
+                cm_to_mm(p->distance_cm), cm_to_mm(p->width_cm), edges_name(p),
+                cm_to_mm(p->center.x_cm));
+        }
+        else
+        {
+            tm_printf((UB*)" ahead_mm=%d width_mm=- edges=%s centre_x_mm=-",
+                cm_to_mm(p->distance_cm), edges_name(p));
+        }
         tm_printf((UB*)" side=%s lclear_mm=%d rclear_mm=%d",
             side_name(av.choice.side), cm_to_mm(av.choice.left_clear_cm),
             cm_to_mm(av.choice.right_clear_cm));
@@ -325,6 +429,7 @@ static void result_on_event(const av_event_t *e)
     {
         case AV_EVT_OBSTACLE_DETECTED:
             enc_profile = false;
+            profile_scans = 0U;
             enc_aligned = false;
             enc_pass_clear = false;
             enc_capped0 = av_metrics(&av)->pass_capped;
@@ -475,6 +580,7 @@ static void cb_on_event(void *ctx, const av_event_t *e)
             tm_printf((UB*)"[B5] %s\n", e->reason);
             break;
         case AV_EVT_DECISION:
+            print_profile(e);
             tm_printf((UB*)"[B5] decision: side %d (0 none, 1 left, 2 right)\n",
                 (int)e->side);
             break;
@@ -697,6 +803,23 @@ static void subsystem5_task(INT stacd, void *exinf)
             }
         }
 #endif
+        {
+            /* How a watched pass ended when the corner was not seen. */
+            static uint32_t seen_unseen, seen_capped;
+            const av_metrics_t *pm = av_metrics(&av);
+            if (pm->pass_unseen != seen_unseen)
+            {
+                seen_unseen = pm->pass_unseen;
+                tm_printf((UB*)"[B5] pass ended: box never seen beside, planned length driven (%d side readings)\n",
+                    av.pass_readings);
+            }
+            if (pm->pass_capped != seen_capped)
+            {
+                seen_capped = pm->pass_capped;
+                tm_printf((UB*)"[B5] pass ended: still beside at the cap (%d hits, last side reads kept it 'beside')\n",
+                    av.pass_hits);
+            }
+        }
         if ((uint32_t)(cb_now_ms(NULL) - last_status_ms) >= B5_STATUS_PERIOD_MS)
         {
             last_status_ms = cb_now_ms(NULL);
@@ -750,7 +873,11 @@ EXPORT ER subsystem5_init(void)
         return E_OBJ;
     }
 
-    av_config_default(&cfg); /* servo 20/90/160: free mount, see avoidance.c */
+    av_config_default(&cfg);
+    /* Every build: the mount tilts the sensor down past +/-60 deg. */
+    cfg.left_deg = B5_SWEEP_LEFT_DEG;
+    cfg.right_deg = B5_SWEEP_RIGHT_DEG;
+    cfg.fine_half_range_deg = B5_FINE_HALF_RANGE_DEG;
     if (has_motion())
     {
         /* Rejoin: centre the turning point on the line and turn along it
@@ -789,6 +916,21 @@ EXPORT ER subsystem5_init(void)
          * 25 cm free past the edge is room enough. */
         cfg.min_clearance_cm = B5_MIN_CLEARANCE_CM;
         cfg.return_from_side = true;
+        cfg.estop_backoff_cm = B5_ESTOP_BACKOFF_CM;
+        cfg.beam_half_deg = B5_BEAM_HALF_DEG;
+        cfg.bypass_min_lateral_cm = B5_BYPASS_MIN_LATERAL_CM;
+        cfg.drive_estimate_cm_s = B5_DRIVE_ESTIMATE_CM_S;
+        cfg.turn_settle_ms = 80U; /* pause after each car turn (was 150) */
+        /* Car trial 2026-11-11: one missed centre echo resumed the car into
+         * the box. Three more clear pings straight ahead before "gone". */
+        cfg.clear_confirm_count = 3;
+        cfg.fine_no_echo_retries = 2;
+        cfg.fine_confirm_open = true;
+        /* No in-place rescan when no side is usable: the same spot gave the
+         * same readings; backing off is what changed the view (car trials
+         * 2026-11-19). Go straight to the reverse. */
+        cfg.max_rescans = 0;
+        cfg.scan_from_center = true;
     }
     er = drv_servo_init(&servo, PIN_SCAN_SERVO, B5_SERVO_MIN_US,
         B5_SERVO_MAX_US, cfg.center_deg);
@@ -815,6 +957,13 @@ EXPORT ER subsystem5_init(void)
     /* Last-resort arc search: ~20 cm radius instead of ~33, so it stays
      * near where the line should be. */
     motion_cfg.search_curvature_u1_m = B5_SEARCH_CURVATURE_U1_M;
+    motion_cfg.pivot_speed_mm_s = B5_PIVOT_SPEED_MM_S;
+    motion_cfg.goal_speed_mm_s = B5_DRIVE_SPEED_MM_S;
+    /* Left wheel stalls in reverse (2026-11-19): left turns arc round it. */
+    motion_cfg.left_arc_curvature_u1_m = B5_LEFT_ARC_CURVATURE_U1_M;
+    motion_cfg.left_arc_speed_mm_s = B5_LEFT_ARC_SPEED_MM_S;
+    motion_cfg.turn_lag_ms = B5_LEFT_ARC_LAG_MS;
+    motion_cfg.arc_wheel_cap_mm_s = 120;   /* Buddy 2's wheel cap seen in the log */
     b5_motion_init(&motion, &bindings.motion, &motion_cfg);
 
     /* Core 0, the same core that services the GPIO interrupt writing the
