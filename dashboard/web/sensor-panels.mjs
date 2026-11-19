@@ -1,3 +1,4 @@
+import {obstacleOutputs} from './obstacle-outputs.mjs?v=b5-outputs-1';
 import {liveGroup,lineHeadline,lineSearching,bypassProgress} from './live-status.mjs?v=barcode-digital-4';
 import {lineNames,terrainNames,avoidanceNames,rangeNames,motionSpeed,systemNames} from './telemetry-view.mjs?v=barcode-digital-4';
 import {renderCalibration} from './calibration.mjs?v=barcode-digital-4';
@@ -5,7 +6,7 @@ import {renderCalibration} from './calibration.mjs?v=barcode-digital-4';
 export function renderSensorHighlights(id,packet,view,fresh,elapsed){
  const $=key=>document.getElementById(key),s=packet?.buddies?.[id],available=!!s,stale=available&&(!fresh||view.stale);
  $('buddy-'+id).classList.toggle('is-empty',!available);
- renderCalibration(id,s,{stale,demo:!!packet?.demo,live:liveGroup(packet,id)});
+ if(id!==5)renderCalibration(id,s,{stale,demo:!!packet?.demo,live:liveGroup(packet,id)});
  const badge=$('sensor-badge-'+id);badge.lastChild.textContent=!available?'Waiting':stale?'Stale':packet.demo?'Sample':'Live';
  const put=(key,value)=>{$(key).textContent=value;};
  if(id===2){
@@ -36,6 +37,9 @@ export function renderSensorHighlights(id,packet,view,fresh,elapsed){
   put('sensor-caption-4',s?.run_ended?(s.run_end_cause===1?`End of run · car lifted ${s.lift_cm} cm · motors stopped`:'End of run · car overturned · motors stopped'):s?.hump_valid?`Last hump ${s.hump_mm} mm · ±${s.uncertainty_mm} mm estimate`:s?(valid?(s.heading_valid?'Attitude and magnetic heading available.':'Attitude available · heading needs magnetometer calibration.'):'Awaiting valid calibration and sensor readings.'):'Pitch, roll and terrain bring the road into view.');
  }
  if(id===5){
+  const outputs=obstacleOutputs(s);
+  for(const key of ['detection','width','direction','rejoin'])put('obstacle-'+key,outputs[key]);
+  put('obstacle-output-note',!s?'Waiting for Buddy 5 telemetry.':stale?'Last reported outputs · readings are stale.':packet.demo?'Sample outputs · simulated.':'Encounter status, not a guarantee of a clear path. Width and direction follow reported scan results.');
   const ok=s?.front_status===0,lastOK=s?.last_status===0;
   put('obstacle-primary',ok?(s.front_mm/10).toFixed(1):'—');
   put('obstacle-unit',!s?'cm ahead':ok?'cm · scan-start front':rangeNames[s.front_status]);
