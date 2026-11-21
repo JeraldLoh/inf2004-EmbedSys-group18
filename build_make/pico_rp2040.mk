@@ -398,6 +398,10 @@ LINE_DAMP_STEER ?= 15
 LINE_DAMP_MS ?= 40
 CFLAGS  += -DCONTROLLER_HDG_ASSIST=$(HDG_ASSIST)
 CFLAGS  += -DB4_HEADING_LOG=$(HEADING_LOG)
+# Buddy 4 IMU data older than this (ms) is stale: the terrain speed cap is
+# ignored (no STOP). The IMU publishes every 20 ms.
+B4_STALE_MS ?= 200
+CFLAGS  += -DB4_STALE_MS=$(B4_STALE_MS)U
 ifneq ($(strip $(BARCODE_STEER_PERCENT)),)
 CFLAGS  += -DCONTROLLER_BARCODE_STEER_PERCENT=$(strip $(BARCODE_STEER_PERCENT))
 endif
@@ -475,7 +479,7 @@ endif
 ################################################################################
 
 PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
-PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-captrace
+PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-stale$(B4_STALE_MS)-captrace
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

@@ -19,6 +19,12 @@ static bool b4_ready;
 static ER b4_init_status = E_OBJ;
 static ER b4_start_status = E_OBJ;
 
+/* No IMU sample for this long: the terrain speed cap is dropped (no STOP). */
+#ifndef B4_STALE_MS
+#define B4_STALE_MS 200U
+#endif
+static volatile bool b4_stale;   /* written by the controller task only */
+
 /* Called by the IMU task every 20 ms: Buddy 2's measured wheel speeds,
  * integrated into a signed path distance for the hump height. Each wheel is
  * signed by its last non-zero target (encoders give magnitude only), so a
@@ -69,7 +75,10 @@ static bool b4_read_odometry(int32_t *cumulative_mm)
 /* Controller task, every 10 ms tick (IF-03): terrain state and speed cap. */
 static bool b4_read_terrain(terrain_report_t *report)
 {
+    static uint32_t last_seq = 0xFFFFFFFFU;   /* no sample seen yet */
+    static uint32_t seq_changed_ms;
     uint32_t words[S4_WORDS];
+    uint32_t seq;
     SYSTIM now;
 
     if (!b4_ready || !s4_shared_read(words))
@@ -77,8 +86,50 @@ static bool b4_read_terrain(terrain_report_t *report)
         return false;
     }
     (void)tk_get_otm(&now);
+    seq = s4_get(words[S4_W_ATTITUDE], S4_AT_SEQ_SHIFT, S4_AT_SEQ_WIDTH);
+    if (seq != last_seq)
+    {
+        last_seq = seq;
+        seq_changed_ms = (uint32_t)now.lo;
+    }
+    if (((uint32_t)now.lo - seq_changed_ms) >= B4_STALE_MS)
+    {
+        /* The IMU task has stalled. Report "no cap" instead of keeping the
+         * last one, and return true so the controller takes the update.
+         * No print here: this runs inside the controller lock. */
+        report->state = TERRAIN_UNKNOWN;
+        report->speed_cap_mm_s = 0U;
+        report->estimated_height_mm = 0;
+        report->uncertainty_mm = 0U;
+        report->estimate_valid = false;
+        report->observed_ms = (system_time_ms_t)now.lo;
+        b4_stale = true;
+        return true;
+    }
+    b4_stale = false;
     s4_terrain_report_from_words(words, (system_time_ms_t)now.lo, report);
     return true;
+}
+
+/* Supervisor: print once per change of the stale flag. */
+static void b4_report_stale(void)
+{
+    static bool printed;
+    bool stale = b4_stale;
+
+    if (stale != printed)
+    {
+        printed = stale;
+        if (stale)
+        {
+            tm_printf((UB*)"[B4] IMU data stale: speed cap ignored, "
+                "lift stop unavailable\n");
+        }
+        else
+        {
+            tm_printf((UB*)"[B4] IMU data fresh again: speed cap restored\n");
+        }
+    }
 }
 
 static void b4_print_status(void)
@@ -134,7 +185,7 @@ static void b4_print_status(void)
             (s4_get(w[S4_W_STATUS], S4_ST_ENDCAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH) == S4_END_LIFTED
                 ? "LIFTED" : "OVERTURNED"),
         (unsigned long)s4_get(w[S4_W_MOTION], S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH),
-        (unsigned long)s4_sample_time_us);
+        (unsigned long)s4_sample_time_us, (int)b4_stale);
     s4_print_task_state();   /* is the IMU task alive, and where is it? */
 }
 
@@ -733,6 +784,7 @@ static void supervise(void)
             }
         }
 
+        b4_report_stale();
         if ((t - last_status) >= STATUS_PERIOD_MS)
         {
             last_status = t;
