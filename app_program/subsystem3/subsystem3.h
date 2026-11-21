@@ -32,6 +32,11 @@ IMPORT BOOL subsystem3_take_junction(junction_observation_t *junction);
  * crossings and publish nothing. */
 IMPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms);
 
+/* Ask s3_task to drop a half-finished barcode capture and any pending "read
+ * failed" event. The controller calls it when the car is stopped before a
+ * re-read pass, so the decoder is idle when the bars arrive. */
+IMPORT void subsystem3_barcode_reset(void);
+
 /* No-barcode junction probe (see subsystem3.c). The controller:
  *   1. sees subsystem3_probe_requested() == TRUE
  *   2. stops just past the crossbar, calls subsystem3_probe_begin()

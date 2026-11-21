@@ -135,6 +135,7 @@ LOCAL s3_probe_state_t s3_probe = S3_PROBE_IDLE;
 
 /* Reacquire request from the controller (e.g. after an obstacle bypass). */
 LOCAL BOOL s3_reacquire_request = FALSE;
+LOCAL BOOL s3_barcode_reset_request = FALSE;
 LOCAL line_side_t s3_reacquire_hint = LINE_SIDE_NONE;
 
 /* Barcode calibration: requested by startup, run by s3_task alongside line
@@ -353,6 +354,23 @@ LOCAL void s3_reacquire_step(line_follow_t *line, uint32_t now_ms)
     }
 }
 
+/* Take the decoder reset request. A reset also drops a pending "read failed"
+ * event, which belongs to the capture being dropped. */
+LOCAL BOOL s3_barcode_reset_take(void)
+{
+    BOOL requested;
+
+    (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+    requested = s3_barcode_reset_request;
+    s3_barcode_reset_request = FALSE;
+    if (requested)
+    {
+        s3_fail_pending = FALSE;
+    }
+    (void)tk_unl_mtx(s3_mtx);
+    return requested;
+}
+
 LOCAL void s3_task(INT stacd, void *exinf)
 {
     line_follow_t line;
@@ -436,6 +454,16 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
         /* ---- Requests from the controller ---- */
         s3_reacquire_step(&line, now_ms);
+        if (s3_barcode_reset_take())
+        {
+            barcode_decoder_reset(&decoder);
+            decoder.fail_pending = false;
+            decoder.fail_count = 0U;
+            decoder.trace_pending = false;
+            decoder.trace_count = 0U;
+            decoder.trace_id = 0U;
+            capture_busy = false;
+        }
 
         /* ---- Line ---- */
         s3_dbg_stage = 2U;            /* line sensors, steering */
@@ -933,6 +961,13 @@ EXPORT void subsystem3_reacquire(line_side_t side_hint)
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
     s3_reacquire_request = TRUE;
     s3_reacquire_hint = side_hint;
+    (void)tk_unl_mtx(s3_mtx);
+}
+
+EXPORT void subsystem3_barcode_reset(void)
+{
+    (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+    s3_barcode_reset_request = TRUE;
     (void)tk_unl_mtx(s3_mtx);
 }
 

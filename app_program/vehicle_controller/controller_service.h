@@ -97,6 +97,9 @@ typedef struct
      * per event, with the ms since the capture started. Used only when the
      * build has BARCODE_RETRY=1. */
     bool (*take_barcode_failure)(void *context, uint32_t *elapsed_ms);
+    /* Optional, may be NULL: drop Buddy 3's half-finished barcode capture.
+     * Called with the car stopped, before the slow re-read pass. */
+    void (*barcode_reset)(void *context);
 } controller_junction_outputs_t;
 
 /* Junction numbers. Placeholders until measured on the car. */

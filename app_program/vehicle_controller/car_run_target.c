@@ -358,6 +358,14 @@ static bool junction_take_barcode_failure(void *context, uint32_t *elapsed_ms)
     return subsystem3_take_barcode_failure(elapsed_ms) != FALSE;
 }
 
+static void junction_barcode_reset(void *context)
+{
+    (void)context;
+#if !APP_OBSTACLE_TABLE
+    subsystem3_barcode_reset();
+#endif
+}
+
 static bool junction_take(void *context, junction_observation_t *junction)
 {
     (void)context;
@@ -465,7 +473,7 @@ static ER bring_up(void)
     controller_junction_outputs_t junction = {NULL, junction_take_route,
         junction_take, junction_probe_requested, junction_probe_begin,
         junction_probe_end, junction_goal, junction_goal_result,
-        junction_take_barcode_failure};
+        junction_take_barcode_failure, junction_barcode_reset};
     subsystem5_bindings_t b5 = {0};
     ER er;
 

@@ -1136,6 +1136,12 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
         case GOAL_DONE:
             goal_step_done(service);
             reread_end(service, now_ms);
+            if (out->barcode_reset != NULL)
+            {
+                /* The sensor ran backwards over the bars: start the forward
+                 * pass with an idle decoder. */
+                out->barcode_reset(out->context);
+            }
             slow_ms = (uint32_t)(service->reread_mm +
                 CONTROLLER_BARCODE_RETRACE_MARGIN_MM) * 1000U /
                 CONTROLLER_BARCODE_REREAD_MM_S;
@@ -1152,7 +1158,8 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
 
 /* True when a re-read started this tick (the caller returns: it owns the
  * motion now). Every failure event is consumed, wanted or not, so a stale one
- * never starts a retrace at a later place. */
+ * never starts a retrace at a later place. A failure during the slow pass does
+ * not end it: only a route or the timer does. */
 static bool reread_start(
     controller_service_t *service,
     bool failed,
@@ -1166,7 +1173,6 @@ static bool reread_start(
     {
         return false;
     }
-    service->reread_slow = false;   /* a second failure ends the slow pass */
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
         !following_line(controller->mission) ||
         (controller->mission == MISSION_JUNCTION_APPROACH) ||
