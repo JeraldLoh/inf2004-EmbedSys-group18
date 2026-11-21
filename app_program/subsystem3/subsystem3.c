@@ -65,6 +65,13 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #define S3_DEBUG_RAW 0           /* 1 = print raw sensor values every 100 ms */
 #endif
 
+/* A failed capture with at least this many elements was a real barcode
+ * attempt, so it publishes a "read failed" event. make
+ * BARCODE_RETRY_MIN_ELEMENTS=n. */
+#ifndef S3_BARCODE_RETRY_MIN_ELEMENTS
+#define S3_BARCODE_RETRY_MIN_ELEMENTS 9U
+#endif
+
 #define S3_SAMPLE_MS 1U
 #define S3_TASK_PRIORITY 10      /* TBD: agree the schedule as a team */
 #define S3_TASK_STACK 1024
@@ -108,6 +115,8 @@ LOCAL volatile line_status_t s3_line;
 LOCAL volatile uint16_t s3_steering = S3_STEER_OFFSET;
 LOCAL route_instruction_t s3_route;
 LOCAL BOOL s3_route_pending = FALSE;
+LOCAL uint32_t s3_fail_elapsed_ms;
+LOCAL BOOL s3_fail_pending = FALSE;
 LOCAL junction_observation_t s3_junction;
 LOCAL BOOL s3_junction_pending = FALSE;
 LOCAL command_id_t s3_next_command_id = 1U;
@@ -357,6 +366,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
     bool right_black;
     uint32_t now_us;
     uint32_t now_ms;
+    uint32_t capture_start_us = 0U;   /* first bar of the current capture */
+    bool capture_busy = false;
     /* Wrap-safe millisecond counter. The 32-bit microsecond timer wraps
      * every 71.6 minutes, so now_us / 1000 would jump back to 0. */
     uint32_t last_us = 0U;
@@ -503,6 +514,11 @@ LOCAL void s3_task(INT stacd, void *exinf)
             {
                 barcode_black = barcode_sensor_is_black(&bar, raw);
                 barcode_decoder_feed(&decoder, barcode_black, now_us);
+                if (barcode_decoder_busy(&decoder) && !capture_busy)
+                {
+                    capture_start_us = now_us;
+                }
+                capture_busy = barcode_decoder_busy(&decoder);
 #if S3_CAPTURE_DIAG
                 /* Diagnostics: darkest reading inside each element of the
                  * capture, printed if it fails. A "white" element hiding a
@@ -615,6 +631,13 @@ LOCAL void s3_task(INT stacd, void *exinf)
         if (decoder.fail_pending)
         {
             decoder.fail_pending = false;
+            if (decoder.fail_count >= S3_BARCODE_RETRY_MIN_ELEMENTS)
+            {
+                (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+                s3_fail_elapsed_ms = (now_us - capture_start_us) / 1000U;
+                s3_fail_pending = TRUE;
+                (void)tk_unl_mtx(s3_mtx);
+            }
 #if APP_CAR_MQTT
             /* Every capture gets a visible outcome, including a short tape
              * crossing. This is a failed attempt, not proof of a barcode. */
@@ -821,6 +844,25 @@ EXPORT BOOL subsystem3_take_route(route_instruction_t *route)
     {
         *route = s3_route;
         s3_route_pending = FALSE;
+        taken = TRUE;
+    }
+    (void)tk_unl_mtx(s3_mtx);
+    return taken;
+}
+
+EXPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms)
+{
+    BOOL taken = FALSE;
+
+    if (elapsed_ms == NULL)
+    {
+        return FALSE;
+    }
+    (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
+    if (s3_fail_pending)
+    {
+        *elapsed_ms = s3_fail_elapsed_ms;
+        s3_fail_pending = FALSE;
         taken = TRUE;
     }
     (void)tk_unl_mtx(s3_mtx);

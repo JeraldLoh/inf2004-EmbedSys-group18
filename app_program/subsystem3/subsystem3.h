@@ -25,6 +25,13 @@ IMPORT int8_t subsystem3_steer(bool *analogue);
 IMPORT BOOL subsystem3_take_route(route_instruction_t *route);
 IMPORT BOOL subsystem3_take_junction(junction_observation_t *junction);
 
+/* A barcode capture that looked like a barcode (at least
+ * S3_BARCODE_RETRY_MIN_ELEMENTS elements) but did not decode. elapsed_ms is
+ * the time from the first bar to the failure. Returns true once per event
+ * (read and clear, like subsystem3_take_route). Shorter failures are tape
+ * crossings and publish nothing. */
+IMPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms);
+
 /* No-barcode junction probe (see subsystem3.c). The controller:
  *   1. sees subsystem3_probe_requested() == TRUE
  *   2. stops just past the crossbar, calls subsystem3_probe_begin()
