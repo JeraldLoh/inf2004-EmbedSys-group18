@@ -30,12 +30,12 @@ export function decodeBuddy4(bytes){
  const calibration=get(0,20,2),detail_faults=get(0,13,7),data_valid=!!get(0,31,1);
  const heading_valid=data_valid&&calibration===3&&!(detail_faults&2);
  return {raw:Array.from(bytes),terrain:get(0,0,3),speed_cap_mm_s:get(0,3,7)*10,motion_class:get(0,10,3),detail_faults,
-  calibration,odometry_used:!!get(0,22,1),hump_active:!!get(0,23,1),collision_active:!!get(0,24,1),collision_counter:get(0,25,3),collision_side:get(0,28,2),
+  calibration,odometry_used:!!get(0,22,1),hump_active:!!get(0,23,1),run_ended:!!get(0,24,1),run_end_cause:get(0,25,2),run_end_count:get(0,27,3),
   clamped:!!get(0,30,1),data_valid,heading_valid,
   pitch_deg:data_valid?signed(get(1,0,9),9)/2:null,roll_deg:data_valid?signed(get(1,9,9),9)/2:null,
   heading_deg:heading_valid?get(1,18,9):null,sample_counter:get(1,27,5),
   turn_rate_deg_s:heading_valid?signed(get(2,0,8),8)*2:null,live_hump_mm:data_valid?get(2,8,8):null,
-  shock_mg:get(2,16,8)*16,vibration_mg:data_valid?get(2,24,6)*8:null,
+  lift_cm:get(2,16,8),vibration_mg:data_valid?get(2,24,6)*8:null,
   hump_mm:get(3,0,8),uncertainty_mm:get(3,8,6),peak_pitch_deg:get(3,14,6),path_cm:get(3,20,8),hump_valid:!!get(3,28,1),hump_seq:get(3,29,3)};
 }
 export function decodeTelemetry(input){

@@ -47,6 +47,7 @@ typedef enum
 typedef struct
 {
     uint32_t goal_speed_mm_s;
+    uint32_t pivot_speed_mm_s;     /* pivot goals; 0 = goal_speed_mm_s */
     uint32_t goal_timeout_ms;
     uint32_t wait_ms;              /* for obstacle authority */
     int32_t search_speed_mm_s;
@@ -58,6 +59,16 @@ typedef struct
     int32_t turn_speed_mm_s;
     int32_t turn_curvature_u1_m;   /* magnitude; sign comes from the turn */
     uint32_t turn_lag_ms;          /* added to each arc for ramp up/down */
+    /* Left turns only, as a tight forward arc round the left wheel: the
+     * left wheel creeps forward instead of reversing (car trials 2026-11-19:
+     * the left wheel stalls in reverse, NO_WHEEL_PROGRESS). 0 = pivot. */
+    int32_t left_arc_curvature_u1_m;
+    int32_t left_arc_speed_mm_s;
+    /* Buddy 2 caps each wheel (car trial 2026-11-19: 133 asked, 120 run, so
+     * a timed 65 deg arc turned 51). The arc time uses the capped outer
+     * wheel. 0 = no cap. */
+    int32_t arc_wheel_cap_mm_s;
+    int32_t arc_track_mm;
 } b5_motion_config_t;
 
 typedef struct
@@ -72,6 +83,12 @@ typedef struct
     bool arc_left;
     bool arc_started;
     uint32_t arc_ms;                    /* length of the arc in progress */
+    int32_t arc_speed_mm_s;             /* of the arc in progress */
+    int32_t arc_curvature_u1_m;
+    /* Set by the caller before each turn: false makes a left turn a pivot
+     * even with left_arc_* set (line align and the line search must turn
+     * on the spot to stay over the line). */
+    bool left_arc_allowed;
     motion_result_code_t last_result;   /* of the last finished goal */
     int32_t travelled_mm;               /* current/last goal, from its results */
     bool travelled_valid;               /* Buddy 2 reported odometry for it */

@@ -42,6 +42,16 @@ test('sensor cards render targets, search, hump pause and preserve failed avoida
   packet.live_status.line.paused=false;renderSensorHighlights(3,packet,{stale:false},true,0);assert.equal(text('line-primary'),'Searching for line');
   packet.live_status.bypass.active=false;packet.live_status.bypass.backing_off=false;
   renderSensorHighlights(5,packet,{stale:false},true,0);assert.equal(text('obstacle-state'),'Failed');
+  assert.equal(text('obstacle-detection'),'Unknown · avoidance failed');
+  assert.equal(text('obstacle-rejoin'),'Avoidance failed');
+  packet.buddies[5]={state:10,front_status:4,last_status:4,profile_valid:1,width_mm:125,left_found:1,right_found:1,decision_valid:1,side:1};
+  renderSensorHighlights(5,packet,{stale:false},true,0);
+  assert.equal(text('obstacle-width'),'12.5 cm');assert.equal(text('obstacle-direction'),'Left');
+  assert.equal(text('obstacle-rejoin'),'Searching for line');
+  renderSensorHighlights(5,packet,{stale:true},false,2000);
+  assert.match(text('obstacle-output-note'),/stale/);
+  assert.equal(elements.has('calibration-5'),false);
+
   packet.live_status_elapsed_ms=1600;renderSensorHighlights(2,packet,{stale:false},true,0);assert.equal(text('motion-target'),'—');
  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
 });

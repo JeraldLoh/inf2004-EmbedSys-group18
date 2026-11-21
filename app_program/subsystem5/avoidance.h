@@ -126,6 +126,23 @@ typedef struct {
     float min_clearance_cm;    // free range needed just past the edge on the chosen side
     float max_range_cm;        // value used for NO_ECHO readings
     float emergency_stop_cm;   // collision guard during bypass/reacquire; 0 disables
+    int clear_confirm_count;   // extra centre pings that must all be clear before a
+                               // scan calls the obstacle gone (0 = trust the sweep)
+    // Car trial 2026-11-19: the first fine step left got no echo off the
+    // angled face and the left edge was put at 3 deg; the car went left
+    // and ran into the box. Retry a no-echo this many times, and with
+    // fine_confirm_open only call an edge after two open steps in a row.
+    int fine_no_echo_retries;
+    bool fine_confirm_open;
+    float drive_estimate_cm_s; // pass-leg distance from time when odometry is not
+                               // reported mid-drive (0 = odometry only)
+    float bypass_min_lateral_cm; // never step out less than this from the line (0 = off)
+    float beam_half_deg;       // sonar beam half-width: each found edge is pulled this far
+                               // back toward the scan direction (0 = off)
+    bool scan_from_center;     // start the fine scans straight ahead when the centre
+                               // reading is the obstacle, not from the nearest echo
+    float estop_backoff_cm;    // reverse this far (straight back) after an emergency stop
+                               // before rescanning; 0 rescans where it stopped
 
     uint32_t servo_settle_base_ms;
     float servo_ms_per_deg;
@@ -249,6 +266,10 @@ typedef struct {
     int scan_base;    // servo angle of that reading; the fine scans fan out from it
     float nearest_cm; // closest reading that hit the obstacle this scan
     int fine_offset;
+    int fine_retries;      // no-echo retries spent at the current step
+    bool fine_open_seen;   // one open step, waiting for the next to confirm
+    float fine_open_dir;
+    float fine_open_cm;
     int turn_mag;     // |heading - origin| reached by the turn scan
     bool refining;    // turn scan found open space; servo looks back for the edge
     float clear_dir;  // direction of the open reading nearest the edge
@@ -284,6 +305,8 @@ typedef struct {
     int pass_hits;
     float pass_hit_sum_cm; // radial side readings that hit, for their mean
     float pass_seen_at_cm; // odometry at the first hit; < 0 unknown
+    uint32_t pass_start_ms; // when the watched pass drive was issued
+    int clear_checks;       // confirming centre pings taken this scan
     float side_cm;         // measured car centre to side face; valid if pass_seen
     float depth_cm;        // obstacle depth along the pass; < 0 unknown
     // Last real obstacle depth/direction this encounter, and how far the car
@@ -326,6 +349,12 @@ const char *av_state_name(av_state_t s);
 bool av_is_active(const av_t *av);
 bool av_last_reading(const av_t *av, range_reading_t *out);
 const obstacle_profile_t *av_profile(const av_t *av); // NULL until first profile
+// True while a drive may cross the line (return drive, centring on it,
+// reacquire): drive those slowly so the stop does not overshoot it.
+bool av_line_expected(const av_t *a);
+// The turn being issued is one of the bypass turns round the obstacle (not
+// the line align, the final straighten-up, or the line search).
+bool av_turn_rounds_obstacle(const av_t *a);
 const av_metrics_t *av_metrics(const av_t *av);
 const char *av_fail_reason(const av_t *av);
 

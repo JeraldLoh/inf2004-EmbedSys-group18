@@ -41,6 +41,7 @@ void b5_motion_default_config(b5_motion_config_t *config)
      * drives faster than line following. Buddy 2's measured executor holds
      * this as a wheel speed and applies its own minimum pivot/drive speeds. */
     config->goal_speed_mm_s = 50U;
+    config->pivot_speed_mm_s = 0U;   /* pivots at goal_speed_mm_s */
     config->goal_timeout_ms = 0U; /* Measured B2 derives a finite path-dependent bound. */
     config->wait_ms = 300U;
     config->search_speed_mm_s = 50;
@@ -58,16 +59,33 @@ void b5_motion_default_config(b5_motion_config_t *config)
     config->turn_speed_mm_s = 50;
     config->turn_curvature_u1_m = 11000000;
     config->turn_lag_ms = 200U;   /* 50 mm/s at 200 mm/s^2 ramps in 0.25 s */
+    config->left_arc_curvature_u1_m = 0;
+    config->left_arc_speed_mm_s = 0;
+    config->arc_wheel_cap_mm_s = 0;
+    config->arc_track_mm = 112;
 }
 
 /* Arc time for a turn: angle / (speed x curvature), plus the ramp lag. */
-static uint32_t arc_time_ms(const b5_motion_config_t *c, int32_t mdeg)
+static uint32_t arc_time_ms(const b5_motion_config_t *c, int32_t speed,
+    int32_t curvature, int32_t mdeg)
 {
     uint64_t deg_per_s_x1e3;
     uint32_t mag = (uint32_t)((mdeg < 0) ? -mdeg : mdeg);
 
+    /* Outer wheel = speed x (1 + k x track/2); past the cap Buddy 2 scales
+     * both wheels down, so the centre speed (and turn rate) drop with it. */
+    if (c->arc_wheel_cap_mm_s > 0)
+    {
+        int64_t outer = (int64_t)speed * (2000000000LL + (int64_t)curvature * c->arc_track_mm)
+            / 2000000000LL;
+        if (outer > c->arc_wheel_cap_mm_s)
+        {
+            speed = (int32_t)((int64_t)speed * c->arc_wheel_cap_mm_s / outer);
+        }
+    }
+
     /* rad/s = (mm/s / 1000) * (u1/m / 1e6); deg = rad * 57296 / 1000 */
-    deg_per_s_x1e3 = ((uint64_t)c->turn_speed_mm_s * (uint64_t)c->turn_curvature_u1_m
+    deg_per_s_x1e3 = ((uint64_t)speed * (uint64_t)curvature
         * 57296ULL) / 1000000000ULL;
     if (deg_per_s_x1e3 == 0U)
     {
@@ -112,6 +130,11 @@ static void start_goal(b5_motion_t *motion, motion_goal_type_t type,
     motion->goal.target_mm = mm;
     motion->goal.target_mdeg = mdeg;
     motion->goal.max_speed_mm_s = motion->config.goal_speed_mm_s;
+    if (((type == MOTION_GOAL_PIVOT_LEFT) || (type == MOTION_GOAL_PIVOT_RIGHT)) &&
+        (motion->config.pivot_speed_mm_s != 0U))
+    {
+        motion->goal.max_speed_mm_s = motion->config.pivot_speed_mm_s;
+    }
     motion->goal.timeout_ms = motion->config.goal_timeout_ms;
     motion->deadline_ms = now_ms + motion->config.wait_ms;
     motion->travelled_mm = 0;
@@ -130,11 +153,19 @@ void b5_motion_turn(b5_motion_t *motion, int32_t mdeg, uint32_t now_ms)
         motion->state = B5_MOVE_DONE;
         return;
     }
-    if (motion->config.arc_turns)
+    bool left_arc = (mdeg > 0) && motion->left_arc_allowed &&
+        (motion->config.left_arc_curvature_u1_m > 0) &&
+        (motion->config.left_arc_speed_mm_s > 0);
+    if (motion->config.arc_turns || left_arc)
     {
         motion->arc_left = mdeg > 0;
         motion->arc_started = false;
-        motion->arc_ms = arc_time_ms(&motion->config, mdeg);
+        motion->arc_speed_mm_s = left_arc ? motion->config.left_arc_speed_mm_s
+            : motion->config.turn_speed_mm_s;
+        motion->arc_curvature_u1_m = left_arc ? motion->config.left_arc_curvature_u1_m
+            : motion->config.turn_curvature_u1_m;
+        motion->arc_ms = arc_time_ms(&motion->config, motion->arc_speed_mm_s,
+            motion->arc_curvature_u1_m, mdeg);
         motion->deadline_ms = now_ms + motion->config.wait_ms;
         motion->state = B5_MOVE_ARC;
         return;
@@ -266,10 +297,10 @@ static bool send_arc(b5_motion_t *motion, uint32_t now_ms)
     (void)memset(&request, 0, sizeof(request));
     request.authority_generation = generation;
     request.source = MOTION_SOURCE_OBSTACLE;
-    request.speed_mm_s = motion->config.turn_speed_mm_s;
+    request.speed_mm_s = motion->arc_speed_mm_s;
     request.curvature_u1_m = motion->arc_left
-        ? motion->config.turn_curvature_u1_m
-        : -motion->config.turn_curvature_u1_m;
+        ? motion->arc_curvature_u1_m
+        : -motion->arc_curvature_u1_m;
     request.created_ms = now_ms;
     request.expires_ms = now_ms + motion->config.search_life_ms;
     return motion->ops.continuous(&request);

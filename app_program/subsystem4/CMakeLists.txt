@@ -2,7 +2,8 @@
 #
 #   imu_math.c           fixed-point decode, axis mapping, atan2, sine, heading
 #   terrain_estimator.c  calibration, hump state machine and height, motion,
-#                        collision, turn detection, range log, packed outputs
+#                        end-of-run (lift/overturn), turn detection, range log,
+#                        packed outputs
 #   s4_shared.c          seqlock snapshot, odometry input word, 17-byte MQTT
 #                        frame, command decoder, terrain_report_t adapter
 #
@@ -18,7 +19,7 @@ target_link_libraries(subsystem4_host PUBLIC group18_contracts)
 group18_host_warnings(subsystem4_host)
 
 if(BUILD_TESTING)
-    # Simulated car: humps, collisions, turns, faults, packing, payloads.
+    # Simulated car: humps, lifts/overturns, turns, faults, packing, payloads.
     group18_add_host_test(subsystem4_host_tests subsystem4
         "${GROUP18_REPO_ROOT}/testing/host/test_terrain_estimator.c")
     target_link_libraries(subsystem4_host_tests PRIVATE subsystem4_host)

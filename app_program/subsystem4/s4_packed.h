@@ -70,12 +70,11 @@ enum /* 2-bit calibration status (Week 8 tribunal) */
     S4_CAL_LEVEL_MAG = 3     /* level and magnetometer calibrated */
 };
 
-enum /* 2-bit collision direction (side of the car that was hit) */
+enum /* 2-bit end-of-run cause: why the motors were stopped */
 {
-    S4_HIT_FRONT = 0,
-    S4_HIT_REAR = 1,
-    S4_HIT_LEFT = 2,
-    S4_HIT_RIGHT = 3
+    S4_END_NONE = 0,
+    S4_END_LIFTED = 1,       /* raised >= S4_LIFT_HEIGHT_MM */
+    S4_END_OVERTURNED = 2    /* tilted beyond S4_OVERTURN_DDEG */
 };
 
 /*
@@ -91,8 +90,9 @@ enum
     S4_FAULT_STALE = 1U << 2,      /* no fresh accelerometer sample */
     S4_FAULT_UNCAL = 1U << 3,      /* no valid level calibration */
     S4_FAULT_SATURATED = 1U << 4,  /* an axis reached full scale */
-    S4_FAULT_TILT = 1U << 5,       /* pitch or roll beyond the limit */
-    S4_FAULT_COLLISION = 1U << 6   /* collision latched until cleared */
+    S4_FAULT_TILT = 1U << 5        /* pitch or roll beyond the limit */
+    /* Bit 6 is reserved (zero): it was the collision latch, removed when
+       IMU collision detection was dropped from the requirements. */
 };
 #define S4_FAULT_WIDTH 7U
 #define S4_FAULT_BLOCKING (S4_FAULT_I2C | S4_FAULT_STALE)
@@ -126,11 +126,12 @@ enum
 #define S4_ST_CAL_WIDTH 2U
 #define S4_ST_ODOM_SHIFT 22U     /* distance from Buddy 2 odometry */
 #define S4_ST_HUMP_SHIFT 23U     /* on a hump now: Buddy 3 pauses sensing */
-#define S4_ST_COLL_SHIFT 24U     /* collision impact in progress */
-#define S4_ST_COLLCNT_SHIFT 25U  /* collision counter mod 8 */
-#define S4_ST_COLLCNT_WIDTH 3U
-#define S4_ST_COLLDIR_SHIFT 28U
-#define S4_ST_COLLDIR_WIDTH 2U
+#define S4_ST_END_SHIFT 24U      /* END OF RUN latched: lifted or overturned,
+                                    the motors must stay stopped */
+#define S4_ST_ENDCAUSE_SHIFT 25U /* S4_END_* of the latched stop */
+#define S4_ST_ENDCAUSE_WIDTH 2U
+#define S4_ST_ENDCNT_SHIFT 27U   /* end-of-run counter mod 8, new-event check */
+#define S4_ST_ENDCNT_WIDTH 3U
 #define S4_ST_CLAMPED_SHIFT 30U  /* a field in this message was saturated */
 #define S4_ST_VALID_SHIFT 31U    /* DATA_VALID */
 
@@ -149,8 +150,9 @@ enum
 #define S4_MO_TURNRATE_WIDTH 8U
 #define S4_MO_LIVEH_SHIFT 8U     /* height in the current hump, mm */
 #define S4_MO_LIVEH_WIDTH 8U
-#define S4_MO_SHOCK_SHIFT 16U    /* last collision magnitude, 16 mg units */
-#define S4_MO_SHOCK_WIDTH 8U
+#define S4_MO_LIFT_SHIFT 16U     /* lift height, cm: live while lifting,
+                                    held at the trigger height when latched */
+#define S4_MO_LIFT_WIDTH 8U
 #define S4_MO_VIB_SHIFT 24U      /* vibration level, 8 mg units */
 #define S4_MO_VIB_WIDTH 6U
 #define S4_MO_RESERVED_SHIFT 30U
@@ -172,7 +174,6 @@ enum
 /* Conversions for packed physical units. */
 #define S4_CAP_UNIT_MM_S 10U
 #define S4_TURNRATE_UNIT_DPS 2U
-#define S4_SHOCK_UNIT_MG 16U
 #define S4_VIB_UNIT_MG 8U
 
 /* ---------------------------------------------------------------------
@@ -188,7 +189,7 @@ enum /* 3-bit event type */
 {
     S4_EV_TERRAIN = 0,   /* state 3b @3, cap 7b @6 */
     S4_EV_HUMP = 1,      /* hump word bits 0..28 @3 */
-    S4_EV_COLLISION = 2, /* direction 2b @3, magnitude 8b @5 */
+    S4_EV_END_RUN = 2,   /* cause 2b @3, lift height cm 8b @5 */
     S4_EV_TURN = 3,      /* right 1b @3, angle deg 9b @4 */
     S4_EV_FAULT = 4,     /* fault mask 7b @3 */
     S4_EV_CAL = 5        /* kind 1b @3 (0 accel, 1 mag), ok 1b @4 */
@@ -196,8 +197,8 @@ enum /* 3-bit event type */
 
 #define S4_EV_TERRAIN_STATE_SHIFT 3U
 #define S4_EV_TERRAIN_CAP_SHIFT 6U
-#define S4_EV_COLL_DIR_SHIFT 3U
-#define S4_EV_COLL_MAG_SHIFT 5U
+#define S4_EV_END_CAUSE_SHIFT 3U
+#define S4_EV_END_LIFT_SHIFT 5U
 #define S4_EV_TURN_RIGHT_SHIFT 3U
 #define S4_EV_TURN_ANGLE_SHIFT 4U
 #define S4_EV_TURN_ANGLE_WIDTH 9U
@@ -248,8 +249,14 @@ _Static_assert(S4_ST_FAULT_SHIFT + S4_ST_FAULT_WIDTH == S4_ST_CAL_SHIFT,
                "fault field overlaps");
 _Static_assert(S4_ST_CAL_SHIFT + S4_ST_CAL_WIDTH == S4_ST_ODOM_SHIFT,
                "calibration field overlaps");
-_Static_assert(S4_ST_COLLDIR_SHIFT + S4_ST_COLLDIR_WIDTH == S4_ST_CLAMPED_SHIFT,
+_Static_assert(S4_ST_HUMP_SHIFT + 1U == S4_ST_END_SHIFT, "hump/end bits overlap");
+_Static_assert(S4_ST_END_SHIFT + 1U == S4_ST_ENDCAUSE_SHIFT, "end fields overlap");
+_Static_assert(S4_ST_ENDCAUSE_SHIFT + S4_ST_ENDCAUSE_WIDTH == S4_ST_ENDCNT_SHIFT,
+               "end fields overlap");
+_Static_assert(S4_ST_ENDCNT_SHIFT + S4_ST_ENDCNT_WIDTH == S4_ST_CLAMPED_SHIFT,
                "status fields overlap");
+_Static_assert(S4_END_OVERTURNED < (1 << S4_ST_ENDCAUSE_WIDTH), "end cause fits 2 bits");
+_Static_assert(S4_MO_LIFT_SHIFT + S4_MO_LIFT_WIDTH == S4_MO_VIB_SHIFT, "motion word layout");
 _Static_assert(S4_ST_VALID_SHIFT == 31U, "status word layout");
 _Static_assert(S4_AT_SEQ_SHIFT + S4_AT_SEQ_WIDTH == 32U, "attitude word layout");
 _Static_assert(S4_MO_VIB_SHIFT + S4_MO_VIB_WIDTH == S4_MO_RESERVED_SHIFT,
@@ -259,7 +266,7 @@ _Static_assert(S4_HU_SEQ_SHIFT + S4_HU_SEQ_WIDTH == 32U, "hump word layout");
 _Static_assert(S4_HU_VALID_SHIFT + 1U == S4_HU_RESULT_WIDTH, "hump result width");
 _Static_assert(S4_EV_PAYLOAD_SHIFT + S4_HU_RESULT_WIDTH == 32U, "hump event fits");
 _Static_assert(TERRAIN_INVALID < (1 << S4_ST_TERRAIN_WIDTH), "terrain fits 3 bits");
-_Static_assert(S4_FAULT_COLLISION < (1U << S4_FAULT_WIDTH), "faults fit 7 bits");
+_Static_assert(S4_FAULT_TILT < (1U << S4_FAULT_WIDTH), "faults fit 7 bits");
 _Static_assert(S4_EV_CAL < (1 << S4_EV_TYPE_WIDTH), "event type fits 3 bits");
 _Static_assert(S4_CMD_REPORT_RANGES < (1 << S4_CMD_CODE_WIDTH), "command fits 3 bits");
 _Static_assert(sizeof(s4_event_msg_t) == 4U, "event message is one word");

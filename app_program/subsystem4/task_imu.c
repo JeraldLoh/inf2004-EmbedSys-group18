@@ -106,9 +106,10 @@ LOCAL void s4_report_ranges(const s4_range_log_t *r)
               (INT)(S4_MASK(S4_MO_TURNRATE_WIDTH - 1U) * S4_TURNRATE_UNIT_DPS),
               (INT)(r->pitch_ddeg / 10U), (INT)(r->pitch_ddeg % 10U),
               (INT)(r->roll_ddeg / 10U), (INT)(r->roll_ddeg % 10U));
-    tm_printf((UB *)"[B4] ranges: hump %d mm / %d mm long, shock %d mg, vibration %d mg, clamped %d\n",
-              (INT)r->hump_height_mm, (INT)r->hump_length_mm, (INT)r->shock_mg,
-              (INT)r->vibration_mg, (INT)r->clamp_count);
+    tm_printf((UB *)"[B4] ranges: hump %d mm / %d mm long, jolt %d mg, lift %d mm, "
+              "vibration %d mg, clamped %d\n",
+              (INT)r->hump_height_mm, (INT)r->hump_length_mm, (INT)r->jolt_mg,
+              (INT)r->lift_mm, (INT)r->vibration_mg, (INT)r->clamp_count);
     tm_printf((UB *)"[B4] sample time: last %d us, worst %d us (period %d ms)\n",
               (INT)s4_sample_time_us, (INT)s4_sample_time_worst_us, (INT)S4_PERIOD_MS);
 }
@@ -131,8 +132,6 @@ LOCAL const char *s4_terrain_name(UINT state)
 
 LOCAL void s4_log_event(s4_event_msg_t msg)
 {
-    static const char *const sides[] = {"front", "rear", "left", "right"};
-
     switch (s4_get(msg, S4_EV_TYPE_SHIFT, S4_EV_TYPE_WIDTH))
     {
         case S4_EV_TERRAIN:
@@ -170,11 +169,18 @@ LOCAL void s4_log_event(s4_event_msg_t msg)
                       (s4_est.last_width_mm > 0U) ? "profile 25/75% fit" : "no fit: cm = path",
                       (INT)s4_est.last_path_mm);
             break;
-        case S4_EV_COLLISION:
-            tm_printf((UB *)"[B4] collision on %s side, %d mg\n",
-                      sides[s4_get(msg, S4_EV_COLL_DIR_SHIFT, S4_ST_COLLDIR_WIDTH)],
-                      (INT)(s4_get(msg, S4_EV_COLL_MAG_SHIFT, S4_MO_SHOCK_WIDTH) *
-                            S4_SHOCK_UNIT_MG));
+        case S4_EV_END_RUN:
+            if (s4_get(msg, S4_EV_END_CAUSE_SHIFT, S4_ST_ENDCAUSE_WIDTH) == S4_END_LIFTED)
+            {
+                tm_printf((UB *)"[B4] END OF RUN: car lifted %d cm (limit %d cm)\n",
+                          (INT)s4_get(msg, S4_EV_END_LIFT_SHIFT, S4_MO_LIFT_WIDTH),
+                          (INT)(S4_LIFT_HEIGHT_MM / 10U));
+            }
+            else
+            {
+                tm_printf((UB *)"[B4] END OF RUN: car overturned (tilt > %d deg for %d ms)\n",
+                          (INT)(S4_OVERTURN_DDEG / 10U), (INT)S4_OVERTURN_MS);
+            }
             break;
         case S4_EV_TURN:
             tm_printf((UB *)"[B4] turned %s %d deg\n",

@@ -13,6 +13,9 @@ export function robotEvents(previous,packet){
  if((!old&&s.hardware_faults)||(old&&s.hardware_faults!==old.hardware_faults))add(s.hardware_faults?'Hardware fault mask: 0x'+s.hardware_faults.toString(16)+'.':'Hardware fault mask cleared.',s.hardware_faults?'warning':'system');
  if(old&&s.mission_state!==old.mission_state)add(`mission state ${missions[old.mission_state]??old.mission_state} -> ${missions[s.mission_state]??s.mission_state}.`);
  const b=packet.buddies[5],a=previous?.buddies?.[5];if(b&&a&&b.state!==a.state)add('Avoidance: '+(avoidanceNames[b.state]??b.state)+'.',b.state===11?'warning':'system');
+ const e=packet.buddies[4],f=previous?.demo?null:previous?.buddies?.[4];
+ if(e?.run_ended&&!f?.run_ended)add(e.run_end_cause===1?`End of run: car lifted ${e.lift_cm} cm (Buddy 4); motors stopped.`:'End of run: car overturned (Buddy 4); motors stopped.','warning');
+ else if(f?.run_ended&&e&&!e.run_ended)add('Buddy 4: car back on its wheels; START allowed again.');
  return events;
 }
 

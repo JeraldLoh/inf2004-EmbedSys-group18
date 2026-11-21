@@ -76,6 +76,16 @@ uint32_t s4_telemetry_pack(uint8_t *out, uint32_t capacity);
 /* Decode a received command byte into an S4_CMD_* code; false if invalid. */
 bool s4_command_decode(uint8_t byte, uint8_t *command);
 
+/*
+ * END OF RUN from a snapshot: true while Buddy 4 reports the car lifted or
+ * overturned, i.e. the motors must stop and stay stopped. *cause gets
+ * S4_END_*, *lift_cm the rise at the trigger (either pointer may be NULL).
+ */
+bool s4_end_of_run_from_words(
+    const uint32_t words[S4_WORDS],
+    uint32_t *cause,
+    uint32_t *lift_cm);
+
 /* --- Compatibility with the existing shared contract (IF-03) ------------ */
 
 /* Expand the packed snapshot into the existing terrain_report_t. */

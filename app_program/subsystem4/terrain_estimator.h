@@ -11,7 +11,8 @@
  *   - terrain state LEVEL/ASCENDING/CREST/DESCENDING/SETTLING with a speed cap;
  *   - hump peak height = integral of sin(pitch) over travelled distance, with
  *     uncertainty and validity;
- *   - motion class, longitudinal acceleration/braking, collision detection;
+ *   - motion class, longitudinal acceleration/braking;
+ *   - end of run: the car lifted >= 20 cm or overturned (motors must stop);
  *   - completed-turn events.
  * Results are kept in the four packed words of s4_packed.h and discrete
  * events are returned as 4-byte messages.
@@ -56,7 +57,8 @@ typedef struct
     uint16_t roll_ddeg;        /* max |roll| */
     uint16_t hump_height_mm;   /* max completed-hump peak, unclamped */
     uint16_t hump_length_mm;   /* max completed-hump path, unclamped */
-    uint16_t shock_mg;         /* max collision jolt */
+    uint16_t jolt_mg;          /* max horizontal jolt (filter protection) */
+    uint16_t lift_mm;          /* max lift-episode rise, unclamped */
     uint16_t vibration_mg;     /* max vibration level */
     uint16_t clamp_count;      /* published messages with CLAMPED set */
 } s4_range_log_t;
@@ -84,6 +86,8 @@ typedef struct
     uint8_t cal_max_spread_mg;
     uint8_t still_vib_mg;
     uint8_t long_accel_mg;
+    uint8_t lift_start_mg;     /* upward |a| - g that starts a lift episode */
+    uint8_t lift_lpf_shift;    /* |a| EMA shift, 1..6 */
 
     uint16_t settle_ms;
     uint16_t episode_timeout_ms;
@@ -96,8 +100,13 @@ typedef struct
     uint16_t caster_arm_mm;    /* drive axle to caster contact, along the car */
     uint16_t track_mm;         /* left to right drive wheel contact */
     uint16_t rough_vib_mg;
-    uint16_t collision_mg;
-    uint16_t collision_hold_ms;
+    uint16_t jolt_mg;            /* horizontal jolt kept out of the filters */
+    uint16_t jolt_hold_ms;
+    uint16_t lift_height_mm;     /* rise that ends the run */
+    uint16_t lift_window_ms;     /* the rise must happen within this */
+    uint16_t overturn_ddeg;      /* tilt from upright that ends the run; 0 off */
+    uint16_t overturn_ms;
+    uint16_t rest_ms;            /* upright and still this long: latch clears */
     uint16_t stale_ms;
     uint16_t fallback_speed_mm_s;
     uint16_t turn_on_ddps;
@@ -211,7 +220,19 @@ typedef struct
     uint16_t impact_ms;
     uint16_t moving_ms;          /* time since the car last stood still */
     uint16_t still_ms;           /* time standing still */
-    uint16_t shock_mg;
+    uint16_t jolt_mg;            /* peak of the current jolt */
+
+    /* End of run (lifted / overturned). Rise from the double integral of
+       |a| - g, in micrometres; |a| filtered, g tracked while at rest. */
+    int32_t lift_mag_x16;        /* |a| EMA, mg x16 */
+    int32_t lift_gref_x16;       /* |a| at rest, mg x16 */
+    int32_t lift_v_um_s;         /* vertical speed in this episode */
+    int32_t lift_h_um;           /* rise in this episode */
+    int32_t lift_peak_um;        /* highest rise in this episode */
+    uint16_t lift_ms;            /* episode age */
+    uint16_t overturn_ms;        /* time tilted beyond overturn_ddeg */
+    uint16_t rest_ms;            /* time upright and still while latched */
+    uint8_t end_lift_cm;         /* rise at the trigger, for telemetry */
 
     /* Task-private state flags as C bit-fields. */
     unsigned int terrain : 3;           /* terrain_state_t */
@@ -237,8 +258,11 @@ typedef struct
     unsigned int saw_descent : 1;
     unsigned int used_fallback : 1;
     unsigned int dist_odometry : 1;
-    unsigned int collision_count : 3;
-    unsigned int collision_dir : 2;     /* S4_HIT_* */
+    unsigned int lift_primed : 1;       /* |a| filter and g reference set */
+    unsigned int lift_active : 1;       /* integrating a possible lift */
+    unsigned int end_latched : 1;       /* END OF RUN: motors must stay off */
+    unsigned int end_cause : 2;         /* S4_END_* */
+    unsigned int end_count : 3;         /* end-of-run triggers mod 8 */
     unsigned int hump_seq : 3;
     unsigned int sample_seq : 5;
     unsigned int cal_count : 8;
@@ -258,7 +282,8 @@ bool s4_est_init(s4_est_t *est, const s4_cfg_t *cfg);
 /* Car must be still on a level floor until the CAL event arrives. */
 void s4_est_begin_calibration(s4_est_t *est);
 
-/* Clear latched conditions (currently the collision bit). */
+/* Clear latched conditions: the end-of-run latch (lifted / overturned).
+   Normally it clears itself once the car rests upright on the floor. */
 void s4_est_clear_latched(s4_est_t *est);
 
 /* Start: spin the car slowly through 360 deg. Stop: apply hard-iron offsets. */
