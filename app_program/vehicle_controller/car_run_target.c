@@ -72,42 +72,62 @@ static bool b4_read_odometry(int32_t *cumulative_mm)
     return true;
 }
 
-/* Controller task, every 10 ms tick (IF-03): terrain state and speed cap. */
+/* Report "no cap" for stale IMU data. The caller returns true so the
+ * controller takes the update and drops the old cap. */
+static void b4_fill_stale(terrain_report_t *report, uint32_t now_ms)
+{
+    report->state = TERRAIN_UNKNOWN;
+    report->speed_cap_mm_s = 0U;
+    report->estimated_height_mm = 0;
+    report->uncertainty_mm = 0U;
+    report->estimate_valid = false;
+    report->observed_ms = (system_time_ms_t)now_ms;
+    b4_stale = true;
+}
+
+/* Controller task, every 10 ms tick (IF-03): terrain state and speed cap.
+ * No print here: this runs inside the controller lock. */
 static bool b4_read_terrain(terrain_report_t *report)
 {
     static uint32_t last_seq = 0xFFFFFFFFU;   /* no sample seen yet */
     static uint32_t seq_changed_ms;
     uint32_t words[S4_WORDS];
     uint32_t seq;
+    uint32_t now_ms;
     SYSTIM now;
+    bool got;
 
-    if (!b4_ready || !s4_shared_read(words))
+    if (!b4_ready)
     {
         return false;
     }
     (void)tk_get_otm(&now);
-    seq = s4_get(words[S4_W_ATTITUDE], S4_AT_SEQ_SHIFT, S4_AT_SEQ_WIDTH);
-    if (seq != last_seq)
+    now_ms = (uint32_t)now.lo;
+    got = s4_shared_read(words);
+    if (got)
     {
-        last_seq = seq;
-        seq_changed_ms = (uint32_t)now.lo;
+        seq = s4_get(words[S4_W_ATTITUDE], S4_AT_SEQ_SHIFT, S4_AT_SEQ_WIDTH);
+        if (seq != last_seq)
+        {
+            last_seq = seq;
+            seq_changed_ms = now_ms;
+        }
     }
-    if (((uint32_t)now.lo - seq_changed_ms) >= B4_STALE_MS)
+    if (last_seq == 0xFFFFFFFFU)
     {
-        /* The IMU task has stalled. Report "no cap" instead of keeping the
-         * last one, and return true so the controller takes the update.
-         * No print here: this runs inside the controller lock. */
-        report->state = TERRAIN_UNKNOWN;
-        report->speed_cap_mm_s = 0U;
-        report->estimated_height_mm = 0;
-        report->uncertainty_mm = 0U;
-        report->estimate_valid = false;
-        report->observed_ms = (system_time_ms_t)now.lo;
-        b4_stale = true;
+        return false;   /* no good read yet: nothing to age */
+    }
+    if ((now_ms - seq_changed_ms) >= B4_STALE_MS)
+    {
+        b4_fill_stale(report, now_ms);
         return true;
     }
+    if (!got)
+    {
+        return false;   /* a short miss keeps the last cap */
+    }
     b4_stale = false;
-    s4_terrain_report_from_words(words, (system_time_ms_t)now.lo, report);
+    s4_terrain_report_from_words(words, (system_time_ms_t)now_ms, report);
     return true;
 }
 
@@ -159,7 +179,7 @@ static void b4_print_status(void)
     tm_printf((UB*)"[B4] valid=%d cal=%s terrain=%s cap=%lu pitch=%ld.%ld roll=%ld.%ld deg "
         "vib=%lu mg motion=%lu odom=%d faults=0x%lx fail=0x%lx i2c_err=%lu live_h=%lu mm | "
         "last hump %lu mm +/-%lu peak %lu deg %lu cm %s #%lu | end=%s lift=%lu cm | "
-        "%lu us/sample\n",
+        "%lu us/sample stale=%d\n",
         (int)s4_get(w[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U),
         cal[s4_get(w[S4_W_STATUS], S4_ST_CAL_SHIFT, S4_ST_CAL_WIDTH)],
         (state < 7U) ? terrain[state] : "?",
