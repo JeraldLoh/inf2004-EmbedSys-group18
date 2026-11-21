@@ -348,6 +348,16 @@ static bool junction_take_route(void *context, route_instruction_t *route)
     return subsystem3_take_route(route) != FALSE;
 }
 
+static bool junction_take_barcode_failure(void *context, uint32_t *elapsed_ms)
+{
+    (void)context;
+#if APP_OBSTACLE_TABLE
+    (void)elapsed_ms;
+    return false;
+#endif
+    return subsystem3_take_barcode_failure(elapsed_ms) != FALSE;
+}
+
 static bool junction_take(void *context, junction_observation_t *junction)
 {
     (void)context;
@@ -454,7 +464,8 @@ static ER bring_up(void)
         controller_read_line};
     controller_junction_outputs_t junction = {NULL, junction_take_route,
         junction_take, junction_probe_requested, junction_probe_begin,
-        junction_probe_end, junction_goal, junction_goal_result};
+        junction_probe_end, junction_goal, junction_goal_result,
+        junction_take_barcode_failure};
     subsystem5_bindings_t b5 = {0};
     ER er;
 
@@ -579,7 +590,8 @@ static void print_status(bool running)
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
         "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | "
         "search=%d n=%lu fail=%lu | "
-        "b5 moves ok=%lu rej=%lu | wd cutoffs=%lu\n",
+        "b5 moves ok=%lu rej=%lu | wd cutoffs=%lu | "
+        "reread n=%lu ok=%lu\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, c.last_analogue_steering ? "analogue" : "digital",
         (int)line.left_black, (int)line.right_black,
@@ -595,7 +607,9 @@ static void print_status(bool running)
         (unsigned long)c.line_search_fails,
         (unsigned long)c.obstacle_moves_accepted,
         (unsigned long)c.obstacle_moves_rejected,
-        (unsigned long)cutoff_count);
+        (unsigned long)cutoff_count,
+        (unsigned long)c.barcode_retries,
+        (unsigned long)c.barcode_rereads_ok);
 }
 
 static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)

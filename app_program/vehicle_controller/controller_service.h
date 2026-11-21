@@ -93,6 +93,10 @@ typedef struct
     bool (*goal)(void *context, const motion_goal_request_t *goal);
     bool (*goal_result)(void *context, goal_id_t goal_id,
         motion_goal_result_t *result);
+    /* Optional, may be NULL: Buddy 3's "barcode read failed" event. True once
+     * per event, with the ms since the capture started. Used only when the
+     * build has BARCODE_RETRY=1. */
+    bool (*take_barcode_failure)(void *context, uint32_t *elapsed_ms);
 } controller_junction_outputs_t;
 
 /* Junction numbers. Placeholders until measured on the car. */
@@ -169,6 +173,8 @@ typedef struct
     bool line_searching;
     uint32_t obstacle_moves_accepted;   /* Buddy 5 moves forwarded to Buddy 2 */
     uint32_t obstacle_moves_rejected;   /* refused here or by Buddy 2 */
+    uint32_t barcode_retries;           /* re-reads started */
+    uint32_t barcode_rereads_ok;        /* a route was taken after one */
 } controller_status_t;
 
 typedef struct
@@ -196,6 +202,12 @@ typedef struct
     bool searching;
     bool search_seen;      /* a sensor saw black during this step */
     bool search_backtrack; /* the first search step is a reverse */
+    bool rereading;        /* barcode re-read: retrace goal running */
+    bool reread_slow;      /* slow constant-speed pass after the retrace */
+    system_time_ms_t reread_slow_until_ms;
+    system_time_ms_t retry_holdoff_until_ms;
+    bool retry_holdoff;    /* retry_holdoff_until_ms is set */
+    int32_t reread_mm;     /* the retrace distance, for the slow pass time */
     int8_t search_dir;     /* +1 right, -1 left: the side tried first */
     int8_t search_pass;    /* 0 toward search_dir, 1 the other way */
     int32_t search_mdeg;   /* heading vs where the line was lost, + = search_dir */

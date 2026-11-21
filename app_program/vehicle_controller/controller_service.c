@@ -142,6 +142,25 @@ static int32_t heading_assist_bias(int32_t steer, uint32_t now_ms)
 #ifndef CONTROLLER_LINE_LOST_MS
 #define CONTROLLER_LINE_LOST_MS 0U   /* off: see controller_line_config_t */
 #endif
+/* Barcode re-read (off by default): a failed read that looked like a
+ * barcode makes the car retrace the distance driven since the capture
+ * started plus a margin, then pass the barcode again at a slow constant
+ * speed. One retry per holdoff. */
+#ifndef CONTROLLER_BARCODE_RETRY
+#define CONTROLLER_BARCODE_RETRY 0
+#endif
+#ifndef CONTROLLER_BARCODE_RETRACE_MARGIN_MM
+#define CONTROLLER_BARCODE_RETRACE_MARGIN_MM 60
+#endif
+#ifndef CONTROLLER_BARCODE_RETRACE_MAX_MM
+#define CONTROLLER_BARCODE_RETRACE_MAX_MM 300
+#endif
+#ifndef CONTROLLER_BARCODE_REREAD_MM_S
+#define CONTROLLER_BARCODE_REREAD_MM_S 50U
+#endif
+#ifndef CONTROLLER_BARCODE_RETRY_HOLDOFF_MS
+#define CONTROLLER_BARCODE_RETRY_HOLDOFF_MS 6000U
+#endif
 #ifndef CONTROLLER_LINE_BACKTRACK_MM
 #define CONTROLLER_LINE_BACKTRACK_MM 0U   /* off: see line config */
 #endif
@@ -609,6 +628,11 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
         {
             service->status.routes_accepted++;
             service->status.last_route = route.command;
+            if (service->reread_slow)
+            {
+                service->reread_slow = false;   /* the re-read worked */
+                service->status.barcode_rereads_ok++;
+            }
         }
         else
         {
@@ -1065,6 +1089,120 @@ static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
     refresh_status(service);
 }
 
+#if CONTROLLER_BARCODE_RETRY
+/* ---- Barcode re-read ----------------------------------------------------
+ * Buddy 3 reports a failed read of a barcode-sized capture. The car retraces
+ * (Buddy 2 replays its recorded line-following path backwards), then drives
+ * the barcode again at a slow constant speed. A rejected or failed retrace
+ * never latches a stop: the car just carries on line following. */
+
+static bool reread_take(controller_service_t *service, uint32_t *elapsed_ms)
+{
+    const controller_junction_outputs_t *out = &service->junction_out;
+
+    return service->junction_bound && (out->take_barcode_failure != NULL) &&
+        out->take_barcode_failure(out->context, elapsed_ms);
+}
+
+static void reread_end(controller_service_t *service, system_time_ms_t now_ms)
+{
+    service->rereading = false;
+    service->line_seen_ms = now_ms;
+}
+
+static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
+{
+    const vehicle_controller_t *controller = &service->controller;
+    const controller_junction_outputs_t *out = &service->junction_out;
+    junction_observation_t junction;
+    motion_goal_result_t result = {0};
+    uint32_t slow_ms;
+
+    if ((controller->mode != SYSTEM_MODE_AUTO) ||
+        !following_line(controller->mission) ||
+        !vehicle_controller_motion_allowed(controller, MOTION_SOURCE_JUNCTION))
+    {
+        goal_step_done(service);
+        reread_end(service, now_ms);   /* STOP, obstacle or mode change */
+        return;
+    }
+    /* Reversing over the bars can look like a crossbar: drop those events.
+     * Routes are left alone. */
+    (void)out->take_junction(out->context, &junction);
+    switch (poll_goal(service, &result))
+    {
+        case GOAL_RUNNING:
+            break;
+        case GOAL_DONE:
+            goal_step_done(service);
+            reread_end(service, now_ms);
+            slow_ms = (uint32_t)(service->reread_mm +
+                CONTROLLER_BARCODE_RETRACE_MARGIN_MM) * 1000U /
+                CONTROLLER_BARCODE_REREAD_MM_S;
+            service->reread_slow = true;
+            service->reread_slow_until_ms = now_ms + slow_ms;
+            break;
+        default:
+            goal_step_done(service);
+            reread_end(service, now_ms);   /* no stop: carry on following */
+            break;
+    }
+    refresh_status(service);
+}
+
+/* True when a re-read started this tick (the caller returns: it owns the
+ * motion now). Every failure event is consumed, wanted or not, so a stale one
+ * never starts a retrace at a later place. */
+static bool reread_start(
+    controller_service_t *service,
+    bool failed,
+    uint32_t elapsed_ms,
+    system_time_ms_t now_ms)
+{
+    const vehicle_controller_t *controller = &service->controller;
+    int32_t mm;
+
+    if (!failed)
+    {
+        return false;
+    }
+    service->reread_slow = false;   /* a second failure ends the slow pass */
+    if ((controller->mode != SYSTEM_MODE_AUTO) ||
+        !following_line(controller->mission) ||
+        (controller->mission == MISSION_JUNCTION_APPROACH) ||
+        (service->junction_phase != CONTROLLER_JUNCTION_IDLE) ||
+        service->searching ||
+        !vehicle_controller_motion_allowed(controller,
+            MOTION_SOURCE_JUNCTION) ||
+        (service->retry_holdoff &&
+         !time_reached(now_ms, service->retry_holdoff_until_ms)))
+    {
+        return false;
+    }
+    if (elapsed_ms > 60000U)
+    {
+        elapsed_ms = 60000U;
+    }
+    mm = (int32_t)((service->line.cruise_mm_s * elapsed_ms) / 1000U) +
+        CONTROLLER_BARCODE_RETRACE_MARGIN_MM;
+    if (mm > CONTROLLER_BARCODE_RETRACE_MAX_MM)
+    {
+        mm = CONTROLLER_BARCODE_RETRACE_MAX_MM;
+    }
+    if (!submit_goal(service, MOTION_GOAL_RETRACE, mm, 0))
+    {
+        return false;   /* rejected (ring too short?): carry on, no stop */
+    }
+    service->rereading = true;
+    service->reread_mm = mm;
+    service->retry_holdoff = true;
+    service->retry_holdoff_until_ms = now_ms +
+        CONTROLLER_BARCODE_RETRY_HOLDOFF_MS;
+    service->status.barcode_retries++;
+    return true;
+}
+#endif
+
 void controller_service_tick(
     controller_service_t *service,
     system_time_ms_t now_ms)
@@ -1073,12 +1211,19 @@ void controller_service_tick(
     controller_line_input_t line = {0};
     motion_continuous_request_t request;
     uint32_t speed;
+#if CONTROLLER_BARCODE_RETRY
+    uint32_t reread_elapsed_ms = 0U;
+    bool reread_failed;
+#endif
 
     if ((service == NULL) || !service->initialized ||
         (service->outputs.drive == NULL))
     {
         return;
     }
+#if CONTROLLER_BARCODE_RETRY
+    reread_failed = reread_take(service, &reread_elapsed_ms);
+#endif
     if (service->searching)
     {
 #if CONTROLLER_HDG_ASSIST
@@ -1087,6 +1232,16 @@ void controller_service_tick(
         search_tick(service, now_ms);
         return;   /* the line search owns the motion */
     }
+#if CONTROLLER_BARCODE_RETRY
+    if (service->rereading)
+    {
+#if CONTROLLER_HDG_ASSIST
+        heading_assist_idle();
+#endif
+        reread_tick(service, now_ms);
+        return;   /* the re-read owns the motion */
+    }
+#endif
     if (service->junction_bound)
     {
         junction_tick(service, now_ms);
@@ -1098,6 +1253,15 @@ void controller_service_tick(
             service->line_seen_ms = now_ms;
             return;   /* a junction step owns the motion */
         }
+#if CONTROLLER_BARCODE_RETRY
+        if (reread_start(service, reread_failed, reread_elapsed_ms, now_ms))
+        {
+#if CONTROLLER_HDG_ASSIST
+            heading_assist_idle();
+#endif
+            return;   /* the re-read owns the motion */
+        }
+#endif
     }
     controller = &service->controller;
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
@@ -1127,6 +1291,19 @@ void controller_service_tick(
     speed = (line.barcode_active ||
         (controller->mission == MISSION_JUNCTION_APPROACH))
         ? service->line.slow_mm_s : service->line.cruise_mm_s;
+#if CONTROLLER_BARCODE_RETRY
+    if (service->reread_slow)
+    {
+        if (time_reached(now_ms, service->reread_slow_until_ms))
+        {
+            service->reread_slow = false;   /* back to cruise */
+        }
+        else if (speed > CONTROLLER_BARCODE_REREAD_MM_S)
+        {
+            speed = CONTROLLER_BARCODE_REREAD_MM_S;   /* constant over bars */
+        }
+    }
+#endif
     speed = vehicle_controller_apply_speed_caps(controller, speed);
 
     (void)memset(&request, 0, sizeof(request));

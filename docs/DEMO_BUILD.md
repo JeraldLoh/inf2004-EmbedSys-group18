@@ -31,6 +31,11 @@ command builds, but the knob has no effect.
 | `WATCHDOG_TEST` | 0 (off) | not used | R5 | Bench aid only, never in the demo build. The executor task sleeps 150 ms once, 5 s after the first AUTO, so a real cutoff happens on the stand. | (fill in) |
 | `RETRACE_SAMPLES` | 256 | default | R7a | Size of the Buddy 2 line-following path ring used by the barcode retrace (about 40 cm at 80 mm/s, 1 KB RAM). Off until tested: it only matters when `BARCODE_RETRY=1`. | (fill in) |
 | `BARCODE_RETRY_MIN_ELEMENTS` | 9 | default | R7b | A failed barcode capture with at least this many elements raises a "read failed" event (shorter ones are tape crossings). Off until tested: nothing uses the event unless `BARCODE_RETRY=1`. | (fill in) |
+| `BARCODE_RETRY` | 0 (off) | 0, off until tested | R7c | 1 turns on the barcode re-read: after a failed read the car retraces, then passes the barcode again slowly. One retry per barcode. A rejected or failed retrace never latches a stop. | (fill in) |
+| `BARCODE_RETRACE_MARGIN_MM` | 60 | default, off until tested | R7c | Extra distance added to the retrace (cruise speed x capture time + this). | (fill in) |
+| `BARCODE_RETRACE_MAX_MM` | 300 | default, off until tested | R7c | Cap on the retrace distance. | (fill in) |
+| `BARCODE_REREAD_MM_S` | 50 | default, off until tested | R7c | Speed cap for the slow pass over the barcode after a retrace. | (fill in) |
+| `BARCODE_RETRY_HOLDOFF_MS` | 6000 | default, off until tested | R7c | After a retry starts, failures inside this time are dropped, so a second failure carries on. | (fill in) |
 | `OFF_GROUND` | 0 (off) | 1 | F1 | Enables the off-ground stop from Buddy 3 sensors plus a timer and IMU agreement. | (fill in) |
 
 Further F1 knobs (`OFF_GROUND_ADC`, `OFF_GROUND_CONFIRM_MS`,
