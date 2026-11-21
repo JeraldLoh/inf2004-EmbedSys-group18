@@ -167,16 +167,47 @@ static void diagnostic_worker(INT code, void *exinf)
  * Physical STOP, motor watchdog, command lease and stop reasons are unchanged. */
 #define B2_STATUS_LOSS_LIMIT_MS 250U
 
+/* Bench aid only, never in the demo build: make WATCHDOG_TEST=1. Once, 5 s
+ * after the first AUTO, this task sleeps 150 ms so the 100 ms motor
+ * watchdog fires for real. */
+#ifndef CAR_WATCHDOG_TEST
+#define CAR_WATCHDOG_TEST 0
+#endif
+#if CAR_WATCHDOG_TEST
+#define WATCHDOG_TEST_DELAY_MS 5000U
+#define WATCHDOG_TEST_SLEEP_MS 150
+#endif
+
 static void executor_task(INT code, void *exinf)
 {
     stop_reason_mask_t fault_pending = STOP_REASON_NONE;
     uint32_t unknown_since_ms = 0U;
     bool unknown_active = false;
+#if CAR_WATCHDOG_TEST
+    bool wd_test_timing = false;
+    bool wd_test_done = false;
+    uint32_t wd_test_start_ms = 0U;
+#endif
     (void)code; (void)exinf;
     for (;;)
     {
         controller_status_t controller;
         bool known = controller_get_status(&controller);
+#if CAR_WATCHDOG_TEST
+        if (!wd_test_done && known && (controller.mode == SYSTEM_MODE_AUTO))
+        {
+            if (!wd_test_timing)
+            {
+                wd_test_timing = true;
+                wd_test_start_ms = now_ms();
+            }
+            else if ((now_ms() - wd_test_start_ms) >= WATCHDOG_TEST_DELAY_MS)
+            {
+                wd_test_done = true;
+                (void)tk_dly_tsk(WATCHDOG_TEST_SLEEP_MS);
+            }
+        }
+#endif
         if (lock())
         {
             measured_motion_executor_t *e = &motion.executor;

@@ -409,6 +409,14 @@ LINE_LOST_MS ?= 0
 LINE_BACKTRACK_MM ?= 0
 CFLAGS  += -DCONTROLLER_LINE_LOST_MS=$(LINE_LOST_MS)U
 CFLAGS  += -DCONTROLLER_LINE_BACKTRACK_MM=$(LINE_BACKTRACK_MM)U
+# WATCHDOG_RETRY=1: GP20 may restart the run after a motor watchdog cutoff
+# (a CONTROLLER_FAULT from that cutoff only). 0 = reset the board, as before.
+# WATCHDOG_TEST=1: bench aid, the executor task stalls 150 ms once, 5 s after
+# the first AUTO, to trigger a real cutoff. Never in the demo build.
+WATCHDOG_RETRY ?= 0
+WATCHDOG_TEST ?= 0
+CFLAGS  += -DCAR_WATCHDOG_RETRY=$(WATCHDOG_RETRY)
+CFLAGS  += -DCAR_WATCHDOG_TEST=$(WATCHDOG_TEST)
 ifneq ($(strip $(BARCODE_STEER_PERCENT)),)
 CFLAGS  += -DCONTROLLER_BARCODE_STEER_PERCENT=$(strip $(BARCODE_STEER_PERCENT))
 endif
@@ -486,7 +494,7 @@ endif
 ################################################################################
 
 PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
-PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-stale$(B4_STALE_MS)-lost$(LINE_LOST_MS)-btrk$(LINE_BACKTRACK_MM)-captrace
+PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-stale$(B4_STALE_MS)-lost$(LINE_LOST_MS)-btrk$(LINE_BACKTRACK_MM)-wdr$(WATCHDOG_RETRY)-wdt$(WATCHDOG_TEST)-captrace
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

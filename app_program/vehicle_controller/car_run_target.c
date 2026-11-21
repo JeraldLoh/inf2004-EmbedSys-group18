@@ -556,6 +556,13 @@ static bool post(controller_event_type_t type, system_mode_t mode,
     return controller_post(&event);
 }
 
+/* GP20 may clear a CONTROLLER_FAULT that came only from the motor watchdog
+ * cutoff. 0 keeps the old rule: that fault needs a board reset. */
+#ifndef CAR_WATCHDOG_RETRY
+#define CAR_WATCHDOG_RETRY 0
+#endif
+static uint32_t cutoff_count;   /* watchdog cutoffs seen since boot */
+
 static void print_status(bool running)
 {
     subsystem2_motion_telemetry_t t;
@@ -572,7 +579,7 @@ static void print_status(bool running)
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
         "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | "
         "search=%d n=%lu fail=%lu | "
-        "b5 moves ok=%lu rej=%lu\n",
+        "b5 moves ok=%lu rej=%lu | wd cutoffs=%lu\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, c.last_analogue_steering ? "analogue" : "digital",
         (int)line.left_black, (int)line.right_black,
@@ -587,7 +594,8 @@ static void print_status(bool running)
         (int)c.line_searching, (unsigned long)c.line_searches,
         (unsigned long)c.line_search_fails,
         (unsigned long)c.obstacle_moves_accepted,
-        (unsigned long)c.obstacle_moves_rejected);
+        (unsigned long)c.obstacle_moves_rejected,
+        (unsigned long)cutoff_count);
 }
 
 static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)
@@ -668,6 +676,7 @@ static void supervise(void)
     uint32_t last_line_ms = 0U;
     uint32_t last_status = now_ms();
     bool running = false;
+    bool cutoff_latched = false;   /* the fault is from the cutoff only */
     uint32_t posted_evidence = 0U;
 #if APP_CAR_MQTT
     bool remote_start_waiting = false;
@@ -691,6 +700,22 @@ static void supervise(void)
                 subsystem2_motion_halt();
                 running = false;
                 tm_printf((UB*)"[CAR] physical STOP/cutoff evidence latched; outputs off.\n");
+                if (events.cutoff_fired)
+                {
+                    cutoff_latched = true;
+                    cutoff_count++;
+                    if (CAR_WATCHDOG_RETRY != 0)
+                    {
+                        tm_printf((UB*)"[CAR] motor watchdog stop #%lu: "
+                            "hold GP20 to retry\n",
+                            (unsigned long)cutoff_count);
+                    }
+                    else
+                    {
+                        tm_printf((UB*)"[CAR] motor watchdog stop #%lu: "
+                            "reset the board\n", (unsigned long)cutoff_count);
+                    }
+                }
             }
             if (posted_evidence == events.stop_events && controller_get_status(&status) &&
                 (status.stop_reasons & reasons) == reasons)
@@ -745,6 +770,12 @@ static void supervise(void)
             }
             else if ((ui == B2_UI_RUN) && controller_get_status(&status))
             {
+                stop_reason_mask_t clearable = OPERATOR_CLEARABLE;
+
+                if ((CAR_WATCHDOG_RETRY != 0) && cutoff_latched)
+                {
+                    clearable |= STOP_REASON_CONTROLLER_FAULT;
+                }
                 if (!subsystem2_motion_qualified() && !subsystem2_motion_trial_enabled())
                 {
                     tm_printf((UB*)"[CAR] START refused: measured PID/load/STOP/pivot calibration unqualified.\n");
@@ -754,7 +785,7 @@ static void supervise(void)
                     tm_printf((UB*)"[CAR] START refused: car still lifted/overturned. "
                         "Put it down upright and keep it still for 1 s.\n");
                 }
-                else if ((status.stop_reasons & ~OPERATOR_CLEARABLE) != 0U)
+                else if ((status.stop_reasons & ~clearable) != 0U)
                 {
                     tm_printf((UB*)"[CAR] refused: fault latched (0x%lx); reset the board.\n",
                         (unsigned long)status.stop_reasons);
@@ -765,6 +796,7 @@ static void supervise(void)
                     post(CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_AUTO, STOP_REASON_NONE))
                 {
                     running = true;
+                    cutoff_latched = false;
                     started_ms = t;
                     last_line_ms = t;
 #if APP_OBSTACLE_TABLE
