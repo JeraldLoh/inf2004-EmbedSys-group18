@@ -142,6 +142,9 @@ static int32_t heading_assist_bias(int32_t steer, uint32_t now_ms)
 #ifndef CONTROLLER_LINE_LOST_MS
 #define CONTROLLER_LINE_LOST_MS 0U   /* off: see controller_line_config_t */
 #endif
+#ifndef CONTROLLER_LINE_BACKTRACK_MM
+#define CONTROLLER_LINE_BACKTRACK_MM 0U   /* off: see line config */
+#endif
 
 void controller_line_default_config(controller_line_config_t *config)
 {
@@ -157,6 +160,7 @@ void controller_line_default_config(controller_line_config_t *config)
     config->slow_mm_s = CONTROLLER_LINE_CRUISE_MM_S < 100U ? CONTROLLER_LINE_CRUISE_MM_S : 100U;
     config->curvature_per_steer_u1_m = CONTROLLER_LINE_CURVATURE_PER_STEER;
     config->lost_ms = CONTROLLER_LINE_LOST_MS;
+    config->backtrack_mm = CONTROLLER_LINE_BACKTRACK_MM;
     config->search_step_mdeg = 15000;   /* sensors ~5 cm ahead sweep ~1.3 cm */
     config->search_max_mdeg = 60000;
     config->request_life_ms = 150U;
@@ -664,7 +668,8 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
 }
 
 static void search_start(controller_service_t *service,
-    const controller_line_input_t *line, system_time_ms_t now_ms);
+    const controller_line_input_t *line, system_time_ms_t now_ms,
+    bool backtrack);
 
 /* After a pivot the car sits wherever the wheels say it turned to, usually a
  * little short of the line. If neither sensor sees black, hand over to the
@@ -691,7 +696,7 @@ static void find_line_after_turn(
         return;   /* already on the line */
     }
     line.steer = (command == ROUTE_COMMAND_RIGHT) ? 1 : -1;   /* same way as the pivot */
-    search_start(service, &line, now_ms);
+    search_start(service, &line, now_ms, false);
 }
 
 /* The pause is over: run the live barcode route, or carry straight on. */
@@ -888,9 +893,11 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
  * Car trial 2026-11-02: with the no-black stop off, a car that had lost the
  * line drove on along its last steering and left the course. The sensors
  * straddle the line, so both white is normal when centred; only a longer
- * time with no black at all (lost_ms) counts as lost. Then the car stops and
- * pivots, a step at a time, toward the side the line was last seen, then the
- * other way, and carries on following as soon as a sensor sees black. */
+ * time with no black at all (lost_ms) counts as lost. Then the car stops,
+ * backs up the distance driven since the line was last seen (backtrack_mm,
+ * track-line mission only) and pivots, a step at a time, toward the side
+ * the line was last seen, then the other way, and carries on following as
+ * soon as a sensor sees black. */
 
 static void search_end(controller_service_t *service, system_time_ms_t now_ms)
 {
@@ -898,6 +905,7 @@ static void search_end(controller_service_t *service, system_time_ms_t now_ms)
     junction_observation_t junction;
 
     service->searching = false;
+    service->search_backtrack = false;
     service->status.line_searching = false;
     service->line_seen_ms = now_ms;
     /* Pivoting over the line can look like a crossbar: drop those events. */
@@ -953,8 +961,42 @@ static void search_next(controller_service_t *service, system_time_ms_t now_ms)
     }
 }
 
+/* Reverse the distance driven since the line was last seen, capped at
+ * backtrack_mm. A straight reverse is close enough to the path the car drove.
+ * Returns true when the reverse goal was submitted. */
+static bool search_backtrack_start(
+    controller_service_t *service,
+    system_time_ms_t now_ms)
+{
+    uint32_t elapsed_ms = (uint32_t)(now_ms - service->line_seen_ms);
+    uint32_t cap_mm = service->line.backtrack_mm;
+    uint32_t mm;
+
+    if (cap_mm == 0U)
+    {
+        return false;
+    }
+    if (elapsed_ms > 60000U)
+    {
+        elapsed_ms = 60000U;   /* keeps the product below 32 bits */
+    }
+    mm = (service->line.cruise_mm_s * elapsed_ms) / 1000U;
+    if (mm > cap_mm)
+    {
+        mm = cap_mm;
+    }
+    if (mm == 0U)
+    {
+        return false;
+    }
+    return submit_goal(service, MOTION_GOAL_REVERSE, (int32_t)mm, 0);
+}
+
+/* backtrack: reverse first (line lost while tracking). The caller passes
+ * false after a turn or an obstacle rejoin, where backing up is wrong. */
 static void search_start(controller_service_t *service,
-    const controller_line_input_t *line, system_time_ms_t now_ms)
+    const controller_line_input_t *line, system_time_ms_t now_ms,
+    bool backtrack)
 {
     service->searching = true;
     service->status.line_searching = true;
@@ -963,6 +1005,13 @@ static void search_start(controller_service_t *service,
     service->search_dir = (line->steer < 0) ? -1 : 1;
     service->search_pass = 0;
     service->search_mdeg = 0;
+    service->search_seen = false;
+    service->search_backtrack = false;
+    if (backtrack && search_backtrack_start(service, now_ms))
+    {
+        service->search_backtrack = true;
+        return;
+    }
     search_next(service, now_ms);
 }
 
@@ -989,6 +1038,7 @@ static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
             break;
         case GOAL_DONE:
             goal_step_done(service);
+            service->search_backtrack = false;
             if (service->search_seen)
             {
                 search_end(service, now_ms);   /* line following takes over */
@@ -999,6 +1049,15 @@ static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
             }
             break;
         default:
+            if (service->search_backtrack)
+            {
+                /* The reverse did not finish: go on to the pivot search
+                 * and do not latch a stop. */
+                goal_step_done(service);
+                service->search_backtrack = false;
+                search_next(service, now_ms);
+                break;
+            }
             search_end(service, now_ms);
             goal_failed(service, &result, now_ms);
             break;
@@ -1060,7 +1119,8 @@ void controller_service_tick(
         (controller->mission != MISSION_JUNCTION_APPROACH) &&
         ((now_ms - service->line_seen_ms) >= service->line.lost_ms))
     {
-        search_start(service, &line, now_ms);
+        search_start(service, &line, now_ms,
+            controller->mission == MISSION_TRACK_LINE);
         return;
     }
 

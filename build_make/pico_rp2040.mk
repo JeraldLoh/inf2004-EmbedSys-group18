@@ -402,6 +402,13 @@ CFLAGS  += -DB4_HEADING_LOG=$(HEADING_LOG)
 # ignored (no STOP). The IMU publishes every 20 ms.
 B4_STALE_MS ?= 200
 CFLAGS  += -DB4_STALE_MS=$(B4_STALE_MS)U
+# Line lost: search after this many ms without black (0 = off). With
+# LINE_BACKTRACK_MM > 0 the car first reverses the distance driven since the
+# line was seen, at most that many mm (track-line mission only, 0 = off).
+LINE_LOST_MS ?= 0
+LINE_BACKTRACK_MM ?= 0
+CFLAGS  += -DCONTROLLER_LINE_LOST_MS=$(LINE_LOST_MS)U
+CFLAGS  += -DCONTROLLER_LINE_BACKTRACK_MM=$(LINE_BACKTRACK_MM)U
 ifneq ($(strip $(BARCODE_STEER_PERCENT)),)
 CFLAGS  += -DCONTROLLER_BARCODE_STEER_PERCENT=$(strip $(BARCODE_STEER_PERCENT))
 endif
@@ -479,7 +486,7 @@ endif
 ################################################################################
 
 PROFILE_ID := smp$(SMP)-$(CONSOLE)-wifi$(WIFI)-net$(NET)-mqtt$(MQTT)-crash$(CRASH_REPORT)-test$(TEST)-b2bench$(B2_BENCH)-b5run$(B5_RUN)-carrun$(CAR_RUN)-circuit$(CIRCUIT_TEST)-b2move$(B2_MOVE_TEST)-b1demo$(B1_DEMO_RUN)-carmqtt$(CAR_MQTT)-carb2trial$(CAR_B2_TRIAL)-table$(OBSTACLE_TABLE)-nobarcal$(NO_BARCODE_CAL)
-PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-stale$(B4_STALE_MS)-captrace
+PROFILE_ID := $(PROFILE_ID)-cruise$(strip $(CRUISE_MM_S))-trim$(strip $(STRAIGHT_RIGHT_TRIM))-learn$(STRAIGHT_TRIM_LEARN)-bsteer$(strip $(BARCODE_STEER_PERCENT))-hdg$(HEADING_LOG)-jpause$(JUNCTION_PAUSE_MS)-appr$(JUNCTION_APPROACH_MM)-comp$(JUNCTION_TURN_COMP_PERCENT)-assist$(HDG_ASSIST)-damp$(LINE_DAMP_STEER)x$(LINE_DAMP_MS)-stale$(B4_STALE_MS)-lost$(LINE_LOST_MS)-btrk$(LINE_BACKTRACK_MM)-captrace
 PROFILE_FILE := .build_profile
 
 ifneq ($(strip $(shell cat $(PROFILE_FILE) 2>/dev/null)),$(PROFILE_ID))

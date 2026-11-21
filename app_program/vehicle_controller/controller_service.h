@@ -133,6 +133,10 @@ typedef struct
      * search_max_mdeg, then the other way. Needs junction outputs (goals).
      * 0 = off: keep driving on the last steering. */
     uint32_t lost_ms;
+    /* Before the pivot search (track-line mission only) reverse the distance
+     * driven since the line was last seen, at most this many mm.
+     * 0 = off. */
+    uint32_t backtrack_mm;
     int32_t search_step_mdeg;
     int32_t search_max_mdeg;
 } controller_line_config_t;
@@ -189,6 +193,7 @@ typedef struct
     system_time_ms_t line_seen_ms;
     bool searching;
     bool search_seen;      /* a sensor saw black during this step */
+    bool search_backtrack; /* the first search step is a reverse */
     int8_t search_dir;     /* +1 right, -1 left: the side tried first */
     int8_t search_pass;    /* 0 toward search_dir, 1 the other way */
     int32_t search_mdeg;   /* heading vs where the line was lost, + = search_dir */
