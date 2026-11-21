@@ -183,6 +183,7 @@ static void executor_task(INT code, void *exinf)
     stop_reason_mask_t fault_pending = STOP_REASON_NONE;
     uint32_t unknown_since_ms = 0U;
     bool unknown_active = false;
+    uint32_t retrace_logged = 0U;
 #if CAR_WATCHDOG_TEST
     bool wd_test_timing = false;
     bool wd_test_done = false;
@@ -193,6 +194,9 @@ static void executor_task(INT code, void *exinf)
     {
         controller_status_t controller;
         bool known = controller_get_status(&controller);
+        uint32_t retrace_seq = retrace_logged;
+        uint32_t retrace_l_mm = 0U;
+        uint32_t retrace_r_mm = 0U;
 #if CAR_WATCHDOG_TEST
         if (!wd_test_done && known && (controller.mode == SYSTEM_MODE_AUTO))
         {
@@ -219,6 +223,9 @@ static void executor_task(INT code, void *exinf)
             bool current = known && (e->status.generation == 0U ||
                 controller.authority_generation-e->status.generation < 0x80000000UL);
             bool status_lost = false;
+            retrace_seq = e->retrace_seq;
+            retrace_l_mm = e->retrace_mm[0];
+            retrace_r_mm = e->retrace_mm[1];
             if (known) { unknown_active = false; }
             else
             {
@@ -238,6 +245,12 @@ static void executor_task(INT code, void *exinf)
                  e->status.last_stop == MOTION_RESULT_TIMEOUT))
             { ++driver_errors; fault_pending = STOP_REASON_MOTION_FAULT; }
             unlock();
+        }
+        if (retrace_seq != retrace_logged)
+        {
+            retrace_logged = retrace_seq;
+            tm_printf((UB*)"[B2] retrace L=%lumm R=%lumm\n",
+                (unsigned long)retrace_l_mm, (unsigned long)retrace_r_mm);
         }
         /* No controller calls while holding the motion mutex: the controller
          * tick owns its guard while submitting a line or junction command. */

@@ -29,6 +29,7 @@ command builds, but the knob has no effect.
 | `LINE_BACKTRACK_MM` | 0 (off) | 150 | F2 | Before the pivot search in track-line mode, reverse the distance driven since the line was last seen, capped at this many mm. | (fill in) |
 | `WATCHDOG_RETRY` | 0 (off) | 1 | R5 | After a motor watchdog cutoff, GP20 may restart the run. MQTT START stays refused. | (fill in) |
 | `WATCHDOG_TEST` | 0 (off) | not used | R5 | Bench aid only, never in the demo build. The executor task sleeps 150 ms once, 5 s after the first AUTO, so a real cutoff happens on the stand. | (fill in) |
+| `RETRACE_SAMPLES` | 256 | default | R7a | Size of the Buddy 2 line-following path ring used by the barcode retrace (about 40 cm at 80 mm/s, 1 KB RAM). Off until tested: it only matters when `BARCODE_RETRY=1`. | (fill in) |
 | `OFF_GROUND` | 0 (off) | 1 | F1 | Enables the off-ground stop from Buddy 3 sensors plus a timer and IMU agreement. | (fill in) |
 
 Further F1 knobs (`OFF_GROUND_ADC`, `OFF_GROUND_CONFIRM_MS`,

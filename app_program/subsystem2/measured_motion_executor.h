@@ -4,6 +4,13 @@
 #include "wheel_pid.h"
 #include "../contracts/control_messages.h"
 
+/* Line-following path ring for MOTION_GOAL_RETRACE: one entry per executor
+ * period, 20 ms at 80 mm/s is about 1.6 mm, so 256 entries are about 40 cm.
+ * 2 x uint16 per entry = 1 KB RAM. make RETRACE_SAMPLES=n. */
+#ifndef B2_RETRACE_SAMPLES
+#define B2_RETRACE_SAMPLES 256U
+#endif
+
 typedef struct
 {
     wheel_measurement_config_t measurement;
@@ -92,6 +99,14 @@ typedef struct
     motion_goal_result_t terminal;
     uint64_t goal_base_um[2];
     uint64_t goal_target_um;
+    uint64_t goal_wheel_um[2];   /* per-wheel targets, equal except RETRACE */
+    uint16_t path_um[B2_RETRACE_SAMPLES][2];   /* per-period wheel travel */
+    uint16_t path_head;          /* next slot to write */
+    uint16_t path_count;         /* valid entries */
+    uint64_t path_prev_um[2];
+    bool path_prev_valid;
+    uint32_t retrace_seq;        /* counts admitted retraces, for the log */
+    uint32_t retrace_mm[2];      /* last admitted per-wheel targets */
     uint64_t progress_um[2];
     uint32_t progress_us[2];
     uint32_t ramp_um_s[2];

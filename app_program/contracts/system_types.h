@@ -80,7 +80,10 @@ typedef enum
     MOTION_GOAL_FORWARD = 0,
     MOTION_GOAL_REVERSE,
     MOTION_GOAL_PIVOT_LEFT,
-    MOTION_GOAL_PIVOT_RIGHT
+    MOTION_GOAL_PIVOT_RIGHT,
+    /* Drive both wheels back over the line-following path the executor
+     * recorded. target_mm is the centre distance, target_mdeg must be 0. */
+    MOTION_GOAL_RETRACE
 } motion_goal_type_t;
 
 typedef enum
