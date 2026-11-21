@@ -33,6 +33,9 @@ static uint32_t urgent_sequence;
 static controller_motion_request_t latest_continuous;
 static bool continuous_pending;
 static bool (*terrain_reader)(terrain_report_t *report); /* set before start */
+static bool (*obstacle_goal_fn)(const motion_goal_request_t *goal);
+static bool (*obstacle_continuous_fn)(
+    const motion_continuous_request_t *request);
 
 static UINT ingress_enter(void)
 {
@@ -230,6 +233,16 @@ ER controller_task_bind_terrain(bool (*read_terrain)(terrain_report_t *report))
     terrain_reader = read_terrain;
     return E_OK;
 }
+ER controller_task_bind_obstacle_motion(
+    bool (*goal)(const motion_goal_request_t *goal),
+    bool (*continuous)(const motion_continuous_request_t *request))
+{
+    if (!initialized || started) { return E_OBJ; }
+    if ((goal == NULL) || (continuous == NULL)) { return E_PAR; }
+    obstacle_goal_fn = goal;
+    obstacle_continuous_fn = continuous;
+    return E_OK;
+}
 ER controller_task_start(void)
 {
     ER result;
@@ -334,6 +347,66 @@ bool controller_get_motion_status(controller_motion_status_t *status)
     *status = motion.status;
     status->authority_generation = service.controller.authority_generation;
     (void)tk_unl_mtx(guard); return true;
+}
+
+/* Caller holds the guard. Lock order is controller guard, then the Buddy 2
+ * mutex, the same as the line tick. */
+static bool obstacle_approved(
+    motion_source_t source,
+    authority_generation_t generation)
+{
+    authority_generation_t current = 0U;
+
+    return (source == MOTION_SOURCE_OBSTACLE) &&
+        controller_service_authority(&service, MOTION_SOURCE_OBSTACLE,
+            &current) &&
+        (generation == current);
+}
+
+bool controller_obstacle_goal(const motion_goal_request_t *goal)
+{
+    bool ok;
+
+    if (!initialized || (goal == NULL) || (obstacle_goal_fn == NULL) ||
+        (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return false;
+    }
+    ok = obstacle_approved(goal->source, goal->authority_generation) &&
+        obstacle_goal_fn(goal);
+    if (ok)
+    {
+        service.status.obstacle_moves_accepted++;
+    }
+    else
+    {
+        service.status.obstacle_moves_rejected++;
+    }
+    (void)tk_unl_mtx(guard);
+    return ok;
+}
+
+bool controller_obstacle_continuous(const motion_continuous_request_t *request)
+{
+    bool ok;
+
+    if (!initialized || (request == NULL) || (obstacle_continuous_fn == NULL) ||
+        (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return false;
+    }
+    ok = obstacle_approved(request->source, request->authority_generation) &&
+        obstacle_continuous_fn(request);
+    if (ok)
+    {
+        service.status.obstacle_moves_accepted++;
+    }
+    else
+    {
+        service.status.obstacle_moves_rejected++;
+    }
+    (void)tk_unl_mtx(guard);
+    return ok;
 }
 
 bool controller_authority(motion_source_t source, authority_generation_t *generation)

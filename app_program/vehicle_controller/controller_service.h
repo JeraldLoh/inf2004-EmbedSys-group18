@@ -167,6 +167,8 @@ typedef struct
     uint32_t line_searches;     /* line lost and searched for */
     uint32_t line_search_fails;
     bool line_searching;
+    uint32_t obstacle_moves_accepted;   /* Buddy 5 moves forwarded to Buddy 2 */
+    uint32_t obstacle_moves_rejected;   /* refused here or by Buddy 2 */
 } controller_status_t;
 
 typedef struct

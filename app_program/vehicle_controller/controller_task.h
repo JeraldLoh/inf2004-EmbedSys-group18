@@ -49,4 +49,18 @@ bool controller_urgent_stop_pending(void);
 /* May source drive now? See controller_service_authority(). Any task. */
 bool controller_authority(motion_source_t source, authority_generation_t *generation);
 
+/* Buddy 5 proposes each move, the controller approves it. Bind the Buddy 2
+ * goal and continuous functions once, after controller init and before any
+ * start (the controller does not include Buddy 2 headers). Then Buddy 5 calls
+ * controller_obstacle_goal / controller_obstacle_continuous instead of Buddy
+ * 2. Each one needs request->source == MOTION_SOURCE_OBSTACLE, the obstacle
+ * authority and the current authority generation, and counts accepted and
+ * rejected moves in controller_status_t. Halt stays a direct Buddy 2 call:
+ * stopping is always allowed. */
+ER controller_task_bind_obstacle_motion(
+    bool (*goal)(const motion_goal_request_t *goal),
+    bool (*continuous)(const motion_continuous_request_t *request));
+bool controller_obstacle_goal(const motion_goal_request_t *goal);
+bool controller_obstacle_continuous(const motion_continuous_request_t *request);
+
 #endif

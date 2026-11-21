@@ -472,8 +472,11 @@ static ER bring_up(void)
     b5.post_event = controller_post;
     b5.controller_status = controller_get_status;
     b5.motion.authority = controller_authority;
-    b5.motion.goal = subsystem2_motion_goal;
-    b5.motion.continuous = subsystem2_motion_continuous;
+    /* Buddy 5 proposes, the controller checks authority and forwards to
+     * Buddy 2. Halt and the urgent stop stay direct: stopping is always
+     * allowed. */
+    b5.motion.goal = controller_obstacle_goal;
+    b5.motion.continuous = controller_obstacle_continuous;
     b5.motion.goal_result = obstacle_goal_result;
     b5.motion.halt = subsystem2_motion_halt;
     b5.motion.line_seen = line_seen;
@@ -482,6 +485,11 @@ static ER bring_up(void)
     er = subsystem2_motion_init(&trial_io);
     if (er == E_OK) { er = controller_task_init(&outputs); }
     if (er == E_OK) { er = controller_task_bind_junction(&junction); }
+    if (er == E_OK)
+    {
+        er = controller_task_bind_obstacle_motion(subsystem2_motion_goal,
+            subsystem2_motion_continuous);
+    }
 #if APP_CAR_MQTT
     if (er == E_OK) { er = subsystem1_init(); }
 #endif
@@ -562,7 +570,9 @@ static void print_status(bool running)
         "line_black L=%d R=%d state=%d last_side=%d | "
         "effort L=%d R=%d speed L=%ld R=%ld mm/s | drive=%lu rej=%lu exec_rej=%lu drv_err=%lu | "
         "target L=%ld R=%ld mm/s valid=%d qualified=%d | "
-        "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | search=%d n=%lu fail=%lu\n",
+        "junc phase=%d seen=%lu done=%lu ign=%lu route=%d | "
+        "search=%d n=%lu fail=%lu | "
+        "b5 moves ok=%lu rej=%lu\n",
         (int)running, (int)c.mode, (int)c.mission, (unsigned long)c.stop_reasons,
         (int)c.last_steer, c.last_analogue_steering ? "analogue" : "digital",
         (int)line.left_black, (int)line.right_black,
@@ -575,7 +585,9 @@ static void print_status(bool running)
         (unsigned long)c.junctions_seen, (unsigned long)c.junctions_done,
         (unsigned long)c.junctions_ignored, (int)c.last_route,
         (int)c.line_searching, (unsigned long)c.line_searches,
-        (unsigned long)c.line_search_fails);
+        (unsigned long)c.line_search_fails,
+        (unsigned long)c.obstacle_moves_accepted,
+        (unsigned long)c.obstacle_moves_rejected);
 }
 
 static void stop_run(bool *running, const char *why, stop_reason_mask_t reasons)
