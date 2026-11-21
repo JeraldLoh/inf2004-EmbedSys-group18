@@ -12,6 +12,9 @@ the command line only. Every knob below keeps today's behaviour when it is not
 given. Each knob is part of `PROFILE_ID`, so changing one forces a clean
 rebuild of the objects.
 
+`LINE_BACKTRACK_MM=150` and `OFF_GROUND=1` in the demo command are
+provisional until the F2 reverse test and the F1 tests pass on the car.
+
 A knob that does not exist yet in the makefile is ignored by make. The "Added
 by" column says which fix introduces it. Until that fix is merged the demo
 command builds, but the knob has no effect.
