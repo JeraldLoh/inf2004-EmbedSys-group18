@@ -6,7 +6,7 @@ export function calibrationView(id,s,live){
   const configured=!!s&&live?.encoder_left_counts>0&&live?.encoder_right_counts>0&&live?.wheel_diameter_mm>0;
   return {items:[item('Encoder calibration',configured?'configured':'unknown',configured?'Configured':s?'Not reported':'Awaiting data')],note:configured?`L ${live.encoder_left_counts} / R ${live.encoder_right_counts} counts/rev · wheel ${live.wheel_diameter_mm} mm. Stored conversion settings; no live calibration test result.`:'Waiting for active encoder settings; motion qualification is separate.'};
  }
- if(!s)return {items:(id===4?['Level','Magnetometer']:id===5?['Sonar','Scan servo']:['Barcode']).map(name=>item(name,'unknown','Awaiting data')),note:'Calibration results appear when sensor telemetry arrives.'};
+ if(!s)return {items:(id===4?['Level']:id===5?['Sonar','Scan servo']:['Barcode']).map(name=>item(name,'unknown','Awaiting data')),note:'Calibration results appear when sensor telemetry arrives.'};
  if(id===3&&live?.barcode_digital)return {items:[item('Barcode input','configured','Digital D0 · GP26')],note:'Black/white threshold comes from the sensor module comparator. Verify its adjustment on your actual barcode.'};
  if(id===3&&live&&live.calibration_state!==4){
   const state=live.calibration_state;
@@ -16,9 +16,9 @@ export function calibrationView(id,s,live){
   note:s.calibrated?'Barcode thresholds are calibrated.':'Progress and failure results are not reported by this feed.'};
  if(id===4){
   const c=s.calibration;
-  return {items:[c===1?item('Level','running','Calibrating'):c===2||c===3?item('Level','passed','Passed'):item('Level','pending','Not ready'),
-   c===3?item('Magnetometer','passed','Passed'):item('Magnetometer','unknown','Not confirmed')],
-   note:c===1?'Keep the car still for level calibration.':c===3?'Both calibrations are available. Sensor validity is checked separately.':'Magnetometer progress and calibration failure results are not reported.'};
+  /* Magnetometer calibration has no trigger in this build, so it is not shown. */
+  return {items:[c===1?item('Level','running','Calibrating'):c===2||c===3?item('Level','passed','Passed'):item('Level','pending','Not ready')],
+   note:c===1?'Keep the car still and level until calibration passes.':c===2||c===3?'Pitch and roll are calibrated. Sensor validity is checked separately.':'Level calibration runs at power-on: keep the car still and level.'};
  }
  return {items:[item('Sonar','unknown','Not reported'),item('Scan servo','unknown','Not reported')],note:'This feed does not include calibration results.'};
 }

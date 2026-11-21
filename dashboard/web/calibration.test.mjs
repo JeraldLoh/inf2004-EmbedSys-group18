@@ -9,17 +9,19 @@ test('Buddy 3 false calibration cannot distinguish running from failure',()=>{
  const v=calibrationView(3,{calibrated:0});assert.equal(v.items[0].state,'pending');
  assert.match(v.note,/failure.*not reported/i);
 });
-test('Buddy 4 separates level and magnetic calibration without inferring failure',()=>{
- const states=code=>calibrationView(4,{calibration:code}).items.map(x=>x.state);
- assert.deepEqual(states(0),['pending','unknown']);
- assert.deepEqual(states(1),['running','unknown']);
- assert.deepEqual(states(2),['passed','unknown']);
- assert.deepEqual(states(3),['passed','passed']);
- assert.match(calibrationView(4,{calibration:2}).note,/failure.*not reported/i);
+test('Buddy 4 shows level calibration only (no magnetometer trigger in this build)',()=>{
+ const v=code=>calibrationView(4,{calibration:code});
+ const states=code=>v(code).items.map(x=>x.state);
+ assert.deepEqual(states(0),['pending']);
+ assert.deepEqual(states(1),['running']);
+ assert.deepEqual(states(2),['passed']);
+ assert.deepEqual(states(3),['passed']);
+ for(const code of [0,1,2,3])assert(!v(code).items.some(x=>/magnet/i.test(x.name))&&!/magnet/i.test(v(code).note));
+ assert.deepEqual(calibrationView(4,null).items.map(x=>x.name),['Level']);
 });
 test('sensor failure does not erase a successful calibration',()=>{
  const v=calibrationView(4,{calibration:3,data_valid:false,detail_faults:3});
- assert.deepEqual(v.items.map(x=>x.state),['passed','passed']);
+ assert.deepEqual(v.items.map(x=>x.state),['passed']);
 });
 test('Buddy 5 commanded servo position is not calibration evidence',()=>{
  const v=calibrationView(5,{servo_valid:1,servo_deg:90,front_status:0});
