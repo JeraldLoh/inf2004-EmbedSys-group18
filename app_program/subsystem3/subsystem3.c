@@ -357,6 +357,12 @@ LOCAL void s3_task(INT stacd, void *exinf)
     bool right_black;
     uint32_t now_us;
     uint32_t now_ms;
+    /* Wrap-safe millisecond counter. The 32-bit microsecond timer wraps
+     * every 71.6 minutes, so now_us / 1000 would jump back to 0. */
+    uint32_t last_us = 0U;
+    uint32_t rem_us = 0U;
+    uint32_t ms = 0U;
+    bool clock_started = false;
     barcode_sensor_t bar;
     uint16_t raw = 0U;
 #if S3_DEBUG_RAW
@@ -402,7 +408,20 @@ LOCAL void s3_task(INT stacd, void *exinf)
         s3_dbg_stage = 1U;
 
         now_us = drv_ir_now_us();
-        now_ms = now_us / 1000U;
+        if (!clock_started)
+        {
+            clock_started = true;
+            ms = now_us / 1000U;      /* first values match the old ones */
+            rem_us = now_us % 1000U;
+        }
+        else
+        {
+            rem_us += now_us - last_us;   /* unsigned: right across the wrap */
+            ms += rem_us / 1000U;
+            rem_us %= 1000U;
+        }
+        last_us = now_us;
+        now_ms = ms;
 
         /* ---- Requests from the controller ---- */
         s3_reacquire_step(&line, now_ms);
