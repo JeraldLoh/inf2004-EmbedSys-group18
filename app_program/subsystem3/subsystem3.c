@@ -44,6 +44,7 @@
 #include "drv_ir.h"
 #include "barcode_sensor.h"
 #include "barcode_decoder.h"
+#include "barcode_map.h"
 
 #ifndef APP_S3_LINE_PID
 #define APP_S3_LINE_PID 0
@@ -74,7 +75,10 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 
 #define S3_SAMPLE_MS 1U
 #define S3_TASK_PRIORITY 10      /* TBD: agree the schedule as a team */
-#define S3_TASK_STACK 1024
+/* The optimized task frame alone is about 888 bytes with MQTT enabled.
+ * Leave room for synchronous device I/O, decoder/printing calls and saved
+ * context; 1 KB cannot safely accommodate those nested call chains. */
+#define S3_TASK_STACK 4096
 #define S3_CALIBRATION_MS 3000U  /* sweep the barcode sensor during this */
 /* 1 = no calibration sweep: fixed darkness thresholds, measured on the car
  * 2026-11-10, sensor lowered to ~2-3 mm, mounted 30+ mm left of the line:
@@ -92,6 +96,7 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #define S3_GROUND_LOG 0
 #endif
 LOCAL volatile uint32_t s3_ground_word;
+LOCAL volatile uint32_t s3_white_at_us;
 EXPORT uint32_t subsystem3_ground_sample(void) { return s3_ground_word; }
 
 /* Where the task is, for the [S3 TASK] line printed by another task. 0 = asleep,
@@ -116,12 +121,16 @@ LOCAL ID s3_mtx = E_NOEXS;
  * that are read-and-cleared by another task (a read-modify-write) and the
  * request handshakes are protected by s3_mtx. */
 LOCAL volatile line_status_t s3_line;
+LOCAL volatile uint32_t s3_line_at_us;
+LOCAL volatile bool s3_line_produced;
 #define S3_STEER_OFFSET 100
 #define S3_STEER_ANALOGUE 0x100U
 LOCAL volatile uint16_t s3_steering = S3_STEER_OFFSET;
 LOCAL route_instruction_t s3_route;
 LOCAL BOOL s3_route_pending = FALSE;
+LOCAL uint32_t s3_route_map_revision;
 LOCAL uint32_t s3_fail_elapsed_ms;
+LOCAL uint32_t s3_fail_map_revision;
 LOCAL BOOL s3_fail_pending = FALSE;
 LOCAL junction_observation_t s3_junction;
 LOCAL BOOL s3_junction_pending = FALSE;
@@ -273,7 +282,8 @@ LOCAL void s3_publish_junction(const junction_observation_t *junction)
     (void)tk_unl_mtx(s3_mtx);
 }
 
-LOCAL void s3_publish_route(route_command_t command, char character, uint32_t now_ms)
+LOCAL void s3_publish_route(route_command_t command, char character, uint32_t now_ms,
+    uint32_t map_revision)
 {
     route_instruction_t route;
 
@@ -292,6 +302,7 @@ LOCAL void s3_publish_route(route_command_t command, char character, uint32_t no
     s3_wifi.route_counter=(s3_wifi.route_counter+1U)&65535U;
 #endif
     s3_route = route;
+    s3_route_map_revision = map_revision;
     s3_route_pending = TRUE;
     (void)tk_unl_mtx(s3_mtx);
 
@@ -331,7 +342,7 @@ LOCAL s3_probe_state_t s3_probe_step(line_follow_t *line, uint32_t now_ms)
                   (type == JUNCTION_TYPE_CROSS) ? "CROSS" : "T");
         if (command != ROUTE_COMMAND_NONE)
         {
-            s3_publish_route(command, '-', now_ms);   /* '-' = default, no barcode */
+            s3_publish_route(command, '-', now_ms, 0U);   /* default, no barcode */
         }
         junction_observation_for_type(&junction, type, now_ms);
         s3_publish_junction(&junction);
@@ -395,6 +406,15 @@ LOCAL void s3_task(INT stacd, void *exinf)
     uint32_t now_ms;
     uint32_t capture_start_us = 0U;   /* first bar of the current capture */
     bool capture_busy = false;
+    bool capture_near_junction = false;
+    bool capture_adc_missed = false;
+    bool junction_seen = false;
+    uint32_t junction_at_ms = 0U;
+    uint32_t last_sample_us = 0U, edge_at_us = 0U;
+    uint32_t white_start_us = 0U, white_sample_us = 0U;
+    bool white_active = false;
+    bool had_sample = false, edge_pending = false, filtered_black = false;
+    uint32_t scan_map_revision = barcode_map_revision();
     /* Wrap-safe millisecond counter. The 32-bit microsecond timer wraps
      * every 71.6 minutes, so now_us / 1000 would jump back to 0. */
     uint32_t last_us = 0U;
@@ -412,6 +432,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
     (void)stacd;
     (void)exinf;
+
+    tm_printf((UB*)"[S3] barcode task stack=%u bytes\n", (unsigned)S3_TASK_STACK);
 
     line_follow_reset(&line);
 #if APP_S3_LINE_PID
@@ -463,7 +485,9 @@ LOCAL void s3_task(INT stacd, void *exinf)
 
         /* ---- Requests from the controller ---- */
         s3_reacquire_step(&line, now_ms);
-        if (s3_barcode_reset_take())
+        uint32_t current_map = barcode_map_revision();
+        bool map_changed = current_map != scan_map_revision;
+        if (s3_barcode_reset_take() || map_changed)
         {
             barcode_decoder_reset(&decoder);
             decoder.fail_pending = false;
@@ -472,7 +496,14 @@ LOCAL void s3_task(INT stacd, void *exinf)
             decoder.trace_count = 0U;
             decoder.trace_id = 0U;
             capture_busy = false;
+            edge_pending = false;
+            had_sample = false;
             barcode_seen = false;
+#if APP_CAR_MQTT
+            s3_scan_state = s3_scan_character = s3_scan_route = 0U;
+            s3_wifi.scan_valid = s3_wifi.pattern_valid = 0U;
+#endif
+            scan_map_revision = current_map;
         }
 
         /* ---- Line ---- */
@@ -520,6 +551,9 @@ LOCAL void s3_task(INT stacd, void *exinf)
         s3_dbg_stage = 3U;            /* junction handling */
         if (line_follow_take_junction(&line, &junction, now_ms))
         {
+            junction_seen = true;
+            junction_at_ms = now_ms;
+            if (capture_busy) capture_near_junction = true;
             if (barcode_seen)
             {
                 s3_publish_junction(&junction);   /* barcode route decides */
@@ -540,7 +574,46 @@ LOCAL void s3_task(INT stacd, void *exinf)
         /* ---- Barcode ---- */
         {
             s3_dbg_stage = 5U;        /* reading the barcode input (ADC) */
-            bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
+            ER adc_status = drv_ir_read_barcode(&raw);
+            bool have_raw = adc_status == E_OK;
+            if (!have_raw && capture_busy) capture_adc_missed = true;
+            if (have_raw && bar.calibrated && barcode_sensor_darkness(raw) < bar.threshold_low)
+            {
+                if (!white_active || (uint32_t)(now_us - white_sample_us) > 8000U)
+                    white_start_us = now_us;
+                white_sample_us = now_us;
+                white_active = true;
+                s3_white_at_us = (uint32_t)(now_us - white_start_us) >= 60000U ? now_us : 0U;
+            }
+            else
+            {
+                white_active = false;
+                s3_white_at_us = 0U;
+            }
+            {
+                static uint32_t adc_errors, adc_streak, adc_logged_ms;
+                if (have_raw)
+                {
+                    if (adc_streak != 0U)
+                    {
+                        tm_printf((UB*)"[S3 ADC] acquisition restored after %lu errors\n",
+                            (unsigned long)adc_streak);
+                    }
+                    adc_streak = 0U;
+                }
+                else
+                {
+                    adc_errors++;
+                    adc_streak++;
+                    if (adc_errors == 1U || (uint32_t)(now_ms - adc_logged_ms) >= 1000U)
+                    {
+                        adc_logged_ms = now_ms;
+                        tm_printf((UB*)"[S3 ADC] read failed er=%ld streak=%lu total=%lu; sample skipped\n",
+                            (long)adc_status, (unsigned long)adc_streak,
+                            (unsigned long)adc_errors);
+                    }
+                }
+            }
             s3_ground_word = ((s3_dbg_loops & 0xFFFFU) << 16) |
                 (have_raw ? ((uint32_t)raw & 0xFFFU) | (1U << 14) : 0U) |
                 (left_black ? 1U << 12 : 0U) |
@@ -563,15 +636,50 @@ LOCAL void s3_task(INT stacd, void *exinf)
             s3_wifi.adc_valid=have_raw;
             s3_wifi.adc=have_raw ? raw : 0U;
 #endif
+            if (had_sample && (uint32_t)(now_us - last_sample_us) > 8000U)
+            {
+                if (capture_busy)
+                    tm_printf((UB*)"[S3 CAP] aborted reason=sample-gap us=%lu\n",
+                        (unsigned long)(now_us - last_sample_us));
+                barcode_decoder_reset(&decoder);
+                capture_busy = false;
+                edge_pending = false;
+                had_sample = false;
+            }
 
             if (!s3_calibrate_step(&bar, &decoder, have_raw, raw, now_ms) &&
-                have_raw)
+                have_raw && scan_map_revision != 0U)
             {
                 barcode_black = barcode_sensor_is_black(&bar, raw);
-                barcode_decoder_feed(&decoder, barcode_black, now_us);
+                if (!had_sample)
+                {
+                    filtered_black = barcode_black;
+                    barcode_decoder_feed(&decoder, filtered_black, now_us);
+                }
+                else if (barcode_black == filtered_black)
+                {
+                    edge_pending = false;
+                    barcode_decoder_feed(&decoder, filtered_black, now_us);
+                }
+                else if (!edge_pending)
+                {
+                    edge_pending = true;
+                    edge_at_us = now_us;
+                }
+                else if ((uint32_t)(now_us - edge_at_us) >= 400U)
+                {
+                    filtered_black = barcode_black;
+                    edge_pending = false;
+                    barcode_decoder_feed(&decoder, filtered_black, edge_at_us);
+                }
+                had_sample = true;
+                last_sample_us = now_us;
                 if (barcode_decoder_busy(&decoder) && !capture_busy)
                 {
-                    capture_start_us = now_us;
+                    capture_start_us = decoder.capture_started_us;
+                    capture_adc_missed = false;
+                    capture_near_junction = junction_seen &&
+                        (uint32_t)(now_ms - junction_at_ms) <= 250U;
                 }
                 capture_busy = barcode_decoder_busy(&decoder);
 #if S3_CAPTURE_DIAG
@@ -633,7 +741,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
         }
 #endif
         s3_dbg_stage = 7U;            /* results and trace */
-        if (barcode_decoder_take(&decoder, &command, &character))
+        if (barcode_decoder_take(&decoder, &command, &character) &&
+            scan_map_revision == barcode_map_revision())
         {
             s3_cap_ok++;
 #if APP_CAR_MQTT
@@ -657,7 +766,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
             }
             else
             {
-                s3_publish_route(command, character, now_ms);
+                s3_publish_route(command, character, now_ms, scan_map_revision);
                 barcode_seen = true;
             }
         }
@@ -679,6 +788,17 @@ LOCAL void s3_task(INT stacd, void *exinf)
                           (INT)decoder.trace_run_us[t]);
             }
             tm_printf((UB *)"\n");
+            if (!decoder.trace_ok)
+            {
+                const char *reason = capture_near_junction ||
+                    line.status.state == LINE_STATE_JUNCTION || line.probing
+                    ? "junction" : capture_adc_missed ? "missing-adc-sample"
+                    : !barcode_decoder_retry_signature(&decoder)
+                    ? "weak-start-pattern" : barcode_seen ? "route-already-read"
+                    : "signature-qualified";
+                tm_printf((UB *)"[S3 RETRY] id=%lu decision=%s\n",
+                    (unsigned long)decoder.trace_id, reason);
+            }
         }
 
         /* A capture that did not decode: print its element widths (ms) so
@@ -686,10 +806,14 @@ LOCAL void s3_task(INT stacd, void *exinf)
         if (decoder.fail_pending)
         {
             decoder.fail_pending = false;
-            if (decoder.fail_count >= S3_BARCODE_RETRY_MIN_ELEMENTS)
+            if (!capture_near_junction && !capture_adc_missed && !barcode_seen &&
+                line.status.state != LINE_STATE_JUNCTION && !line.probing &&
+                scan_map_revision != 0U && scan_map_revision == barcode_map_revision() &&
+                barcode_decoder_retry_signature(&decoder))
             {
                 (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
                 s3_fail_elapsed_ms = (now_us - capture_start_us) / 1000U;
+                s3_fail_map_revision = scan_map_revision;
                 s3_fail_pending = TRUE;
                 (void)tk_unl_mtx(s3_mtx);
             }
@@ -776,6 +900,8 @@ LOCAL void s3_task(INT stacd, void *exinf)
 #endif
         line_follow_set_barcode_active(&line, barcode_decoder_busy(&decoder));
         s3_line = line.status;
+        s3_line_at_us = now_us;
+        s3_line_produced = true;
         s3_steering = (uint16_t)((unsigned)(steer + S3_STEER_OFFSET) |
             (analogue_steering ? S3_STEER_ANALOGUE : 0U));
 #if APP_CAR_MQTT
@@ -798,6 +924,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
                     .barcode_state=s3_scan_state,.barcode_character=s3_scan_character,
                     .barcode_route=s3_scan_route,.barcode_sequence=s3_scan_sequence,
                     .barcode_failures=s3_scan_failures,.barcode_event_ms=s3_scan_event_ms,
+                    .map_revision=scan_map_revision,
                     .barcode_digital=0};
                 (void)b1_submit_live_status(3,&report);
                 if(b1_submit_section(3,&s3_wifi,at)) s3_wifi_at=at;
@@ -879,6 +1006,18 @@ EXPORT line_status_t subsystem3_line_status(void)
     return s3_line;
 }
 
+EXPORT bool subsystem3_line_fresh(void)
+{
+    uint32_t sampled_us = s3_line_at_us;
+    return s3_line_produced && (uint32_t)(drv_ir_now_us() - sampled_us) <= 100000U;
+}
+
+EXPORT bool subsystem3_barcode_white_ready(void)
+{
+    uint32_t sampled_us = s3_white_at_us;
+    return sampled_us != 0U && (uint32_t)(drv_ir_now_us() - sampled_us) <= 8000U;
+}
+
 EXPORT int8_t subsystem3_steer(bool *analogue)
 {
     uint16_t sample = s3_steering;
@@ -897,9 +1036,13 @@ EXPORT BOOL subsystem3_take_route(route_instruction_t *route)
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
     if (s3_route_pending)
     {
-        *route = s3_route;
+        uint32_t revision = barcode_map_revision();
+        if (s3_route_map_revision == 0U || s3_route_map_revision == revision)
+        {
+            *route = s3_route;
+            taken = TRUE;
+        }
         s3_route_pending = FALSE;
-        taken = TRUE;
     }
     (void)tk_unl_mtx(s3_mtx);
     return taken;
@@ -916,9 +1059,12 @@ EXPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms)
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);
     if (s3_fail_pending)
     {
-        *elapsed_ms = s3_fail_elapsed_ms;
+        if (s3_fail_map_revision == barcode_map_revision())
+        {
+            *elapsed_ms = s3_fail_elapsed_ms;
+            taken = TRUE;
+        }
         s3_fail_pending = FALSE;
-        taken = TRUE;
     }
     (void)tk_unl_mtx(s3_mtx);
     return taken;

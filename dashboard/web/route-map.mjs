@@ -12,7 +12,7 @@ export const ACTIONS=[
  {value:4,key:'U',name:'U-turn',icon:'↶'}
 ];
 export const MAP_BYTES=14,ENTRIES=36;
-export const DEFAULT_MAP=Object.freeze({A:1,B:2,C:3,D:4});   // firmware power-on map
+export const DEFAULT_MAP=Object.freeze({});
 export function charIndex(c){
  if(typeof c!=='string'||c.length!==1)return -1;
  c=c.toUpperCase();
@@ -64,3 +64,14 @@ export function decodeMapCommand(bytes){
 export const sortedEntries=map=>Object.entries(map).filter(([,v])=>v).sort(([a],[b])=>charIndex(a)-charIndex(b));
 export const mapSummary=map=>sortedEntries(map).map(([c,v])=>c+'='+ACTIONS[v-1].key).join(' ')||'(empty)';
 export function sameMap(a,b){return !!a&&!!b&&mapSummary(a)===mapSummary(b);}
+export function lettersForDirection(map,direction){
+ return sortedEntries(map).filter(([,value])=>value===direction).map(([letter])=>letter);
+}
+export function assignDirection(map,direction,letter){
+ const next={};
+ for(const [key,value] of Object.entries(map)){
+  if(key!==letter&&value!==direction)next[key]=value;
+ }
+ if(letter)next[letter]=direction;
+ return next;
+}

@@ -128,8 +128,17 @@ static int32_t heading_assist_bias(int32_t steer, uint32_t now_ms)
 #ifndef CONTROLLER_JUNCTION_APPROACH_MM
 #define CONTROLLER_JUNCTION_APPROACH_MM 50
 #endif
+#ifndef CONTROLLER_JUNCTION_PIVOT_APPROACH_PERCENT
+#define CONTROLLER_JUNCTION_PIVOT_APPROACH_PERCENT 100
+#endif
 #ifndef CONTROLLER_JUNCTION_TURN_COMP_PERCENT
 #define CONTROLLER_JUNCTION_TURN_COMP_PERCENT 100
+#endif
+#ifndef CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT
+#define CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT 100
+#endif
+#ifndef CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT
+#define CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT 100
 #endif
 
 /* Line-follow cruise speed; CAR_RUN may lower it with -D for floor tuning. */
@@ -198,6 +207,9 @@ void controller_junction_default_config(controller_junction_config_t *config)
     config->approach_mm = CONTROLLER_JUNCTION_APPROACH_MM;
     config->turn_mdeg = 90000 * CONTROLLER_JUNCTION_TURN_COMP_PERCENT / 100;
     config->uturn_mdeg = 180000 * CONTROLLER_JUNCTION_TURN_COMP_PERCENT / 100;
+    config->turn_mdeg = config->turn_mdeg * CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT / 100;
+    config->uturn_mdeg = config->uturn_mdeg * CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT / 100;
+    config->uturn_mdeg = config->uturn_mdeg * CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT / 100;
     config->probe_mdeg = 10000;
     config->goal_speed_mm_s = 100U;
     config->goal_timeout_ms = 0U; /* B2 derives finite distance/speed + ramp/settle bound. */
@@ -339,12 +351,14 @@ bool controller_service_handle(
     controller_action_t action = {0};
     bool applied;
     bool was_auto;
+    stop_reason_mask_t prior_stops;
 
     if ((service == NULL) || !service->initialized)
     {
         return false;
     }
     was_auto = service->controller.mode == SYSTEM_MODE_AUTO;
+    prior_stops = service->controller.safety.active_reasons;
     applied = (event != NULL) && apply(service, event, &action);
     if (applied)
     {
@@ -355,9 +369,20 @@ bool controller_service_handle(
             service->retry_holdoff = false;
             service->rereading = false;
             service->reread_slow = false;
+            service->reread_waiting_white = false;
+            service->reread_capture_seen = false;
+            service->reread_capture_path_valid = false;
         }
         service->status.events_applied++;
         execute(service, &action);
+        if (event->type == CONTROLLER_EVENT_LATCH_STOP &&
+            (was_auto || prior_stops != service->controller.safety.active_reasons))
+        {
+            if (service->junction_out.barcode_reset != NULL)
+                service->junction_out.barcode_reset(service->junction_out.context);
+            service->rereading = service->reread_waiting_white = service->reread_slow = false;
+            service->reread_capture_seen = service->reread_capture_path_valid = false;
+        }
     }
     else
     {
@@ -490,6 +515,8 @@ static bool submit_goal(
     goal->target_mm = mm;
     goal->target_mdeg = mdeg;
     goal->max_speed_mm_s = service->junction.goal_speed_mm_s;
+    if (type == MOTION_GOAL_RETRACE && goal->max_speed_mm_s > 50U)
+        goal->max_speed_mm_s = 50U;
     goal->timeout_ms = service->junction.goal_timeout_ms;
     if (!service->junction_out.goal(service->junction_out.context, goal))
     {
@@ -598,7 +625,13 @@ static void start_route(
     motion_goal_result_t rejected = {0};
 
     service->junction_route = command;
-    if (submit_goal(service, MOTION_GOAL_FORWARD, service->junction.approach_mm, 0))
+    int32_t approach_mm = service->junction.approach_mm;
+    if (command == ROUTE_COMMAND_LEFT || command == ROUTE_COMMAND_RIGHT ||
+        command == ROUTE_COMMAND_UTURN)
+    {
+        approach_mm = (approach_mm * CONTROLLER_JUNCTION_PIVOT_APPROACH_PERCENT + 50) / 100;
+    }
+    if (submit_goal(service, MOTION_GOAL_FORWARD, approach_mm, 0))
     {
         set_phase(service, CONTROLLER_JUNCTION_APPROACH, now_ms);
     }
@@ -606,6 +639,19 @@ static void start_route(
     {
         rejected.code = MOTION_RESULT_REJECTED;
         goal_failed(service, &rejected, now_ms);
+    }
+}
+
+static void sync_route_map(controller_service_t *service)
+{
+    if (service->read_route_map_revision == NULL) return;
+    uint32_t revision = service->read_route_map_revision();
+    if (revision == service->route_map_revision) return;
+    service->route_map_revision = revision;
+    if (service->controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING)
+    {
+        service->controller.route_lifecycle = ROUTE_LIFECYCLE_CANCELLED;
+        service->status.last_route = ROUTE_COMMAND_NONE;
     }
 }
 
@@ -620,9 +666,13 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
     bool have_junction;
     bool have_route;
 
+    sync_route_map(service);
+    uint32_t revision = service->route_map_revision;
     /* Junction first: its route was published before it. */
     have_junction = out->take_junction(out->context, &junction);
     have_route = out->take_route(out->context, &route);
+    sync_route_map(service);
+    have_route = have_route && revision == service->route_map_revision;
 
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
         vehicle_controller_in_obstacle_mission(controller))
@@ -678,6 +728,7 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
                 return;
             }
 #endif
+            sync_route_map(service);
             action = vehicle_controller_on_junction(controller, &junction, now_ms);
             execute(service, &action);
             if (action.type == CONTROLLER_ACTION_EXECUTE_ROUTE)
@@ -702,41 +753,10 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
     }
 }
 
-static void search_start(controller_service_t *service,
-    const controller_line_input_t *line, system_time_ms_t now_ms,
-    bool backtrack);
-
-/* After a pivot the car sits wherever the wheels say it turned to, usually a
- * little short of the line. If neither sensor sees black, hand over to the
- * line search, which keeps turning the same way first. */
-static void find_line_after_turn(
-    controller_service_t *service,
-    route_command_t command,
-    system_time_ms_t now_ms)
-{
-    controller_line_input_t line = {0};
-
-    if ((command != ROUTE_COMMAND_LEFT) && (command != ROUTE_COMMAND_RIGHT) &&
-        (command != ROUTE_COMMAND_UTURN))
-    {
-        return;   /* STRAIGHT: still on the line */
-    }
-    if ((service->outputs.read_line == NULL) ||
-        (service->controller.mode != SYSTEM_MODE_AUTO))
-    {
-        return;
-    }
-    if (service->outputs.read_line(service->outputs.context, &line) && line.on_line)
-    {
-        return;   /* already on the line */
-    }
-    line.steer = (command == ROUTE_COMMAND_RIGHT) ? 1 : -1;   /* same way as the pivot */
-    search_start(service, &line, now_ms, false);
-}
-
 /* The pause is over: run the live barcode route, or carry straight on. */
 static void pause_finish(controller_service_t *service, system_time_ms_t now_ms)
 {
+    sync_route_map(service);
     vehicle_controller_t *controller = &service->controller;
     controller_action_t action;
     bool live = (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
@@ -866,7 +886,11 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
             route_instruction_t pause_route;
 
             /* A barcode decoded while we wait still counts. */
-            if (out->take_route(out->context, &pause_route))
+            sync_route_map(service);
+            uint32_t revision = service->route_map_revision;
+            bool have_route = out->take_route(out->context, &pause_route);
+            sync_route_map(service);
+            if (have_route && revision == service->route_map_revision)
             {
                 pause_route.expires_ms = now_ms +
                     (pause_route.expires_ms - pause_route.decoded_ms);
@@ -906,10 +930,7 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
             state = poll_goal(service, &result);
             if (state == GOAL_DONE)
             {
-                route_command_t turned = service->junction_route;
-
                 finish_route(service, &result, now_ms);
-                find_line_after_turn(service, turned, now_ms);
             }
             break;
 
@@ -1122,6 +1143,7 @@ static bool reread_take(controller_service_t *service, uint32_t *elapsed_ms)
 static void reread_end(controller_service_t *service, system_time_ms_t now_ms)
 {
     service->rereading = false;
+    service->reread_waiting_white = false;
     service->line_seen_ms = now_ms;
     service->line_seen_path_valid = false;
 }
@@ -1133,7 +1155,7 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
     junction_observation_t junction;
     route_instruction_t reverse_route;
     motion_goal_result_t result = {0};
-    uint32_t slow_ms;
+    controller_line_input_t line = {0};
 
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
         !following_line(controller->mission) ||
@@ -1144,29 +1166,45 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
         return;
     }
     /* Reverse captures cannot choose a forward junction route. */
-    (void)out->take_junction(out->context, &junction);
+    bool crossed_junction = out->take_junction(out->context, &junction);
     (void)out->take_route(out->context, &reverse_route);
+    if (crossed_junction)
+    {
+        goal_step_done(service);
+        reread_end(service, now_ms);
+        if (out->barcode_reset != NULL) out->barcode_reset(out->context);
+        junction_fail(service, STOP_REASON_ROUTE_REQUIRED, now_ms);
+        return;
+    }
+    if (service->reread_waiting_white)
+    {
+        uint32_t elapsed = now_ms - service->reread_stopped_at_ms;
+        bool quiet = elapsed >= 60U &&
+            service->outputs.read_line(service->outputs.context, &line) && line.barcode_white_ready;
+        if (!quiet && elapsed < 300U) return;
+        reread_end(service, now_ms);
+        if (out->barcode_reset != NULL) out->barcode_reset(out->context);
+        if (quiet)
+        {
+            service->reread_slow = true;
+            service->reread_slow_until_ms = now_ms + 500U +
+                (uint32_t)(service->reread_mm + CONTROLLER_BARCODE_RETRACE_MARGIN_MM) *
+                1000U / CONTROLLER_BARCODE_REREAD_MM_S;
+        }
+        return;
+    }
     switch (poll_goal(service, &result))
     {
         case GOAL_RUNNING:
             break;
         case GOAL_DONE:
             goal_step_done(service);
-            reread_end(service, now_ms);
-            if (out->barcode_reset != NULL)
-            {
-                /* The sensor ran backwards over the bars: start the forward
-                 * pass with an idle decoder. */
-                out->barcode_reset(out->context);
-            }
-            slow_ms = (uint32_t)(service->reread_mm +
-                CONTROLLER_BARCODE_RETRACE_MARGIN_MM) * 1000U /
-                CONTROLLER_BARCODE_REREAD_MM_S;
-            service->reread_slow = true;
-            service->reread_slow_until_ms = now_ms + slow_ms;
+            service->reread_waiting_white = true;
+            service->reread_stopped_at_ms = now_ms;
             break;
         default:
             goal_step_done(service);
+            if (out->barcode_reset != NULL) out->barcode_reset(out->context);
             reread_end(service, now_ms);   /* no stop: carry on following */
             break;
     }
@@ -1184,15 +1222,18 @@ static bool reread_start(
     system_time_ms_t now_ms)
 {
     const vehicle_controller_t *controller = &service->controller;
-    int32_t mm;
+    controller_line_input_t line = {0};
 
     if (!failed)
     {
         return false;
     }
     if ((controller->mode != SYSTEM_MODE_AUTO) ||
-        !following_line(controller->mission) ||
-        (controller->mission == MISSION_JUNCTION_APPROACH) ||
+        (controller->mission != MISSION_TRACK_LINE &&
+         controller->mission != MISSION_VERIFY_LINE) ||
+        controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING ||
+        controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED ||
+        (service->holdoff && !time_reached(now_ms, service->holdoff_until_ms)) ||
         (service->junction_phase != CONTROLLER_JUNCTION_IDLE) ||
         service->searching || service->rereading || service->reread_slow ||
         service->retry_episode ||
@@ -1201,20 +1242,40 @@ static bool reread_start(
         (service->retry_holdoff &&
          !time_reached(now_ms, service->retry_holdoff_until_ms)))
     {
+        service->status.barcode_retry_decision = BARCODE_RETRY_INTERLOCK;
         return false;
     }
-    if (elapsed_ms > 60000U)
+    uint32_t observed_ms = now_ms - service->reread_capture_started_ms;
+    if (!service->reread_capture_path_valid)
     {
-        elapsed_ms = 60000U;
+        service->status.barcode_retry_decision = BARCODE_RETRY_CAPTURE_PATH;
+        return false;
     }
-    mm = (int32_t)((service->line.cruise_mm_s * elapsed_ms) / 1000U) +
-        CONTROLLER_BARCODE_RETRACE_MARGIN_MM;
-    if (mm > CONTROLLER_BARCODE_RETRACE_MAX_MM)
+    service->status.barcode_retry_observed_ms = observed_ms;
+    if (elapsed_ms > 10000U || observed_ms > elapsed_ms + 150U ||
+        elapsed_ms > observed_ms + 150U)
     {
-        mm = CONTROLLER_BARCODE_RETRACE_MAX_MM;
+        service->status.barcode_retry_decision = BARCODE_RETRY_CAPTURE_TIMING;
+        return false;
     }
+    if (!service->outputs.read_line(service->outputs.context, &line) || !line.path_valid)
+    {
+        service->status.barcode_retry_decision = BARCODE_RETRY_CURRENT_PATH;
+        return false;
+    }
+    uint32_t travel = line.path_mm - service->reread_capture_path_mm;
+    service->status.barcode_retry_travel_mm = travel;
+    if (travel == 0U || travel > CONTROLLER_BARCODE_RETRACE_MAX_MM -
+        CONTROLLER_BARCODE_RETRACE_MARGIN_MM)
+    {
+        service->status.barcode_retry_decision = BARCODE_RETRY_DISTANCE;
+        return false;
+    }
+    int32_t mm = (int32_t)(travel + CONTROLLER_BARCODE_RETRACE_MARGIN_MM);
+    service->reread_capture_seen = service->reread_capture_path_valid = false;
     if (!submit_goal(service, MOTION_GOAL_RETRACE, mm, 0))
     {
+        service->status.barcode_retry_decision = BARCODE_RETRY_GOAL_REJECTED;
         return false;   /* rejected (ring too short?): carry on, no stop */
     }
     service->rereading = true;
@@ -1224,6 +1285,7 @@ static bool reread_start(
     service->retry_holdoff_until_ms = now_ms +
         CONTROLLER_BARCODE_RETRY_HOLDOFF_MS;
     service->status.barcode_retries++;
+    service->status.barcode_retry_decision = BARCODE_RETRY_STARTED;
     return true;
 }
 #endif
@@ -1248,6 +1310,14 @@ void controller_service_tick(
     }
 #if CONTROLLER_BARCODE_RETRY
     reread_failed = reread_take(service, &reread_elapsed_ms);
+    if (reread_failed)
+    {
+        service->status.barcode_retry_decision_seq++;
+        service->status.barcode_retry_decision = BARCODE_RETRY_MOTION_BUSY;
+        service->status.barcode_retry_capture_ms = reread_elapsed_ms;
+        service->status.barcode_retry_observed_ms = 0U;
+        service->status.barcode_retry_travel_mm = 0U;
+    }
 #endif
     if (service->searching)
     {
@@ -1321,6 +1391,17 @@ void controller_service_tick(
         (controller->mission == MISSION_JUNCTION_APPROACH))
         ? service->line.slow_mm_s : service->line.cruise_mm_s;
 #if CONTROLLER_BARCODE_RETRY
+    if (!line.barcode_active)
+    {
+        service->reread_capture_seen = service->reread_capture_path_valid = false;
+    }
+    else if (!service->reread_capture_seen)
+    {
+        service->reread_capture_seen = true;
+        service->reread_capture_path_valid = line.path_valid;
+        service->reread_capture_path_mm = line.path_mm;
+        service->reread_capture_started_ms = now_ms;
+    }
     if (service->reread_slow)
     {
         if (time_reached(now_ms, service->reread_slow_until_ms))
@@ -1397,11 +1478,11 @@ void controller_service_motion_result(controller_service_t *service,
  * can outlive this request and erase a newer STOP. The task re-drains urgent
  * ingress after this operation and before issuing motion on its next tick. */
 bool controller_service_remote_start(controller_service_t *s,
-    uint32_t requested, uint32_t current, bool pending)
+    uint32_t requested, uint32_t current, bool pending, stop_reason_mask_t expected_stops)
 {
     controller_status_t status;
     controller_event_t clear={CONTROLLER_EVENT_CLEAR_STOP,SYSTEM_MODE_IDLE,
-        STOP_REASON_REMOTE,MISSION_IDLE,false};
+        expected_stops,MISSION_IDLE,false};
     controller_event_t start={CONTROLLER_EVENT_SET_MODE,SYSTEM_MODE_AUTO,
         STOP_REASON_NONE,MISSION_IDLE,false};
     if(s==NULL || !s->initialized || requested!=current || current==UINT32_MAX || pending)
@@ -1409,7 +1490,8 @@ bool controller_service_remote_start(controller_service_t *s,
     controller_service_status(s,&status);
     if((status.mode!=SYSTEM_MODE_STARTUP && status.mode!=SYSTEM_MODE_IDLE && status.mode!=SYSTEM_MODE_STOPPED) ||
        status.hardware_faults!=0U ||
-       (status.stop_reasons & ~((uint32_t)STOP_REASON_REMOTE))!=0U) return false;
+       status.stop_reasons!=expected_stops ||
+       (expected_stops & ~((uint32_t)(STOP_REASON_REMOTE | STOP_REASON_PHYSICAL)))!=0U) return false;
     if(status.stop_reasons!=0U && !controller_service_handle(s,&clear)) return false;
     return controller_service_handle(s,&start);
 }

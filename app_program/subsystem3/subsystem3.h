@@ -14,6 +14,8 @@ IMPORT void subsystem3_debug(uint32_t *loops, uint32_t *stage);
 
 /* Latest line status (1 packed byte, safe to read from any task/core). */
 IMPORT line_status_t subsystem3_line_status(void);
+IMPORT bool subsystem3_line_fresh(void);
+IMPORT bool subsystem3_barcode_white_ready(void);
 
 /* Steering proposal for Buddy 2: -100 (full left) .. 0 .. +100 (full right).
  * It grows the longer the car stays off centre and briefly counter-steers

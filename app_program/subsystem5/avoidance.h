@@ -276,6 +276,7 @@ typedef struct {
     struct {
         bool done;
         bool found;
+        bool measured_hit;
         float last_hit_dir; // direction of the outermost reading that hit the obstacle
         float last_hit_cm;
         float edge_dir;
@@ -307,6 +308,7 @@ typedef struct {
     float pass_seen_at_cm; // odometry at the first hit; < 0 unknown
     uint32_t pass_start_ms; // when the watched pass drive was issued
     int clear_checks;       // confirming centre pings taken this scan
+    int clear_unknown;      // bounded unmeasured centre pings in this scan
     float side_cm;         // measured car centre to side face; valid if pass_seen
     float depth_cm;        // obstacle depth along the pass; < 0 unknown
     // Last real obstacle depth/direction this encounter, and how far the car

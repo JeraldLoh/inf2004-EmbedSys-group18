@@ -1,6 +1,18 @@
 # Demo integration on latest main — 24 November 2026
 
-Base: GitHub `origin/main` at `b0dee3ee3fce810bc39c496031016342b8ba91da` (fetched and checked on 24 November). Local branch `demo-integration-20261124` imports all 12 commits from `buddy2-demo-fixes`, then addresses the independent review findings. The original main checkout and old fixes branch are preserved. Nothing has been pushed or flashed.
+Base: GitHub `origin/main` at `b0dee3ee3fce810bc39c496031016342b8ba91da` (fetched and checked on 24 November). Local branch `demo-integration-20261124` imports all 12 commits from `buddy2-demo-fixes`, then addresses the independent review findings. The original main checkout and old fixes branch are preserved.
+
+## Combined demo profile through U-turn +5%
+
+Set the Pico SDK path and local MQTT Wi-Fi settings as described below. Run this command from `build_make/` to reproduce the combined firmware profile.
+
+```sh
+make -j6 SMP=1 CONSOLE=usb_cdc WIFI=cyw43 NET=lwip MQTT=1 CAR_RUN=1 CAR_MQTT=1 CAR_B2_TRIAL=1 CRASH_REPORT=0 TEST=0 CRUISE_MM_S=80 LINE_DAMP_STEER=40 LINE_DAMP_MS=40 LINE_LOST_MS=0 LINE_BACKTRACK_MM=0 BARCODE_RETRY=1 BARCODE_RETRACE_MARGIN_MM=25 BARCODE_REREAD_MM_S=80 WATCHDOG_RETRY=1 S3_GROUND_LOG=1 JUNCTION_PIVOT_APPROACH_PERCENT=110 JUNCTION_PIVOT_TRAVEL_PERCENT=90 JUNCTION_UTURN_TRAVEL_PERCENT=105
+```
+
+The U-turn requests 5% more wheel travel than the previous combined build. The left and right pivots keep their prior travel. The barcode retry requires a recognizable capture and valid encoder history. Physical barcode retry and the 5% U-turn adjustment are pending verification. Hump height and obstacle width still need comparison against measured fixtures.
+
+The dashboard at port 8080 includes the four-card Rover overview, the current barcode map, and wireless log export. Its overview works with the combined firmware telemetry. A decoded route is an instruction. The controller's junction maneuver is displayed separately.
 
 ## Build and firmware selection
 

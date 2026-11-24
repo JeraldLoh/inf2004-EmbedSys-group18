@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_MAP,encodeMapSet,encodeMapShow,decodeMapCommand,mapFromHex,mapToHex,mapSummary,packMap,sameMap,charIndex} from './route-map.mjs';
+import {DEFAULT_MAP,encodeMapSet,encodeMapShow,decodeMapCommand,mapFromHex,mapToHex,mapSummary,packMap,sameMap,charIndex,assignDirection,lettersForDirection} from './route-map.mjs';
 import {RobotState} from './state.mjs';
+import {barcodeView} from './barcode-status.mjs';
+import {encodeLiveStatus,decodeLiveStatus} from './live-status.mjs';
 
 test('power-on map matches the firmware reply bytes',()=>{
- // Same value the C bridge test expects for barcode_map_defaults().
- assert.equal(mapToHex(DEFAULT_MAP),'d108'+'0'.repeat(24));
+ assert.equal(mapToHex(DEFAULT_MAP),'0'.repeat(28));
+ assert.deepEqual(mapFromHex('0'.repeat(28)),{});
  assert.deepEqual(mapFromHex('d108'+'0'.repeat(24)),{A:1,B:2,C:3,D:4});
 });
 test('MAP_SET is 22 bytes and round-trips; MAP_SHOW is 8',()=>{
@@ -28,4 +30,40 @@ test('command_result with map updates the confirmed rover map',()=>{
  assert.ok(sameMap(s.routeMap,{K:1}));assert.equal(s.routeMapAt,3);
  assert.throws(()=>s.receive('command_result','{"schema":1,"demo":false,"status":"applied","command_id":7,"map":"zz"}',4));
  assert.ok(sameMap(s.routeMap,{K:1}));
+});
+test('new assignments replace a slot and move duplicate letters',()=>{
+ assert.deepEqual(assignDirection({A:1,B:2},1,'K'),{K:1,B:2});
+ assert.deepEqual(assignDirection({A:1,B:2},1,'B'),{B:1});
+ assert.deepEqual(assignDirection({A:1,B:2},1,''),{B:2});
+});
+test('confirmed direction rows show the live map, including older maps with duplicate directions',()=>{
+ const map={A:1,K:1,B:2,D:4};
+ assert.deepEqual(lettersForDirection(map,1),['A','K']);
+ assert.deepEqual(lettersForDirection(map,2),['B']);
+ assert.deepEqual(lettersForDirection(map,3),[]);
+ assert.deepEqual(lettersForDirection(map,4),['D']);
+});
+test('reader shows only scans from the current confirmed map',()=>{
+ const packet={demo:false,live_status:{demo:false,present:2,uptime_ms:1500,line:{
+  at_ms:1500,barcode_event_ms:1000,barcode_state:2,barcode_character:65,barcode_route:1,barcode_failures:0,map_revision:4
+ }}};
+ const view=barcodeView(packet,{mapRevision:6});
+ assert.equal(view.headline,'Ready for a fresh scan');
+ packet.live_status.line.map_revision=6;
+ packet.live_status.line.barcode_route=2;
+ assert.equal(barcodeView(packet,{mapRevision:6}).headline,'Decoded A → Right');
+});
+test('reader status v5 carries its map revision while v4 still decodes',()=>{
+ const line={map_revision:6,barcode_state:2,barcode_character:65,barcode_route:2};
+ assert.equal(decodeLiveStatus(encodeLiveStatus({version:5,line})).line.map_revision,6);
+ assert.equal(decodeLiveStatus(encodeLiveStatus({version:4,line})).line.map_revision,undefined);
+});
+test('a reader sample just newer than the packet does not look stalled',()=>{
+ const status={demo:false,present:2,uptime_ms:1000,line:{
+  at_ms:1001,barcode_state:0,map_revision:6
+ }};
+ const packet={demo:false,live_status:status};
+ assert.equal(barcodeView(packet,{mapRevision:6}).headline,'Ready · waiting for sensor activity');
+ status.uptime_ms=8000;
+ assert.match(barcodeView(packet,{mapRevision:6}).detail,/reader data is 7\.0 s old/);
 });

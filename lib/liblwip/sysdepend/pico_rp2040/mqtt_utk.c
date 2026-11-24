@@ -7,6 +7,9 @@
 #include "mqtt_utk.h"
 #include "../../../../app_program/subsystem1/buddy1_bridge.h"
 #include <tm/tmonitor.h>
+#if TM_CONSOLE_USB_CDC && CNF_SMP
+#include "../../../libtm/sysdepend/pico_rp2040/mqtt_console.h"
+#endif
 #ifndef B1_TOPIC_PREFIX
 #define B1_TOPIC_PREFIX "group18/robot1"
 #endif
@@ -17,6 +20,30 @@ static unsigned int next_try, attempt_at, last_pump;
 static int connecting, subscribed, active, rx_valid;
 static char rx[128];
 static unsigned int rx_length, rx_expected;
+#if TM_CONSOLE_USB_CDC && CNF_SMP
+static void publish_console(unsigned int now)
+{
+ static unsigned int last_batch, sequence, last_dropped;
+ static UB payload[400];
+ UW dropped = last_dropped;
+ if ((unsigned int)(now-last_batch) < 50U) return;
+ last_batch = now;
+ /* Format separately so the byte stream preserves split printf lines. */
+ UB bytes[256];
+ UW count = tm_mqtt_console_peek(bytes, sizeof(bytes), &dropped);
+ if (count == 0U && dropped == last_dropped) return;
+ INT header = tm_sprintf(payload,
+     (const UB *)"fw=group18-combined-retry80-uturn-plus5-2026-11-25 seq=%u uptime_ms=%u dropped_bytes=%u\n",
+     sequence, now, (unsigned)dropped);
+ memcpy(payload + header, bytes, count);
+ if (mqtt_publish(client, B1_TOPIC_PREFIX "/log", payload,
+                  (u16_t)(header + count), 0, 0, 0, 0) == ERR_OK) {
+  tm_mqtt_console_consume(count);
+  last_dropped = dropped;
+  sequence++;
+ }
+}
+#endif
 static void offline(void) {
  connecting=0;subscribed=0;active=0;b1_connection(0);next_try=sys_now()+3000;
 }
@@ -80,5 +107,8 @@ void mqtt_utk_poll(int link_up) {
 #endif
   }
  }
+#if TM_CONSOLE_USB_CDC && CNF_SMP
+ publish_console(now);
+#endif
 }
 void mqtt_utk_start(void) {mqtt_utk_poll(1);}

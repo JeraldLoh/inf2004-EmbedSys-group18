@@ -1,4 +1,4 @@
-import {obstacleOutputs} from './obstacle-outputs.mjs?v=b5-outputs-1';
+import {obstacleOutputs} from './obstacle-outputs.mjs?v=combined-1';
 import {liveGroup,lineHeadline,lineSearching,bypassProgress} from './live-status.mjs?v=barcode-digital-4';
 import {lineNames,terrainNames,avoidanceNames,rangeNames,motionSpeed,systemNames} from './telemetry-view.mjs?v=barcode-digital-4';
 import {renderCalibration} from './calibration.mjs?v=no-mag-1';
@@ -22,7 +22,6 @@ export function renderSensorHighlights(id,packet,view,fresh,elapsed){
   put('line-primary',s?lineHeadline(packet,s):'Waiting for the line');
   const searching=lineSearching(packet),held=searching||!!liveGroup(packet,3)?.paused;
   put('line-steering',held?'Controller override':s?(s.steering===0?'Straight':`${Math.abs(s.steering)}% ${s.steering<0?'left':'right'}`):'—');
-  put('line-route',s?.scan_valid?['None','Left','Right','Straight','U-turn'][s.route]:'—');
   $('sensor-left').classList.toggle('is-black',!!s?.left_black);$('sensor-right').classList.toggle('is-black',!!s?.right_black);
   $('line-correction').setAttribute('d',`M140 118Q140 65 ${140+(s?.steering??0)*.55} 24`);
   const motion=packet?.buddies?.[2];

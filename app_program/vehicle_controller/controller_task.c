@@ -13,7 +13,7 @@ typedef struct
     uint32_t restart_stop_sequence;
     union
     {
-        uint32_t remote_start_sequence;
+        stop_reason_mask_t remote_start_expected_stops;
         controller_event_t event;
         controller_motion_request_t motion;
         motion_goal_result_t result;
@@ -141,7 +141,8 @@ static void controller_task_main(INT code, void *exinf)
                     sequence=urgent_sequence;pending=urgent_reasons!=STOP_REASON_NONE;
                     ingress_leave(saved);
                     (void)controller_service_remote_start(&service,
-                        mail.value.remote_start_sequence,sequence,pending);
+                        mail.restart_stop_sequence,sequence,pending,
+                        mail.value.remote_start_expected_stops);
                     controller_motion_sync(&motion);
                     /* A STOP racing with the conditional transition is applied
                      * before this task can issue any new line request. */
@@ -227,6 +228,14 @@ ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     return controller_motion_init(&motion, &service, outputs, session, caution, cruise)
         ? E_OK : E_PAR;
 }
+ER controller_task_bind_route_map(uint32_t (*read_revision)(void))
+{
+    if (!initialized || started) return E_OBJ;
+    if (read_revision == NULL) return E_PAR;
+    service.read_route_map_revision = read_revision;
+    return E_OK;
+}
+
 ER controller_task_bind_terrain(bool (*read_terrain)(terrain_report_t *report))
 {
     if (!initialized || started) { return E_OBJ; }
@@ -256,16 +265,26 @@ static bool post(controller_mail_t *mail)
 {
     return started && tk_snd_mbf(queue, mail, (INT)sizeof(*mail), TMO_POL) == E_OK;
 }
-bool controller_post_remote_start(void)
+uint32_t controller_remote_start_ticket(void)
+{
+    UINT saved=ingress_enter();
+    uint32_t ticket=urgent_reasons==STOP_REASON_NONE ? urgent_sequence : UINT32_MAX;
+    ingress_leave(saved);
+    return ticket;
+}
+
+bool controller_post_remote_start(uint32_t ticket, stop_reason_mask_t expected_stops)
 {
     controller_mail_t mail={0};
     UINT saved;
     if(!started) return false;
     saved=ingress_enter();
-    if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX){
+    if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence!=ticket || ticket==UINT32_MAX){
         ingress_leave(saved);return false;
     }
-    mail.kind=MAIL_REMOTE_START;mail.value.remote_start_sequence=urgent_sequence;
+    mail.kind=MAIL_REMOTE_START;
+    mail.restart_stop_sequence=ticket;
+    mail.value.remote_start_expected_stops=expected_stops;
     ingress_leave(saved);
     return post(&mail);
 }

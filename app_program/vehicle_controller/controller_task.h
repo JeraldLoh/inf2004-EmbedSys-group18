@@ -21,8 +21,10 @@ ER controller_task_start(void);
  * reject a full queue; STOP uses an independent sticky lane and disables
  * outputs immediately even when FIFO is full. */
 bool controller_post(const controller_event_t *event);
-/* Queue one conditional remote START, invalidated by every newer STOP. */
-bool controller_post_remote_start(void);
+/* Sample before evaluating START interlocks. A newer STOP invalidates the
+ * ticket at both queue admission and execution. */
+uint32_t controller_remote_start_ticket(void);
+bool controller_post_remote_start(uint32_t ticket, stop_reason_mask_t expected_stops);
 
 /* Copy of the latest status; false if not initialised or busy. */
 bool controller_get_status(controller_status_t *status);
@@ -30,6 +32,7 @@ bool controller_get_status(controller_status_t *status);
  * the line-tracking outputs, before any start. Not with the typed motion
  * adapter below. */
 ER controller_task_bind_junction(const controller_junction_outputs_t *outputs);
+ER controller_task_bind_route_map(uint32_t (*read_revision)(void));
 /* Bind after controller init and before any start. Existing STOP-only users
  * need no change. No hook means motion commands fail closed. */
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,

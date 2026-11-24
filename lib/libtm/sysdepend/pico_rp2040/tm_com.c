@@ -41,6 +41,78 @@
 
 #ifdef PICO_RP2040
 
+#if TM_MQTT && TM_CONSOLE_USB_CDC && TK_SUPPORT_SMP
+#include <tk/tkernel.h>
+#include <tk/smp.h>
+#include "mqtt_console.h"
+
+#define MQTT_CONSOLE_BYTES 8192U
+#define MQTT_CONSOLE_MASK (MQTT_CONSOLE_BYTES - 1U)
+static T_SPLOCK log_lock;
+static UB log_bytes[MQTT_CONSOLE_BYTES];
+static UW log_head, log_tail;
+static volatile UW log_dropped[TK_MAX_CORE];
+
+static void drop_console(UW count)
+{
+	UINT intsts;
+
+	DI(intsts);
+	INT core = tk_get_prc();
+	if (core >= 1 && core <= TK_MAX_CORE) log_dropped[core - 1] += count;
+	EI(intsts);
+}
+
+static void capture_console(const UB *buf, INT size)
+{
+	UINT intsts;
+	UW count;
+
+	if (size <= 0) return;
+	if (ISpinTryLock(&log_lock, &intsts) != E_OK) {
+		drop_console((UW)size);
+		return;
+	}
+	count = (log_tail - log_head - 1U) & MQTT_CONSOLE_MASK;
+	if (count > 96U) count = 96U;
+	if (count > (UW)size) count = (UW)size;
+	for (UW i = 0; i < count; ++i) {
+		log_bytes[log_head] = buf[i];
+		log_head = (log_head + 1U) & MQTT_CONSOLE_MASK;
+	}
+	(void)ISpinUnlock(&log_lock, intsts);
+	if (count < (UW)size) {
+		drop_console((UW)size - count);
+	}
+}
+
+UW tm_mqtt_console_peek(UB *out, UW capacity, UW *dropped)
+{
+	UINT intsts;
+	UW count;
+
+	if (ISpinTryLock(&log_lock, &intsts) != E_OK) return 0;
+	count = (log_head - log_tail) & MQTT_CONSOLE_MASK;
+	if (count > capacity) count = capacity;
+	for (UW i = 0; i < count; ++i) {
+		out[i] = log_bytes[(log_tail + i) & MQTT_CONSOLE_MASK];
+	}
+	*dropped = 0U;
+	for (unsigned i = 0; i < TK_MAX_CORE; ++i) *dropped += log_dropped[i];
+	(void)ISpinUnlock(&log_lock, intsts);
+	return count;
+}
+
+void tm_mqtt_console_consume(UW count)
+{
+	UINT intsts;
+
+	(void)ISpinLock(&log_lock, &intsts);
+	log_tail = (log_tail + count) & MQTT_CONSOLE_MASK;
+	(void)ISpinUnlock(&log_lock, intsts);
+}
+#endif
+
 /* UART register definition (Use UART0) */
 #define UART_BASE              0x40034000
 
@@ -84,6 +156,9 @@ IMPORT void tm_usb_console_put(const UB *buf, INT size);
 
 EXPORT	void	tm_snd_dat( const UB* buf, INT size )
 {
+#if TM_MQTT && TM_CONSOLE_USB_CDC && TK_SUPPORT_SMP
+	capture_console(buf, size);
+#endif
 #if TM_CONSOLE_USB_CDC
 	tm_usb_console_put(buf, size);
 #endif

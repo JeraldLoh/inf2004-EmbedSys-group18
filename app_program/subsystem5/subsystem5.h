@@ -32,6 +32,7 @@ typedef struct
     /* Optional, all or nothing: controller gate, Buddy 2 executor and
      * Buddy 3 line sensing (see b5_motion.h). */
     b5_motion_ops_t motion;
+    bool (*line_progress)(uint32_t *path_mm); /* optional: fresh line following and wheel motion */
 } subsystem5_bindings_t;
 
 /* Startup only, before subsystem5_init(). dispatcher, urgent_stop and

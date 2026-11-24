@@ -57,6 +57,10 @@
 #define	DEVCNF_ADC_INTPRI	2
 
 /* A/D conversion timeout time */
+#if defined(APP_CAR_RUN) && APP_CAR_RUN
+#define	DEVCNF_ADC_TMOSCAN	12
+#else
 #define	DEVCNF_ADC_TMOSCAN	1000
+#endif
 
 #endif		/* __DEV_ADC_CNF_RP2040_H__ */

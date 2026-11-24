@@ -63,7 +63,8 @@ typedef struct
     bool on_line;          /* either sensor sees black (line search) */
     bool analogue_steering;
     bool path_valid;
-    uint32_t path_mm;      /* mean wheel travel; used only for reverse search */
+    uint32_t path_mm;      /* mean wheel travel */
+    bool barcode_white_ready; /* fresh white ADC samples for the quiet zone */
 } controller_line_input_t;
 
 typedef struct
@@ -150,6 +151,19 @@ typedef struct
     int32_t search_max_mdeg;
 } controller_line_config_t;
 
+typedef enum
+{
+    BARCODE_RETRY_NO_DECISION = 0,
+    BARCODE_RETRY_MOTION_BUSY,
+    BARCODE_RETRY_INTERLOCK,
+    BARCODE_RETRY_CAPTURE_PATH,
+    BARCODE_RETRY_CAPTURE_TIMING,
+    BARCODE_RETRY_CURRENT_PATH,
+    BARCODE_RETRY_DISTANCE,
+    BARCODE_RETRY_GOAL_REJECTED,
+    BARCODE_RETRY_STARTED
+} controller_barcode_retry_decision_t;
+
 typedef struct
 {
     system_mode_t mode;
@@ -180,6 +194,11 @@ typedef struct
     uint32_t obstacle_moves_rejected;   /* refused here or by Buddy 2 */
     uint32_t barcode_retries;           /* re-reads started */
     uint32_t barcode_rereads_ok;        /* a route was taken after one */
+    uint32_t barcode_retry_decision_seq;
+    controller_barcode_retry_decision_t barcode_retry_decision;
+    uint32_t barcode_retry_capture_ms;
+    uint32_t barcode_retry_observed_ms;
+    uint32_t barcode_retry_travel_mm;
 } controller_status_t;
 
 typedef struct
@@ -194,6 +213,8 @@ typedef struct
     controller_junction_outputs_t junction_out;
     controller_junction_config_t junction;
     bool junction_bound;
+    uint32_t (*read_route_map_revision)(void);
+    uint32_t route_map_revision;
     controller_junction_phase_t junction_phase;
     system_time_ms_t phase_since_ms;
     route_command_t junction_route;
@@ -210,6 +231,12 @@ typedef struct
     bool search_seen;      /* a sensor saw black during this step */
     bool search_backtrack; /* the first search step is a reverse */
     bool rereading;        /* barcode re-read: retrace goal running */
+    bool reread_waiting_white;
+    system_time_ms_t reread_stopped_at_ms;
+    bool reread_capture_seen;
+    bool reread_capture_path_valid;
+    uint32_t reread_capture_path_mm;
+    system_time_ms_t reread_capture_started_ms;
     bool reread_slow;      /* slow constant-speed pass after the retrace */
     system_time_ms_t reread_slow_until_ms;
     system_time_ms_t retry_holdoff_until_ms;
@@ -262,7 +289,7 @@ bool controller_service_authority(
  * Rejects a request superseded by any STOP, or while safety stops remain. */
 bool controller_service_remote_start(controller_service_t *service,
     uint32_t requested_stop_sequence, uint32_t current_stop_sequence,
-    bool urgent_stop_pending);
+    bool urgent_stop_pending, stop_reason_mask_t expected_stops);
 
 void controller_service_motion_result(controller_service_t *service,
     const motion_goal_result_t *result);

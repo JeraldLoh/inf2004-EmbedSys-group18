@@ -5,9 +5,8 @@
  *
  * The letters are announced on the day, so the map is set at run time from
  * the dashboard's Barcode routes panel: Buddy 1 receives a binary MAP_SET on
- * /command (see subsystem1/buddy1_protocol.h) and calls barcode_map_set()
- * for all 36 characters. The decoder looks the letter up after every read.
- * Power-on map: A=LEFT B=RIGHT C=STRAIGHT D=UTURN.
+ * /command and replaces the entire table. The decoder looks the letter up
+ * after every read. The power-on map is empty.
  *
  * Portable: no tk_* calls and no hardware, so it builds in the host tests.
  */
@@ -20,6 +19,8 @@
 
 /* Command for a decoded character, ROUTE_COMMAND_NONE if not mapped. */
 route_command_t barcode_map_get(char character);
+uint32_t barcode_map_revision(void); /* zero while a replacement is in flight */
+bool barcode_map_replace(const uint8_t commands[BARCODE_MAP_SIZE]);
 
 /* Set one character. Returns false for a character outside A-Z / 0-9. */
 bool barcode_map_set(char character, route_command_t command);

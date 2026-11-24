@@ -4,7 +4,7 @@ export function obstacleOutputs(s) {
  const last=s.state===0?' · last encounter':'';
  return {
   detection:s.state===11?'Unknown · avoidance failed':s.state===0?'No active encounter':'Yes · encounter active',
-  width:s.profile_valid?`${!s.left_found||!s.right_found?'At least ':''}${(s.width_mm/10).toFixed(1)} cm${last}`:'Not reported yet',
+  width:s.profile_valid?(s.left_found&&s.right_found?`${(s.width_mm/10).toFixed(1)} cm${last}`:'Unavailable · incomplete scan'):'Not reported yet',
   direction:s.decision_valid?(['No usable side','Left','Right'][s.side]??'Unknown')+last:'Not decided yet',
   rejoin:s.state===10?'Searching for line':s.state===11?'Avoidance failed':s.state===9?'Not active · bypassing':'Not active'
  };

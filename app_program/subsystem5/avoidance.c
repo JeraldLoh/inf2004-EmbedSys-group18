@@ -310,7 +310,12 @@ static void note_hit(av_t *a, range_reading_t r) {
 }
 
 static bool is_clear(const av_t *a, range_reading_t r, float dir) {
-    return obstacle_is_clear(r, dir, a->ahead_cm, a->cfg.edge_margin_cm, a->cfg.max_range_cm);
+    return r.status == RANGE_OK &&
+        obstacle_is_clear(r, dir, a->ahead_cm, a->cfg.edge_margin_cm, a->cfg.max_range_cm);
+}
+
+static bool is_measured_hit(range_reading_t r) {
+    return r.status == RANGE_OK || r.status == RANGE_TOO_CLOSE;
 }
 
 static obstacle_edge_t make_edge(float dir, float cm, bool found) {
@@ -323,7 +328,7 @@ static obstacle_edge_t make_edge(float dir, float cm, bool found) {
 
 static void finish_edge(av_t *a, int idx, bool found, float edge_dir, float clear_cm) {
     a->edge[idx].done = true;
-    a->edge[idx].found = found;
+    a->edge[idx].found = found && a->edge[idx].measured_hit;
     a->edge[idx].edge_dir = edge_dir;
     a->edge[idx].clear_cm = clear_cm;
 }
@@ -331,6 +336,7 @@ static void finish_edge(av_t *a, int idx, bool found, float edge_dir, float clea
 static void start_coarse(av_t *a) {
     a->coarse_idx = 0;
     a->clear_checks = 0;
+    a->clear_unknown = 0;
     a->shift_cm = 0.0f; // a fresh scan measures from here
     a->origin_deg = a->heading_deg;
     a->leg_active = false;
@@ -512,8 +518,20 @@ static void on_coarse(av_t *a, uint32_t now) {
         a->ahead_cm = obstacle_polar_to_xy(direction_of(a, a->scan_base), near_cm).y_cm;
     }
 
-    bool gone = center.status != RANGE_FAULT &&
+    bool gone = center.status == RANGE_OK &&
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
+    if (near < 0 && center.status != RANGE_OK) {
+        range_reading_t r;
+        if (take(a, now, a->cfg.center_deg, &r) != TAKE_READY) return;
+        emit_point(a, now, a->cfg.center_deg, r);
+        if (is_measured_hit(r)) {
+            a->coarse[a->cfg.coarse_points / 2].reading = r;
+            a->clear_checks = 0;
+        } else if (++a->clear_unknown >= a->cfg.clear_confirm_count + 1) {
+            fail(a, now, "obstacle status unknown: no measured front clearance");
+        }
+        return;
+    }
     // Also after a plain reverse (no side found): car trial 2026-11-10 later,
     // reversed 10 cm, lost the obstacle, resumed and met it again, twice.
     if (gone && !a->off_line && (a->backoffs > 0 || a->reverses > 0) && a->have_prev) {
@@ -536,6 +554,7 @@ static void on_coarse(av_t *a, uint32_t now) {
         for (int i = 0; i < 2; i++) {
             a->edge[i].done = false;
             a->edge[i].found = false;
+            a->edge[i].measured_hit = near >= 0 && a->coarse[near].reading.status == RANGE_OK;
             a->edge[i].last_hit_dir = direction_of(a, a->scan_base);
             a->edge[i].last_hit_cm = near_cm;
             a->edge[i].edge_dir = 0.0f;
@@ -552,6 +571,16 @@ static void on_coarse(av_t *a, uint32_t now) {
     if (a->clear_checks < a->cfg.clear_confirm_count) {
         range_reading_t r;
         if (take(a, now, a->cfg.center_deg, &r) != TAKE_READY) return;
+        if (!is_measured_hit(r)) {
+            emit_point(a, now, a->cfg.center_deg, r);
+            if (++a->clear_unknown >= a->cfg.clear_confirm_count + 1) {
+                fail(a, now, "obstacle status unknown: inconsistent front echoes");
+                return;
+            }
+            a->coarse[a->cfg.coarse_points / 2].reading = r;
+            a->clear_checks = 0;
+            return;
+        }
         a->clear_checks++;
         if (r.status == RANGE_TOO_CLOSE ||
             (r.status == RANGE_OK && r.cm < a->cfg.detect_cm + a->cfg.clear_hysteresis_cm)) {
@@ -602,6 +631,11 @@ static void on_fine(av_t *a, uint32_t now) {
         emit_point(a, now, angle, r);
 
         float dir = direction_of(a, angle);
+        if (!is_measured_hit(r)) {
+            a->fine_open_seen = false;
+            a->fine_offset += a->cfg.fine_step_deg;
+            return;
+        }
         if (is_clear(a, r, dir)) {
             if (a->cfg.fine_confirm_open && !a->fine_open_seen) {
                 a->fine_open_seen = true;
@@ -618,8 +652,11 @@ static void on_fine(av_t *a, uint32_t now) {
             finish_edge(a, idx, true, 0.5f * (a->edge[idx].last_hit_dir + open_dir), open_cm);
         } else {
             a->fine_open_seen = false; // that open step was a missed echo
-            a->edge[idx].last_hit_dir = dir;
-            a->edge[idx].last_hit_cm = hit_cm(a, r);
+            if (r.status == RANGE_OK) {
+                a->edge[idx].measured_hit = true;
+                a->edge[idx].last_hit_dir = dir;
+                a->edge[idx].last_hit_cm = r.cm;
+            }
             note_hit(a, r);
             a->fine_offset += a->cfg.fine_step_deg;
             return;
@@ -684,9 +721,12 @@ static void on_turn_scan(av_t *a, uint32_t now) {
             a->clear_dir = dir;
             a->edge[idx].clear_cm = range_effective_cm(r, a->cfg.max_range_cm);
             a->fine_offset = a->cfg.fine_step_deg;
-        } else {
-            a->edge[idx].last_hit_dir = dir;
-            a->edge[idx].last_hit_cm = hit_cm(a, r);
+        } else if (is_measured_hit(r)) {
+            if (r.status == RANGE_OK) {
+                a->edge[idx].measured_hit = true;
+                a->edge[idx].last_hit_dir = dir;
+                a->edge[idx].last_hit_cm = r.cm;
+            }
             note_hit(a, r);
         }
         return;
@@ -703,6 +743,10 @@ static void on_turn_scan(av_t *a, uint32_t now) {
     if (take(a, now, angle, &r) != TAKE_READY) return;
     emit_point(a, now, angle, r);
     float dir = direction_of(a, angle);
+    if (!is_measured_hit(r)) {
+        a->fine_offset += a->cfg.fine_step_deg;
+        return;
+    }
     if (is_clear(a, r, dir)) {
         // Keep the smallest open reading: the room past the edge is only as
         // good as its most cramped direction.
@@ -712,9 +756,14 @@ static void on_turn_scan(av_t *a, uint32_t now) {
         a->fine_offset += a->cfg.fine_step_deg;
         return;
     }
-    a->edge[idx].last_hit_dir = dir;
-    a->edge[idx].last_hit_cm = hit_cm(a, r);
-    finish_edge(a, idx, true, 0.5f * (dir + a->clear_dir), a->edge[idx].clear_cm);
+    if (r.status == RANGE_OK) {
+        a->edge[idx].measured_hit = true;
+        a->edge[idx].last_hit_dir = dir;
+        a->edge[idx].last_hit_cm = r.cm;
+    }
+    note_hit(a, r);
+    finish_edge(a, idx, true, 0.5f * (a->edge[idx].last_hit_dir + a->clear_dir),
+                a->edge[idx].clear_cm);
     next_edge_stage(a, side);
 }
 
@@ -1099,6 +1148,7 @@ static void pass_watch(av_t *a, uint32_t now) {
     }
     if (r.status == RANGE_FAULT) return;
     emit_point(a, now, angle, r); // side readings show up in the log
+    if (r.status == RANGE_NO_ECHO && a->pass_seen) return;
 
     float cm = r.status == RANGE_TOO_CLOSE ? 0.0f : range_effective_cm(r, a->cfg.max_range_cm);
     point2_t pt = obstacle_polar_to_xy(scan_left_offset_deg(&a->geom, (float)angle), cm);

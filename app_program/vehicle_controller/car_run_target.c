@@ -7,6 +7,7 @@
 #include "../subsystem2/b2_platform_rp2040.h"
 #include "../subsystem2/b2_gesture.h"
 #include "../subsystem3/subsystem3.h"
+#include "../subsystem3/barcode_map.h"
 #include "../subsystem5/subsystem5.h"
 #include "../subsystem4/s4_imu.h"
 #include "../subsystem4/s4_config.h"
@@ -368,17 +369,19 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
     line->analogue_steering = false;
     return true;
 #endif
+    if (!subsystem3_line_fresh()) return false;
     line->steer = subsystem3_steer(&line->analogue_steering);
     line->barcode_active = status.barcode_active != 0U;
     line->on_line = (status.left_black != 0U) || (status.right_black != 0U);
     line->path_valid = false;
-#if CONTROLLER_LINE_BACKTRACK_MM > 0
+#if (CONTROLLER_LINE_BACKTRACK_MM > 0) || CONTROLLER_BARCODE_RETRY
     {
         subsystem2_motion_telemetry_t motion;
         if (subsystem2_motion_telemetry(&motion) && motion.valid && motion.speed_valid)
         { line->path_valid = true; line->path_mm = motion.path_mm; }
     }
 #endif
+    line->barcode_white_ready = subsystem3_barcode_white_ready();
     return true;
 }
 
@@ -470,8 +473,26 @@ static bool line_seen(void)
     (void)status;
     return table_bypass_done;
 #endif
-    return (status.state != LINE_STATE_REACQUIRE) &&
+    return subsystem3_line_fresh() && (status.state != LINE_STATE_REACQUIRE) &&
         ((status.left_black != 0U) || (status.right_black != 0U));
+}
+
+static bool line_progress(uint32_t *path_mm)
+{
+    controller_status_t status;
+    subsystem2_motion_telemetry_t measured;
+    if (!subsystem3_line_fresh() || !controller_get_status(&status) ||
+        status.mode != SYSTEM_MODE_AUTO ||
+        (status.mission != MISSION_TRACK_LINE && status.mission != MISSION_VERIFY_LINE) ||
+        !subsystem2_motion_telemetry(&measured) || !measured.valid ||
+        !measured.speed_valid || (uint32_t)(now_ms() - measured.sampled_ms) > 100U ||
+        measured.left_target_mm_s <= 0 || measured.right_target_mm_s <= 0 ||
+        measured.left_mm_s <= 0 || measured.right_mm_s <= 0)
+    {
+        return false;
+    }
+    *path_mm = measured.path_mm;
+    return true;
 }
 
 /* True once neither line sensor has seen black for CAR_LINE_LOST_MS while
@@ -521,6 +542,10 @@ static ER bring_up(void)
         junction_take_barcode_failure, junction_barcode_reset};
     subsystem5_bindings_t b5 = {0};
     ER er;
+    ER b5_status;
+#if APP_CAR_MQTT
+    ER b1_status;
+#endif
 
     /* Buddy 2 init holds GP8-GP11 low: the motors are safe from here on. */
     if (!b2_platform_init(&hal, &trial_io) || (subsystem2_bind_hal(&hal) != E_OK) ||
@@ -535,6 +560,7 @@ static ER bring_up(void)
     b5.urgent_stop = urgent_stop;
     b5.post_event = controller_post;
     b5.controller_status = controller_get_status;
+    b5.line_progress = line_progress;
     b5.motion.authority = controller_authority;
     /* Buddy 5 proposes, the controller checks authority and forwards to
      * Buddy 2. Halt and the urgent stop stay direct: stopping is always
@@ -549,23 +575,24 @@ static ER bring_up(void)
     er = subsystem2_motion_init(&trial_io);
     if (er == E_OK) { er = controller_task_init(&outputs); }
     if (er == E_OK) { er = controller_task_bind_junction(&junction); }
+    if (er == E_OK) { er = controller_task_bind_route_map(barcode_map_revision); }
     if (er == E_OK)
     {
         er = controller_task_bind_obstacle_motion(subsystem2_motion_goal,
             subsystem2_motion_continuous);
     }
-#if APP_CAR_MQTT
-    if (er == E_OK) { er = subsystem1_init(); }
-#endif
     if (er == E_OK) { er = subsystem3_init(); }
-    if (er == E_OK) { er = subsystem5_bind(&b5); }
-    if (er == E_OK) { er = subsystem5_init(); }
     if (er != E_OK)
     {
         (void)subsystem2_urgent_stop();
         failure = "init failed; no task started";
         return er;
     }
+    b5_status = subsystem5_bind(&b5);
+    if (b5_status == E_OK) b5_status = subsystem5_init();
+#if APP_CAR_MQTT
+    b1_status = subsystem1_init();
+#endif
 
     /* Buddy 4 last: optional, so its failure is recorded, not fatal. */
     {
@@ -580,14 +607,18 @@ static ER bring_up(void)
     if (er == E_OK) { er = subsystem2_motion_start(); }
     if (er == E_OK) { er = controller_task_start(); }
     if (er == E_OK) { er = subsystem3_start(); }
-    if (er == E_OK) { er = subsystem5_start(); }
+    if (er == E_OK && b5_status == E_OK) b5_status = subsystem5_start();
+    if (b5_status != E_OK)
+        tm_printf((UB*)"[CAP] obstacle sensing/bypass unavailable er=%d\n", (int)b5_status);
     if ((er == E_OK) && (b4_init_status == E_OK))
     {
         b4_start_status = subsystem4_start();
         b4_ready = b4_start_status == E_OK;
     }
 #if APP_CAR_MQTT
-    if (er == E_OK) { er = subsystem1_start(); }
+    if (b1_status == E_OK) b1_status = subsystem1_start();
+    if (b1_status != E_OK)
+        tm_printf((UB*)"[CAP] MQTT application unavailable er=%d\n", (int)b1_status);
 #endif
     if (er != E_OK)
     {
@@ -701,8 +732,9 @@ static bool b4_end_of_run(bool *running, uint32_t t)
     uint32_t lift_cm = 0U;
     bool fresh = b4_ready && !b4_stale && s4_shared_read(w);
     bool ended = fresh && s4_end_of_run_from_words(w, &cause, &lift_cm);
+    bool valid = fresh && s4_get(w[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U) != 0U;
 
-    if (!ended && (!announced || fresh))
+    if (!ended && (!announced || valid))
     {
         if (announced)
         {
@@ -735,6 +767,18 @@ static bool b4_end_of_run(bool *running, uint32_t t)
     *running = false;
     return true;
 }
+
+#if APP_CAR_MQTT
+static bool imu_ready_for_remote_restart(void)
+{
+    uint32_t words[S4_WORDS];
+    return b4_ready && !b4_stale && s4_shared_read(words) &&
+        s4_get(words[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U) != 0U &&
+        s4_get(words[S4_W_STATUS], S4_ST_CAL_SHIFT, S4_ST_CAL_WIDTH) >= S4_CAL_LEVEL &&
+        s4_get(words[S4_W_MOTION], S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH) == 0U &&
+        !s4_end_of_run_from_words(words, NULL, NULL);
+}
+#endif
 
 static bool off_ground_end_of_run(bool *running, uint32_t t)
 {
@@ -801,14 +845,82 @@ static void supervise(void)
     uint32_t last_status = now_ms();
     bool running = false;
     bool cutoff_latched = false;   /* the fault is from the cutoff only */
+    bool line_unavailable = false;
+    stop_reason_mask_t previous_stops = STOP_REASON_NONE;
+    controller_junction_phase_t previous_junction_phase = 0;
+    uint32_t previous_routes = 0U, previous_turns = 0U;
     uint32_t posted_evidence = 0U;
+#if CONTROLLER_BARCODE_RETRY
+    uint32_t previous_retry_decision = 0U;
+    static const char *const retry_decision_names[] = {
+        [BARCODE_RETRY_NO_DECISION] = "none",
+        [BARCODE_RETRY_MOTION_BUSY] = "other-motion-active",
+        [BARCODE_RETRY_INTERLOCK] = "interlock-or-holdoff",
+        [BARCODE_RETRY_CAPTURE_PATH] = "missing-capture-start-path",
+        [BARCODE_RETRY_CAPTURE_TIMING] = "capture-timing-mismatch",
+        [BARCODE_RETRY_CURRENT_PATH] = "missing-current-path",
+        [BARCODE_RETRY_DISTANCE] = "distance-out-of-range",
+        [BARCODE_RETRY_GOAL_REJECTED] = "motor-goal-rejected",
+        [BARCODE_RETRY_STARTED] = "reverse-request-accepted"
+    };
+#endif
 #if APP_CAR_MQTT
     bool remote_start_waiting = false;
+    stop_reason_mask_t remote_start_stops = STOP_REASON_NONE;
 #endif
 
     for (;;)
     {
         uint32_t t = now_ms();
+        bool line_available = subsystem3_line_fresh();
+        if (line_available == line_unavailable)
+        {
+            line_unavailable = !line_available;
+            tm_printf((UB*)"[CAP] line samples %s\n",
+                line_available ? "fresh" : "unavailable/stale");
+        }
+        if (controller_get_status(&status))
+        {
+#if CONTROLLER_BARCODE_RETRY
+            if (status.barcode_retry_decision_seq != previous_retry_decision)
+            {
+                previous_retry_decision = status.barcode_retry_decision_seq;
+                tm_printf((UB*)"[CAR RETRY] seq=%lu decision=%s capture_ms=%lu observed_ms=%lu travel_mm=%lu mode=%u mission=%u junction=%u stops=0x%lx\n",
+                    (unsigned long)previous_retry_decision,
+                    retry_decision_names[status.barcode_retry_decision],
+                    (unsigned long)status.barcode_retry_capture_ms,
+                    (unsigned long)status.barcode_retry_observed_ms,
+                    (unsigned long)status.barcode_retry_travel_mm,
+                    (unsigned)status.mode, (unsigned)status.mission,
+                    (unsigned)status.junction_phase, (unsigned long)status.stop_reasons);
+            }
+#endif
+            if (status.stop_reasons != previous_stops)
+            {
+                previous_stops = status.stop_reasons;
+                tm_printf((UB*)"[CAR STOP] reasons=0x%lx mission=%u\n",
+                    (unsigned long)previous_stops, (unsigned)status.mission);
+            }
+            if (status.routes_accepted != previous_routes ||
+                status.junctions_done != previous_turns ||
+                status.junction_phase != previous_junction_phase)
+            {
+                previous_routes = status.routes_accepted;
+                previous_turns = status.junctions_done;
+                previous_junction_phase = status.junction_phase;
+                tm_printf((UB*)"[CAR ROUTE] accepted=%lu junction=%lu phase=%u command=%u done=%lu\n",
+                    (unsigned long)previous_routes, (unsigned long)status.junctions_seen,
+                    (unsigned)previous_junction_phase, (unsigned)status.last_route,
+                    (unsigned long)previous_turns);
+            }
+            if (!line_available && status.mode == SYSTEM_MODE_AUTO)
+            {
+                subsystem2_motion_halt();
+                (void)post(CONTROLLER_EVENT_LATCH_STOP, SYSTEM_MODE_STOPPED,
+                    STOP_REASON_SENSOR_CRITICAL);
+                running = false;
+            }
+        }
 
         /* STOP button / cutoff alarm evidence from Buddy 2's ISRs. The ISR
          * has already stopped the motors; latch it in the controller. */
@@ -862,15 +974,23 @@ static void supervise(void)
             if(choice==B1_STOP){
                 wifi_command_id=id;remote_start_waiting=false;
                 stop_run(&running,"MQTT STOP",STOP_REASON_REMOTE);
-            } else if(choice==B1_START && pickup_ended){
-                tm_printf((UB*)"[CAR] MQTT START refused: pickup stop is still active.\n");
-            } else if(choice==B1_START && events.reasons==STOP_REASON_NONE && !events.cutoff_fired &&
-                      !controller_urgent_stop_pending() && controller_get_status(&status) &&
-                      (status.mode==SYSTEM_MODE_STARTUP || status.mode==SYSTEM_MODE_IDLE || status.mode==SYSTEM_MODE_STOPPED) &&
-                      b1_car_start_allowed(status.stop_reasons,b2_platform_stop_pressed(),running,status.hardware_faults)){
-                if(controller_post_remote_start()){
+            } else if(choice==B1_START){
+                uint32_t ticket=controller_remote_start_ticket();
+                b2_platform_events_t latest={0};
+                b2_platform_peek_events(&latest);
+                if(pickup_ended){
+                    tm_printf((UB*)"[CAR] MQTT START refused: pickup stop is still active.\n");
+                } else if(latest.reasons==STOP_REASON_NONE && !latest.cutoff_fired &&
+                          subsystem3_line_fresh() && controller_get_status(&status) &&
+                          (status.mode==SYSTEM_MODE_STARTUP || status.mode==SYSTEM_MODE_IDLE || status.mode==SYSTEM_MODE_STOPPED) &&
+                          b1_car_start_allowed(status.stop_reasons,b2_platform_stop_pressed(),running,status.hardware_faults,
+                            (status.stop_reasons & STOP_REASON_PHYSICAL) != 0U && imu_ready_for_remote_restart()) &&
+                          controller_post_remote_start(ticket,status.stop_reasons)){
+                    remote_start_stops=status.stop_reasons;
                     wifi_command_id=id;running=true;started_ms=t;last_line_ms=t;start_queued=true;remote_start_waiting=true;
                     tm_printf((UB*)"[CAR] MQTT START requested at configured car speed\n");
+                } else {
+                    tm_printf((UB*)"[CAR] MQTT START refused: STOP, fault or sensor interlock active.\n");
                 }
             }
             wifi_telemetry(t);
@@ -881,7 +1001,7 @@ static void supervise(void)
 #endif
 #if APP_CAR_MQTT
         if(remote_start_waiting && controller_get_status(&status)){
-            int progress=b1_car_start_progress(status.mode,status.stop_reasons,started_ms,t);
+            int progress=b1_car_start_progress(status.mode,status.stop_reasons,remote_start_stops,started_ms,t);
             if(progress!=0) remote_start_waiting=false;
             if(progress<0) stop_run(&running,"MQTT START not applied",STOP_REASON_REMOTE);
         }
