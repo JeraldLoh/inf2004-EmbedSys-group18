@@ -88,6 +88,12 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #define S3_ROUTE_VALID_MS 10000U /* TBD: measure barcode-to-junction time */
 #define S3_DEBUG_PERIOD_MS 100U
 
+#ifndef S3_GROUND_LOG
+#define S3_GROUND_LOG 0
+#endif
+LOCAL volatile uint32_t s3_ground_word;
+EXPORT uint32_t subsystem3_ground_sample(void) { return s3_ground_word; }
+
 /* Where the task is, for the [S3 TASK] line printed by another task. 0 = asleep,
  * 1..8 = the step it last reached. A frozen counter with a frozen stage shows
  * where the task is stuck. */
@@ -366,6 +372,9 @@ LOCAL BOOL s3_barcode_reset_take(void)
     if (requested)
     {
         s3_fail_pending = FALSE;
+        s3_route_pending = FALSE;
+        s3_junction_pending = FALSE;
+        s3_probe = S3_PROBE_IDLE;
     }
     (void)tk_unl_mtx(s3_mtx);
     return requested;
@@ -463,6 +472,7 @@ LOCAL void s3_task(INT stacd, void *exinf)
             decoder.trace_count = 0U;
             decoder.trace_id = 0U;
             capture_busy = false;
+            barcode_seen = false;
         }
 
         /* ---- Line ---- */
@@ -531,6 +541,23 @@ LOCAL void s3_task(INT stacd, void *exinf)
         {
             s3_dbg_stage = 5U;        /* reading the barcode input (ADC) */
             bool have_raw = (drv_ir_read_barcode(&raw) == E_OK);
+            s3_ground_word = ((s3_dbg_loops & 0xFFFFU) << 16) |
+                (have_raw ? ((uint32_t)raw & 0xFFFU) | (1U << 14) : 0U) |
+                (left_black ? 1U << 12 : 0U) |
+                (right_black ? 1U << 13 : 0U);
+#if S3_GROUND_LOG
+            {
+                static uint32_t ground_logged_ms;
+                if ((uint32_t)(now_ms - ground_logged_ms) >= 100U)
+                {
+                    ground_logged_ms = now_ms;
+                    tm_printf((UB*)"[GROUND] L=%d R=%d adc=%u valid=%d seq=%lu\n",
+                        (int)left_black, (int)right_black,
+                        (unsigned)(have_raw ? raw : 0U), (int)have_raw,
+                        (unsigned long)(s3_dbg_loops & 0xFFFFU));
+                }
+            }
+#endif
             s3_dbg_stage = 6U;        /* classify and decode */
 #if APP_CAR_MQTT
             s3_wifi.adc_valid=have_raw;

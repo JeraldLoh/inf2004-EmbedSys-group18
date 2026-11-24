@@ -37,6 +37,11 @@ IMPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms);
  * re-read pass, so the decoder is idle when the bars arrive. */
 IMPORT void subsystem3_barcode_reset(void);
 
+/* One coherent aligned word: ADC bits 0..11, L/R black bits 12/13,
+ * ADC-valid bit 14, acquisition sequence bits 16..31. No decoded/classified
+ * barcode state is used to decide whether the floor is reflecting. */
+IMPORT uint32_t subsystem3_ground_sample(void);
+
 /* No-barcode junction probe (see subsystem3.c). The controller:
  *   1. sees subsystem3_probe_requested() == TRUE
  *   2. stops just past the crossbar, calls subsystem3_probe_begin()

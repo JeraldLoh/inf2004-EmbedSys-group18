@@ -394,6 +394,8 @@ bool subsystem2_motion_telemetry(subsystem2_motion_telemetry_t *out)
     out->right_target_mm_s = e->status.target_um_s[1]/1000;
     out->speed_valid = out->valid && e->status.wheels.speed_valid;
     out->qualified = e->config.qualified;
+    out->path_mm = (uint32_t)((e->status.wheels.travel_um[0] +
+        e->status.wheels.travel_um[1]) / 2000U);
     out->encoder_left_counts=e->config.measurement.counts_per_rev[0];
     out->encoder_right_counts=e->config.measurement.counts_per_rev[1];
     out->wheel_diameter_mm=e->config.measurement.diameter_mm;

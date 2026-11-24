@@ -380,6 +380,9 @@ typedef struct
     int probe_ends;
     motion_goal_request_t goals[8];
     int goal_count;
+    bool read_failed;
+    uint32_t read_elapsed_ms;
+    int decoder_resets;
     bool reject_goal;
     motion_result_code_t goal_code;   /* what goal_result reports */
     bool publish_after_first_take;    /* Buddy 3 publishes between the takes */
@@ -472,11 +475,24 @@ static bool fj_read_line(void *context, controller_line_input_t *line)
     return fake_read_line(&((fake_junction_t *)context)->car, line);
 }
 
+static bool fj_take_failure(void *context, uint32_t *elapsed_ms)
+{
+    fake_junction_t *f = context;
+    if (!f->read_failed) { return false; }
+    f->read_failed = false;
+    *elapsed_ms = f->read_elapsed_ms;
+    return true;
+}
+
+static void fj_decoder_reset(void *context)
+{ ((fake_junction_t *)context)->decoder_resets++; }
+
 static const controller_junction_outputs_t *fj_outputs(fake_junction_t *f)
 {
     static controller_junction_outputs_t outputs;
     controller_junction_outputs_t o = {NULL, fj_take_route, fj_take_junction,
-        fj_probe_requested, fj_probe_begin, fj_probe_end, fj_goal, fj_goal_result};
+        fj_probe_requested, fj_probe_begin, fj_probe_end, fj_goal, fj_goal_result,
+        fj_take_failure, fj_decoder_reset};
     o.context = f;
     outputs = o;
     return &outputs;
@@ -948,8 +964,73 @@ static void test_line_search_off_by_default(void)
     assert((f.goal_count == 0) && !service.status.line_searching);
 }
 
+static void test_backtrack_uses_encoders_and_stops_on_line(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    uint32_t generation;
+    start_junctions(&service, &f);
+    service.line.lost_ms = 100U;
+    service.line.backtrack_mm = 150U;
+    f.car.line.on_line = true;
+    f.car.line.path_valid = true;
+    f.car.line.path_mm = 100U;
+    controller_service_tick(&service, 100U);
+    generation = service.controller.authority_generation;
+    f.car.line.on_line = false;
+    f.car.line.path_mm = 155U;
+    controller_service_tick(&service, 210U);
+    assert(service.search_backtrack && f.goal_count == 1);
+    assert(f.goals[0].type == MOTION_GOAL_REVERSE);
+    assert(f.goals[0].target_mm == 55);
+    f.car.line.on_line = true;
+    controller_service_tick(&service, 220U);
+    assert(!service.searching && !service.controller.active_goal);
+    assert(service.controller.authority_generation == generation + 1U);
+    assert(f.car.motion.stops > 0);
+}
+
+#if CONTROLLER_BARCODE_RETRY
+static void test_retry_episode_and_reverse_routes(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    controller_event_t idle = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_IDLE,
+        STOP_REASON_NONE, MISSION_IDLE, false};
+    controller_event_t run = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_AUTO,
+        STOP_REASON_NONE, MISSION_IDLE, false};
+    start_junctions(&service, &f);
+    f.read_failed = true; f.read_elapsed_ms = 3000U;
+    controller_service_tick(&service, 100U);
+    assert(service.rereading && f.goal_count == 1);
+    publish_route(&f, ROUTE_COMMAND_LEFT); /* Decoded while reversing. */
+    controller_service_tick(&service, 8000U);
+    assert(!f.route_ready && service.status.routes_accepted == 0U);
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 9000U);
+    assert(service.reread_slow && f.decoder_resets == 1);
+    f.read_failed = true;
+    controller_service_tick(&service, 16000U); /* Original 6 s holdoff expired. */
+    assert(f.goal_count == 1 && service.reread_slow);
+    controller_service_tick(&service, 17000U);
+    assert(!service.reread_slow);
+    f.read_failed = true;
+    controller_service_tick(&service, 18000U);
+    assert(f.goal_count == 1); /* Same approach cannot start another reverse. */
+    assert(controller_service_handle(&service, &idle));
+    assert(controller_service_handle(&service, &run));
+    f.read_failed = true;
+    controller_service_tick(&service, 19000U);
+    assert(f.goal_count == 2 && service.status.barcode_retries == 2U);
+}
+#endif
+
 int main(void)
 {
+    test_backtrack_uses_encoders_and_stops_on_line();
+#if CONTROLLER_BARCODE_RETRY
+    test_retry_episode_and_reverse_routes();
+#endif
     test_line_lost_pivots_until_a_sensor_sees_it();
     test_line_search_sweeps_both_ways_then_stops();
     test_line_search_off_by_default();

@@ -13,7 +13,11 @@ static bool reached(uint32_t now, uint32_t deadline)
 /* Straight-line right-wheel trim in 1/100 percent. Fixed unless
  * B2_STRAIGHT_TRIM_LEARN, then adapted from line corrections (RAM only,
  * resets at boot). */
+#if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
 static int32_t b2_trim_x100 = (int32_t)B2_STRAIGHT_RIGHT_TRIM_PERCENT * 100;
+#else
+static int32_t b2_trim_x100 = 10000;
+#endif
 #if B2_STRAIGHT_TRIM_LEARN
 static int32_t b2_prev_sign;
 static int32_t b2_pending_delta;      /* step applied by the current correction */
@@ -90,59 +94,60 @@ bool measured_motion_executor_init(measured_motion_executor_t *e, drv_motor_t *m
  * end of a retrace clear it. */
 static void path_clear(measured_motion_executor_t *e)
 {
-    e->path_head = 0U;
-    e->path_count = 0U;
+#if CONTROLLER_BARCODE_RETRY
+    wheel_path_clear(&e->path);
     e->path_prev_valid = false;
+#else
+    (void)e;
+#endif
+}
+
+static void path_pause(measured_motion_executor_t *e)
+{
+#if CONTROLLER_BARCODE_RETRY
+    e->path_prev_valid = false;
+#else
+    (void)e;
+#endif
 }
 
 static void path_record(measured_motion_executor_t *e)
 {
-    unsigned i;
-
+#if CONTROLLER_BARCODE_RETRY
     if (e->path_prev_valid)
     {
-        for (i = 0U; i < 2U; ++i)
-        {
-            uint64_t delta = e->measurement.sample.travel_um[i] -
-                e->path_prev_um[i];
-
-            e->path_um[e->path_head][i] =
-                (uint16_t)(delta > 0xFFFFU ? 0xFFFFU : delta);
-        }
-        e->path_head = (uint16_t)((e->path_head + 1U) % B2_RETRACE_SAMPLES);
-        if (e->path_count < B2_RETRACE_SAMPLES)
-        {
-            e->path_count++;
-        }
+        wheel_path_record(&e->path,
+            e->measurement.sample.travel_um[0] - e->path_prev_um[0],
+            e->measurement.sample.travel_um[1] - e->path_prev_um[1]);
     }
     e->path_prev_um[0] = e->measurement.sample.travel_um[0];
     e->path_prev_um[1] = e->measurement.sample.travel_um[1];
     e->path_prev_valid = true;
+#else
+    (void)e;
+#endif
 }
 
-/* Walk back from the newest sample until the centre distance reaches
- * target_mm. False when the ring holds less than half of it. */
-static bool path_plan(const measured_motion_executor_t *e, uint32_t target_mm,
+static bool path_plan(measured_motion_executor_t *e, uint32_t target_mm,
     uint64_t wheel_um[2])
 {
-    uint64_t target_um = (uint64_t)target_mm * 1000U;
-    uint16_t index = e->path_head;
-    uint16_t n;
+#if CONTROLLER_BARCODE_RETRY
+    return wheel_path_plan(&e->path, target_mm, wheel_um);
+#else
+    (void)e; (void)target_mm; (void)wheel_um;
+    return false;
+#endif
+}
 
-    wheel_um[0] = 0U;
-    wheel_um[1] = 0U;
-    for (n = 0U; n < e->path_count; ++n)
-    {
-        index = (uint16_t)((index + B2_RETRACE_SAMPLES - 1U) %
-            B2_RETRACE_SAMPLES);
-        wheel_um[0] += e->path_um[index][0];
-        wheel_um[1] += e->path_um[index][1];
-        if (((wheel_um[0] + wheel_um[1]) / 2U) >= target_um)
-        {
-            break;
-        }
-    }
-    return ((wheel_um[0] + wheel_um[1]) / 2U) >= (target_um / 2U);
+static void path_advance(measured_motion_executor_t *e)
+{
+#if CONTROLLER_BARCODE_RETRY
+    uint32_t chunk = 4U * e->config.tolerance_um;
+    if (chunk < 20000U) { chunk = 20000U; }
+    wheel_path_next(&e->path, chunk);
+#else
+    (void)e;
+#endif
 }
 
 static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
@@ -179,7 +184,7 @@ static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
 static void finish_as(measured_motion_executor_t *e, motion_result_code_t code, bool inhibit)
 {
     bool reporting = e->status.state == MOTION_EXEC_GOAL;
-    e->path_prev_valid = false;
+    path_pause(e);
     if (inhibit || (reporting && (e->goal.type == MOTION_GOAL_RETRACE)))
     {
         path_clear(e);
@@ -388,6 +393,7 @@ motion_status_t measured_motion_executor_goal(measured_motion_executor_t *e,
         e->retrace_mm[0] = (uint32_t)(wheel_um[0] / 1000U);
         e->retrace_mm[1] = (uint32_t)(wheel_um[1] / 1000U);
         e->retrace_seq++;
+        path_advance(e);
     }
     else
     {
@@ -450,7 +456,7 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     if (e->status.state != MOTION_EXEC_CONTINUOUS && e->status.state != MOTION_EXEC_GOAL)
     {
         motion_motor_state_t idle;
-        e->path_prev_valid = false;   /* travel while idle is not path */
+        path_pause(e);   /* travel while idle is not path */
         if (e->status.authorized && (drv_motor_read(e->motor, &idle) != MOTION_OK ||
             idle.stop_sequence != e->permit_ticket || e->io.stop_pending(e->io.context)))
         { finish(e, MOTION_RESULT_CANCELLED); }
@@ -492,7 +498,9 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     }
     else
     {
-        e->path_prev_valid = false;
+        if (e->status.state == MOTION_EXEC_CONTINUOUS)
+        { path_clear(e); } /* Obstacle arcs cannot splice two LINE histories. */
+        else { path_pause(e); }
     }
     if (e->status.state == MOTION_EXEC_CONTINUOUS)
     {
@@ -610,9 +618,22 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
         bool retrace = e->goal.type == MOTION_GOAL_RETRACE;
         bool linear_goal = e->goal.type == MOTION_GOAL_FORWARD ||
             e->goal.type == MOTION_GOAL_REVERSE || retrace;
-        uint64_t tmax = e->goal_wheel_um[0] > e->goal_wheel_um[1] ?
-            e->goal_wheel_um[0] : e->goal_wheel_um[1];
-        uint64_t sync_slack = linear_goal ? e->config.linear_sync_slack_um : e->config.pivot_sync_slack_um;
+        uint64_t waypoint[2] = {e->goal_wheel_um[0], e->goal_wheel_um[1]};
+#if CONTROLLER_BARCODE_RETRY
+        if (retrace)
+        {
+            while (e->path.remaining != 0U &&
+                e->measurement.sample.travel_um[0] - e->goal_base_um[0] +
+                    e->config.tolerance_um >= e->path.waypoint_um[0] &&
+                e->measurement.sample.travel_um[1] - e->goal_base_um[1] +
+                    e->config.tolerance_um >= e->path.waypoint_um[1])
+            { path_advance(e); }
+            waypoint[0] = e->path.waypoint_um[0];
+            waypoint[1] = e->path.waypoint_um[1];
+        }
+#endif
+        uint64_t sync_slack = retrace ? 0U :
+            (linear_goal ? e->config.linear_sync_slack_um : e->config.pivot_sync_slack_um);
         if (!linear_goal && sync_slack > e->goal_target_um/2U) { sync_slack = e->goal_target_um/2U; }
         if (sync_slack != 0U)
         {
@@ -644,10 +665,23 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
                     if(slowed<floor) { slowed=floor; }
                 }
                 desired[i] = e->goal.max_speed_mm_s*1000U;
-                if (retrace && tmax != 0U)
-                {   /* both wheels finish together: scale by target / max */
-                    desired[i] = (uint32_t)((uint64_t)desired[i] *
-                        e->goal_wheel_um[i] / tmax);
+                if (retrace)
+                {
+                    uint64_t gap[2];
+                    uint64_t largest;
+                    uint32_t floor = e->config.linear_goal_min_speed_mm_s * 1000U;
+                    uint32_t cap = e->goal.max_speed_mm_s * 1000U;
+                    if (floor > cap) { floor = cap; }
+                    gap[0] = waypoint[0] > e->measurement.sample.travel_um[0] - e->goal_base_um[0] ?
+                        waypoint[0] - (e->measurement.sample.travel_um[0] - e->goal_base_um[0]) : 0U;
+                    gap[1] = waypoint[1] > e->measurement.sample.travel_um[1] - e->goal_base_um[1] ?
+                        waypoint[1] - (e->measurement.sample.travel_um[1] - e->goal_base_um[1]) : 0U;
+                    largest = gap[0] > gap[1] ? gap[0] : gap[1];
+                    if (largest != 0U)
+                    { desired[i] = (uint32_t)((uint64_t)cap * gap[i] / largest); }
+                    /* A reached waypoint may hold a wheel at zero; a rolling
+                     * wheel never receives a target below its calibrated floor. */
+                    if (desired[i] != 0U && desired[i] < floor) { desired[i] = floor; }
                 }
                 if (slowed < desired[i]) { desired[i] = (uint32_t)slowed; }
                 complete = false;

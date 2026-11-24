@@ -554,7 +554,18 @@ static void end_run_step(
 
     if (jolt)
     {
+#if S4_LIFT_JOLT_PAUSE
+        /* A rejected sample must not erase a lift already in progress or
+         * extend its integration window indefinitely. No impulse is added. */
+        if (est->lift_active)
+        {
+            est->lift_ms = add_sat_u16(est->lift_ms, dt_ms);
+            if (est->lift_ms >= est->cfg.lift_window_ms)
+            { est->lift_active = 0U; }
+        }
+#else
         est->lift_active = 0U;   /* a knock is not a lift */
+#endif
         return;
     }
     if (!est->lift_active)

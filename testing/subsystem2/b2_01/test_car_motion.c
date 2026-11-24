@@ -28,7 +28,8 @@ static bool drive(void *p,const motion_continuous_request_t *r) {
     fixture_t *f=p; return car_motion_continuous(&f->motion,r,f->ms,f->fake.now_us);
 }
 static bool line(void *p,controller_line_input_t *r) {
-    r->steer=((fixture_t *)p)->steer; r->barcode_active=false; return true;
+    r->steer=((fixture_t *)p)->steer; r->barcode_active=false;
+    r->on_line=true; r->analogue_steering=false; r->path_valid=false; return true;
 }
 static bool authority(motion_source_t s,authority_generation_t *g)
 { return controller_service_authority(&current->controller,s,g); }
@@ -180,7 +181,7 @@ static bool junction_result(void *p,goal_id_t id,motion_goal_result_t *r)
 { return car_motion_result(&((fixture_t *)p)->motion,MOTION_SOURCE_JUNCTION,id,r); }
 static void junction(void) {
     fixture_t f;
-    controller_junction_outputs_t ops={&f,take_route,take_junction,no_probe,probe,probe,junction_goal,junction_result};
+    controller_junction_outputs_t ops={&f,take_route,take_junction,no_probe,probe,probe,junction_goal,junction_result,NULL,NULL};
     init(&f,true);
     assert(controller_service_bind_junction(&f.controller,&ops));
     f.controller.junction.goal_speed_mm_s=30U;

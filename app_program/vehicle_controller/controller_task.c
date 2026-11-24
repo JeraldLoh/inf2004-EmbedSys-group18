@@ -30,6 +30,7 @@ static T_SPLOCK ingress_lock;
 #endif
 static stop_reason_mask_t urgent_reasons;
 static uint32_t urgent_sequence;
+static uint32_t obstacle_unavailable; /* protected by ingress_lock */
 static controller_motion_request_t latest_continuous;
 static bool continuous_pending;
 static bool (*terrain_reader)(terrain_report_t *report); /* set before start */
@@ -338,6 +339,13 @@ bool controller_get_status(controller_status_t *status)
     if (!initialized || status == NULL || tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK)
     { return false; }
     controller_service_status(&service, status);
+    {
+        UINT saved = ingress_enter();
+        uint32_t missed = obstacle_unavailable;
+        ingress_leave(saved);
+        status->obstacle_moves_rejected = missed > UINT32_MAX - status->obstacle_moves_rejected ?
+            UINT32_MAX : status->obstacle_moves_rejected + missed;
+    }
     (void)tk_unl_mtx(guard); return true;
 }
 bool controller_get_motion_status(controller_motion_status_t *status)
@@ -363,6 +371,17 @@ static bool obstacle_approved(
         (generation == current);
 }
 
+static bool obstacle_unavailable_reject(void)
+{
+    if (initialized)
+    {
+        UINT saved = ingress_enter();
+        if (obstacle_unavailable != UINT32_MAX) { obstacle_unavailable++; }
+        ingress_leave(saved);
+    }
+    return false;
+}
+
 bool controller_obstacle_goal(const motion_goal_request_t *goal)
 {
     bool ok;
@@ -370,7 +389,7 @@ bool controller_obstacle_goal(const motion_goal_request_t *goal)
     if (!initialized || (goal == NULL) || (obstacle_goal_fn == NULL) ||
         (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
     {
-        return false;
+        return obstacle_unavailable_reject();
     }
     ok = obstacle_approved(goal->source, goal->authority_generation) &&
         obstacle_goal_fn(goal);
@@ -393,7 +412,7 @@ bool controller_obstacle_continuous(const motion_continuous_request_t *request)
     if (!initialized || (request == NULL) || (obstacle_continuous_fn == NULL) ||
         (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
     {
-        return false;
+        return obstacle_unavailable_reject();
     }
     ok = obstacle_approved(request->source, request->authority_generation) &&
         obstacle_continuous_fn(request);

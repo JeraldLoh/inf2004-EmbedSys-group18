@@ -104,6 +104,36 @@ static void pivot(bool right,bool legacy) {
     }
     measured_motion_executor_cancel(&f.e,MOTION_RESULT_CANCELLED); fake_assert_safe(&f.fake);
 }
+#if CONTROLLER_BARCODE_RETRY
+static void retrace(void)
+{
+    fixture_t f;
+    motion_goal_request_t r = {1U,1U,MOTION_SOURCE_CALIBRATION,
+        MOTION_GOAL_RETRACE,80,0,80U,0U};
+    motion_goal_result_t result;
+    unsigned i;
+    bool first_bend = false, second_bend = false;
+    init(&f, false);
+    for (i = 0U; i < 20U; ++i) { wheel_path_record(&f.e.path, 3000U, 1000U); }
+    for (i = 0U; i < 20U; ++i) { wheel_path_record(&f.e.path, 1000U, 3000U); }
+    assert(measured_motion_executor_goal(&f.e,&r,0U,1000000U)==MOTION_OK);
+    for (i = 0U; i < 600U && !f.e.status.terminal_pending; ++i)
+    {
+        first_bend |= f.e.path.waypoint_um[1] > f.e.path.waypoint_um[0];
+        second_bend |= first_bend && f.e.path.segment_um[0] > f.e.path.segment_um[1];
+        plant(&f, false, 300000U);
+        assert(f.e.status.target_um_s[0] <= 0 && f.e.status.target_um_s[1] <= 0);
+    }
+    assert(measured_motion_executor_result(&f.e,&result));
+    printf("retrace result=%u mm=%ld bend_order=%d/%d\n",(unsigned)result.code,
+        (long)result.travelled_mm,(int)first_bend,(int)second_bend);
+    fflush(stdout);
+    assert(result.code == MOTION_RESULT_COMPLETED && result.travelled_mm < 0);
+    assert(first_bend && second_bend && f.e.path.count == 0U);
+    measured_motion_executor_cancel(&f.e,MOTION_RESULT_CANCELLED);
+    fake_assert_safe(&f.fake);
+}
+#endif
 int main(int argc,char **argv) {
     assert(argc==2);
     if(strcmp(argv[1],"pivot_left")==0) { pivot(false,false); }
@@ -116,6 +146,9 @@ int main(int argc,char **argv) {
     else if(strcmp(argv[1],"blocked")==0) { run(false,true,false,300000U); }
     else if(strcmp(argv[1],"cap")==0) { cap(false); }
     else if(strcmp(argv[1],"pivot_cap")==0) { cap(true); }
+#if CONTROLLER_BARCODE_RETRY
+    else if(strcmp(argv[1],"retrace")==0) { retrace(); }
+#endif
     else { assert(false); }
     printf("PASS distance approach %s\n",argv[1]); return 0;
 }

@@ -62,6 +62,8 @@ typedef struct
     bool barcode_active;   /* a barcode is being read: hold a steady speed */
     bool on_line;          /* either sensor sees black (line search) */
     bool analogue_steering;
+    bool path_valid;
+    uint32_t path_mm;      /* mean wheel travel; used only for reverse search */
 } controller_line_input_t;
 
 typedef struct
@@ -202,6 +204,8 @@ typedef struct
     system_time_ms_t holdoff_until_ms;
 
     system_time_ms_t line_seen_ms;
+    uint32_t line_seen_path_mm;
+    bool line_seen_path_valid;
     bool searching;
     bool search_seen;      /* a sensor saw black during this step */
     bool search_backtrack; /* the first search step is a reverse */
@@ -210,6 +214,7 @@ typedef struct
     system_time_ms_t reread_slow_until_ms;
     system_time_ms_t retry_holdoff_until_ms;
     bool retry_holdoff;    /* retry_holdoff_until_ms is set */
+    bool retry_episode;    /* re-arm only after a completed junction or new run */
     int32_t reread_mm;     /* the retrace distance, for the slow pass time */
     int8_t search_dir;     /* +1 right, -1 left: the side tried first */
     int8_t search_pass;    /* 0 toward search_dir, 1 the other way */

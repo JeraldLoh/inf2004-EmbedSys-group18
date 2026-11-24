@@ -5,6 +5,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(B2_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../../app_program/subsystem2")
 option(B2_COVERAGE "Instrument native driver tests with GCC coverage" OFF)
+option(B2_BARCODE_RETRY "Exercise the optional encoder retrace" OFF)
 
 add_library(b2_foundation STATIC
     ${B2_SOURCE}/motion_hal.c
@@ -18,6 +19,9 @@ add_library(b2_foundation STATIC
 )
 target_include_directories(b2_foundation PUBLIC ${B2_SOURCE} stubs)
 target_compile_definitions(b2_foundation PRIVATE APP_B2_BENCH=1 APP_B2_MOVE_TEST=1)
+if(B2_BARCODE_RETRY)
+    target_compile_definitions(b2_foundation PUBLIC CONTROLLER_BARCODE_RETRY=1)
+endif()
 add_library(b2_fake STATIC fake_motion_hal.c)
 target_link_libraries(b2_fake PUBLIC b2_foundation)
 
@@ -102,7 +106,8 @@ foreach(case IN ITEMS unqualified steering obstacle b5_goal junction stop_ids de
     add_test(NAME b2_car_${case} COMMAND test_car_motion ${case})
 endforeach()
 add_executable(test_car_startup test_car_startup.c
-    ${B2_SOURCE}/../vehicle_controller/car_run_target.c)
+    ${B2_SOURCE}/../vehicle_controller/car_run_target.c
+    ${B2_SOURCE}/../subsystem4/s4_shared.c)
 target_include_directories(test_car_startup PRIVATE ${B2_SOURCE} stubs)
 target_compile_definitions(test_car_startup PRIVATE APP_CAR_RUN=1 APP_B2_BENCH=0)
 foreach(case IN ITEMS unqualified qualified init_failure stop_ack trial)
@@ -141,6 +146,9 @@ endforeach()
 add_executable(test_goal_approach test_goal_approach.c ${B2_SOURCE}/../diagnostics/b2_move_profile.c)
 target_compile_definitions(test_goal_approach PRIVATE APP_B2_MOVE_TEST=1)
 target_link_libraries(test_goal_approach PRIVATE b2_fake)
+if(B2_BARCODE_RETRY)
+    add_test(NAME b2_goal_approach_retrace COMMAND test_goal_approach retrace)
+endif()
 foreach(case IN ITEMS legacy_shortfall forward reverse coast blocked cap pivot_left pivot_right pivot_legacy pivot_cap)
     add_test(NAME b2_goal_approach_${case} COMMAND test_goal_approach ${case})
 endforeach()
@@ -165,7 +173,8 @@ foreach(case IN ITEMS trial_limit trial_fault trial_idle)
     add_test(NAME b2_integrated_startup_${case} COMMAND test_integrated_trial_startup ${case})
 endforeach()
 add_executable(test_integrated_trial_unlimited test_car_startup.c
-    ${B2_SOURCE}/../vehicle_controller/car_run_target.c)
+    ${B2_SOURCE}/../vehicle_controller/car_run_target.c
+    ${B2_SOURCE}/../subsystem4/s4_shared.c)
 target_include_directories(test_integrated_trial_unlimited PRIVATE ${B2_SOURCE} stubs)
 target_compile_definitions(test_integrated_trial_unlimited PRIVATE APP_CAR_RUN=1 APP_CAR_B2_TRIAL=1 APP_B2_BENCH=0)
 add_test(NAME b2_integrated_startup_trial_unlimited COMMAND test_integrated_trial_unlimited trial_unlimited)

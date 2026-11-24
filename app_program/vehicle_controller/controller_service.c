@@ -338,14 +338,24 @@ bool controller_service_handle(
 {
     controller_action_t action = {0};
     bool applied;
+    bool was_auto;
 
     if ((service == NULL) || !service->initialized)
     {
         return false;
     }
+    was_auto = service->controller.mode == SYSTEM_MODE_AUTO;
     applied = (event != NULL) && apply(service, event, &action);
     if (applied)
     {
+        if (event->type == CONTROLLER_EVENT_SET_MODE &&
+            event->mode == SYSTEM_MODE_AUTO && !was_auto)
+        {
+            service->retry_episode = false;
+            service->retry_holdoff = false;
+            service->rereading = false;
+            service->reread_slow = false;
+        }
         service->status.events_applied++;
         execute(service, &action);
     }
@@ -574,6 +584,7 @@ static void finish_route(
     action = vehicle_controller_on_motion_result(&service->controller, result);
     execute(service, &action);
     service->status.junctions_done++;
+    service->retry_episode = false;
     service->holdoff = true;
     service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
     set_phase(service, CONTROLLER_JUNCTION_IDLE, now_ms);
@@ -760,6 +771,7 @@ static void pause_finish(controller_service_t *service, system_time_ms_t now_ms)
     controller->mission = MISSION_TRACK_LINE;
     service->status.last_route = ROUTE_COMMAND_STRAIGHT;
     service->status.junctions_done++;
+    service->retry_episode = false;
     service->holdoff = true;
     service->holdoff_until_ms = now_ms + service->junction.holdoff_ms;
     set_phase(service, CONTROLLER_JUNCTION_IDLE, now_ms);
@@ -932,6 +944,7 @@ static void search_end(controller_service_t *service, system_time_ms_t now_ms)
     service->search_backtrack = false;
     service->status.line_searching = false;
     service->line_seen_ms = now_ms;
+    service->line_seen_path_valid = false;
     /* Pivoting over the line can look like a crossbar: drop those events. */
     (void)service->junction_out.take_route(service->junction_out.context, &route);
     (void)service->junction_out.take_junction(service->junction_out.context, &junction);
@@ -988,32 +1001,16 @@ static void search_next(controller_service_t *service, system_time_ms_t now_ms)
 /* Reverse the distance driven since the line was last seen, capped at
  * backtrack_mm. A straight reverse is close enough to the path the car drove.
  * Returns true when the reverse goal was submitted. */
-static bool search_backtrack_start(
-    controller_service_t *service,
-    system_time_ms_t now_ms)
+static bool search_backtrack_start(controller_service_t *service,
+    const controller_line_input_t *line)
 {
-    uint32_t elapsed_ms = (uint32_t)(now_ms - service->line_seen_ms);
-    uint32_t cap_mm = service->line.backtrack_mm;
     uint32_t mm;
-
-    if (cap_mm == 0U)
-    {
-        return false;
-    }
-    if (elapsed_ms > 60000U)
-    {
-        elapsed_ms = 60000U;   /* keeps the product below 32 bits */
-    }
-    mm = (service->line.cruise_mm_s * elapsed_ms) / 1000U;
-    if (mm > cap_mm)
-    {
-        mm = cap_mm;
-    }
-    if (mm == 0U)
-    {
-        return false;
-    }
-    return submit_goal(service, MOTION_GOAL_REVERSE, (int32_t)mm, 0);
+    if (service->line.backtrack_mm == 0U || !line->path_valid ||
+        !service->line_seen_path_valid)
+    { return false; } /* Do not invent reverse distance from commanded speed. */
+    mm = line->path_mm - service->line_seen_path_mm;
+    if (mm > service->line.backtrack_mm) { mm = service->line.backtrack_mm; }
+    return mm != 0U && submit_goal(service, MOTION_GOAL_REVERSE, (int32_t)mm, 0);
 }
 
 /* backtrack: reverse first (line lost while tracking). The caller passes
@@ -1031,7 +1028,7 @@ static void search_start(controller_service_t *service,
     service->search_mdeg = 0;
     service->search_seen = false;
     service->search_backtrack = false;
-    if (backtrack && search_backtrack_start(service, now_ms))
+    if (backtrack && search_backtrack_start(service, line))
     {
         service->search_backtrack = true;
         return;
@@ -1055,6 +1052,24 @@ static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
     if (service->outputs.read_line(service->outputs.context, &line) && line.on_line)
     {
         service->search_seen = true;
+        if (service->search_backtrack)
+        {
+            bool stopped = service->outputs.stop_motion(service->outputs.context);
+            goal_step_done(service);
+            search_end(service, now_ms);
+            /* halt retires LINE authority: resume only under a new generation. */
+            service->controller.authority_generation++;
+            if (service->controller.authority_generation == 0U)
+            { service->controller.authority_generation = 1U; }
+            if (!stopped)
+            {
+                controller_action_t action = vehicle_controller_latch_stop(
+                    &service->controller, STOP_REASON_MOTION_FAULT);
+                execute(service, &action);
+            }
+            refresh_status(service);
+            return;
+        }
     }
     switch (poll_goal(service, &result))
     {
@@ -1092,9 +1107,9 @@ static void search_tick(controller_service_t *service, system_time_ms_t now_ms)
 #if CONTROLLER_BARCODE_RETRY
 /* ---- Barcode re-read ----------------------------------------------------
  * Buddy 3 reports a failed read of a barcode-sized capture. The car retraces
- * (Buddy 2 replays its recorded line-following path backwards), then drives
- * the barcode again at a slow constant speed. A rejected or failed retrace
- * never latches a stop: the car just carries on line following. */
+ * (Buddy 2 follows recorded wheel-distance waypoints backwards), then drives
+ * the barcode again at a slow speed. Admission rejection falls back to line
+ * following. Executor faults retain Buddy 2's protective stop. */
 
 static bool reread_take(controller_service_t *service, uint32_t *elapsed_ms)
 {
@@ -1108,6 +1123,7 @@ static void reread_end(controller_service_t *service, system_time_ms_t now_ms)
 {
     service->rereading = false;
     service->line_seen_ms = now_ms;
+    service->line_seen_path_valid = false;
 }
 
 static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
@@ -1115,6 +1131,7 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
     const vehicle_controller_t *controller = &service->controller;
     const controller_junction_outputs_t *out = &service->junction_out;
     junction_observation_t junction;
+    route_instruction_t reverse_route;
     motion_goal_result_t result = {0};
     uint32_t slow_ms;
 
@@ -1126,9 +1143,9 @@ static void reread_tick(controller_service_t *service, system_time_ms_t now_ms)
         reread_end(service, now_ms);   /* STOP, obstacle or mode change */
         return;
     }
-    /* Reversing over the bars can look like a crossbar: drop those events.
-     * Routes are left alone. */
+    /* Reverse captures cannot choose a forward junction route. */
     (void)out->take_junction(out->context, &junction);
+    (void)out->take_route(out->context, &reverse_route);
     switch (poll_goal(service, &result))
     {
         case GOAL_RUNNING:
@@ -1177,7 +1194,8 @@ static bool reread_start(
         !following_line(controller->mission) ||
         (controller->mission == MISSION_JUNCTION_APPROACH) ||
         (service->junction_phase != CONTROLLER_JUNCTION_IDLE) ||
-        service->searching ||
+        service->searching || service->rereading || service->reread_slow ||
+        service->retry_episode ||
         !vehicle_controller_motion_allowed(controller,
             MOTION_SOURCE_JUNCTION) ||
         (service->retry_holdoff &&
@@ -1200,6 +1218,7 @@ static bool reread_start(
         return false;   /* rejected (ring too short?): carry on, no stop */
     }
     service->rereading = true;
+    service->retry_episode = true;
     service->reread_mm = mm;
     service->retry_holdoff = true;
     service->retry_holdoff_until_ms = now_ms +
@@ -1257,6 +1276,7 @@ void controller_service_tick(
             heading_assist_idle();
 #endif
             service->line_seen_ms = now_ms;
+            service->line_seen_path_valid = false;
             return;   /* a junction step owns the motion */
         }
 #if CONTROLLER_BARCODE_RETRY
@@ -1279,11 +1299,14 @@ void controller_service_tick(
         heading_assist_idle();
 #endif
         service->line_seen_ms = now_ms;   /* the lost timer runs only while following */
+        service->line_seen_path_valid = false;
         return;   /* nothing sent: Buddy 2 stops when the last one expires */
     }
     if (line.on_line)
     {
         service->line_seen_ms = now_ms;
+        service->line_seen_path_mm = line.path_mm;
+        service->line_seen_path_valid = line.path_valid;
     }
     else if ((service->line.lost_ms != 0U) && service->junction_bound &&
         (controller->mission != MISSION_JUNCTION_APPROACH) &&

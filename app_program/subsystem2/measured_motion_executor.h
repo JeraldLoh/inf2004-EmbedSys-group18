@@ -10,6 +10,12 @@
 #ifndef B2_RETRACE_SAMPLES
 #define B2_RETRACE_SAMPLES 256U
 #endif
+#ifndef CONTROLLER_BARCODE_RETRY
+#define CONTROLLER_BARCODE_RETRY 0
+#endif
+#if CONTROLLER_BARCODE_RETRY
+#include "wheel_path.h"
+#endif
 
 typedef struct
 {
@@ -100,11 +106,11 @@ typedef struct
     uint64_t goal_base_um[2];
     uint64_t goal_target_um;
     uint64_t goal_wheel_um[2];   /* per-wheel targets, equal except RETRACE */
-    uint16_t path_um[B2_RETRACE_SAMPLES][2];   /* per-period wheel travel */
-    uint16_t path_head;          /* next slot to write */
-    uint16_t path_count;         /* valid entries */
+#if CONTROLLER_BARCODE_RETRY
+    wheel_path_t path;
     uint64_t path_prev_um[2];
     bool path_prev_valid;
+#endif
     uint32_t retrace_seq;        /* counts admitted retraces, for the log */
     uint32_t retrace_mm[2];      /* last admitted per-wheel targets */
     uint64_t progress_um[2];

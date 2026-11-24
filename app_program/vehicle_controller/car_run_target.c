@@ -9,6 +9,43 @@
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem5/subsystem5.h"
 #include "../subsystem4/s4_imu.h"
+#include "../subsystem4/s4_config.h"
+#include "pickup_guard.h"
+
+#ifndef CONTROLLER_LINE_LOST_MS
+#define CONTROLLER_LINE_LOST_MS 0U
+#endif
+#ifndef CONTROLLER_LINE_BACKTRACK_MM
+#define CONTROLLER_LINE_BACKTRACK_MM 0U
+#endif
+
+#ifndef CAR_OFF_GROUND
+#define CAR_OFF_GROUND 0
+#endif
+#ifndef OFF_GROUND_ADC
+#define OFF_GROUND_ADC 0U
+#endif
+#ifndef OFF_GROUND_LEFT_BLACK
+#define OFF_GROUND_LEFT_BLACK 1U
+#endif
+#ifndef OFF_GROUND_RIGHT_BLACK
+#define OFF_GROUND_RIGHT_BLACK 1U
+#endif
+#ifndef OFF_GROUND_CONFIRM_MS
+#define OFF_GROUND_CONFIRM_MS 300U
+#endif
+#ifndef OFF_GROUND_ALONE_MS
+#define OFF_GROUND_ALONE_MS 1000U
+#endif
+#if CAR_OFF_GROUND && (OFF_GROUND_ADC < 101 || OFF_GROUND_ADC > 4095)
+#error OFF_GROUND requires a measured ADC threshold between 101 and 4095
+#endif
+#if OFF_GROUND_LEFT_BLACK > 1 || OFF_GROUND_RIGHT_BLACK > 1
+#error Optical pickup polarity must be 0 or 1
+#endif
+#if OFF_GROUND_CONFIRM_MS < 100 || OFF_GROUND_ALONE_MS < OFF_GROUND_CONFIRM_MS || OFF_GROUND_ALONE_MS > 60000
+#error Invalid optical pickup confirmation durations
+#endif
 
 /* ---- Buddy 4: IMU terrain and hump monitoring --------------------------- */
 /* Buddy 4 only observes. If it cannot start, the car still runs without it:
@@ -238,7 +275,7 @@ static void wifi_telemetry(uint32_t now)
     /* Integrated distance and goal acknowledgement are not supplied here. */
     {
         uint32_t w[S4_WORDS];
-        if(b4_ready && s4_shared_read(w))
+        if(b4_ready && !b4_stale && s4_shared_read(w))
             s.terrain_state=s4_get(w[S4_W_STATUS],S4_ST_TERRAIN_SHIFT,S4_ST_TERRAIN_WIDTH);
     }
     if(b1_submit_section(2,&s,m.sampled_ms)) wifi_telemetry_at=now;
@@ -249,7 +286,7 @@ static void b4_wifi_telemetry(uint32_t now)
 {
     static uint32_t sent_at;
     uint8_t frame[S4_TLM_SIZE];
-    if(!b4_ready || (uint32_t)(now-sent_at)<200U) return;
+    if(!b4_ready || b4_stale || (uint32_t)(now-sent_at)<200U) return;
     if(s4_telemetry_pack(frame,sizeof frame)==S4_TLM_SIZE && b1_submit_section(4,frame,now))
         sent_at=now;
 }
@@ -334,6 +371,14 @@ static bool controller_read_line(void *context, controller_line_input_t *line)
     line->steer = subsystem3_steer(&line->analogue_steering);
     line->barcode_active = status.barcode_active != 0U;
     line->on_line = (status.left_black != 0U) || (status.right_black != 0U);
+    line->path_valid = false;
+#if CONTROLLER_LINE_BACKTRACK_MM > 0
+    {
+        subsystem2_motion_telemetry_t motion;
+        if (subsystem2_motion_telemetry(&motion) && motion.valid && motion.speed_valid)
+        { line->path_valid = true; line->path_mm = motion.path_mm; }
+    }
+#endif
     return true;
 }
 
@@ -654,8 +699,10 @@ static bool b4_end_of_run(bool *running, uint32_t t)
     uint32_t w[S4_WORDS];
     uint32_t cause = S4_END_NONE;
     uint32_t lift_cm = 0U;
+    bool fresh = b4_ready && !b4_stale && s4_shared_read(w);
+    bool ended = fresh && s4_end_of_run_from_words(w, &cause, &lift_cm);
 
-    if (!b4_ready || !s4_shared_read(w) || !s4_end_of_run_from_words(w, &cause, &lift_cm))
+    if (!ended && (!announced || fresh))
     {
         if (announced)
         {
@@ -687,6 +734,61 @@ static bool b4_end_of_run(bool *running, uint32_t t)
     }
     *running = false;
     return true;
+}
+
+static bool off_ground_end_of_run(bool *running, uint32_t t)
+{
+#if CAR_OFF_GROUND
+    static pickup_guard_t guard;
+    static uint32_t last_post, lift_seen_ms;
+    static bool announced, have_lift;
+    controller_status_t status;
+    uint32_t word = subsystem3_ground_sample();
+    uint32_t adc = word & 0xFFFU;
+    bool valid = (word & (1U << 14)) != 0U;
+    bool candidate = valid && adc >= OFF_GROUND_ADC &&
+        (((word >> 12) & 1U) == OFF_GROUND_LEFT_BLACK) &&
+        (((word >> 13) & 1U) == OFF_GROUND_RIGHT_BLACK);
+    bool eligible = controller_get_status(&status) &&
+        status.mode == SYSTEM_MODE_AUTO &&
+        status.junction_phase == CONTROLLER_JUNCTION_IDLE && !status.line_searching;
+    uint32_t w[S4_WORDS];
+    bool imu_agrees;
+    bool latched;
+
+    if (b4_ready && !b4_stale && s4_shared_read(w) &&
+        s4_get(w[S4_W_STATUS], S4_ST_VALID_SHIFT, 1U) != 0U &&
+        s4_get(w[S4_W_MOTION], S4_MO_LIFT_SHIFT, S4_MO_LIFT_WIDTH) >= 2U)
+    { have_lift = true; lift_seen_ms = t; }
+    imu_agrees = have_lift && !b4_stale && (uint32_t)(t - lift_seen_ms) < 2000U;
+    latched = pickup_guard_update(&guard, t, (uint16_t)(word >> 16), valid,
+        candidate, valid && adc < OFF_GROUND_ADC - 100U, eligible, imu_agrees,
+        OFF_GROUND_CONFIRM_MS, OFF_GROUND_ALONE_MS, 1000U, 200U);
+    if (!latched)
+    {
+        if (announced)
+        { tm_printf((UB*)"[CAR] Floor confirmed for 1 s; a fresh START is required.\n"); }
+        announced = false;
+        return false;
+    }
+    if (!announced || (uint32_t)(t - last_post) >= B4_END_REPEAT_MS)
+    {
+        subsystem2_motion_halt();
+        if (post(CONTROLLER_EVENT_LATCH_STOP, SYSTEM_MODE_STOPPED, STOP_REASON_PHYSICAL))
+        { last_post = t; }
+    }
+    if (!announced)
+    {
+        tm_printf((UB*)"[CAR] END OF RUN: off the ground (optical%s); motors stopped.\n",
+            imu_agrees ? ", IMU" : "");
+        announced = true;
+    }
+    *running = false;
+    return true;
+#else
+    (void)running; (void)t;
+    return false;
+#endif
 }
 
 static void supervise(void)
@@ -746,6 +848,8 @@ static void supervise(void)
 
         /* Lifted >= 20 cm or overturned: end of run, motors off. */
         bool b4_ended = b4_end_of_run(&running, t);
+        bool optical_ended = off_ground_end_of_run(&running, t);
+        bool pickup_ended = b4_ended || optical_ended;
 
 #if APP_CAR_MQTT
         {
@@ -758,8 +862,8 @@ static void supervise(void)
             if(choice==B1_STOP){
                 wifi_command_id=id;remote_start_waiting=false;
                 stop_run(&running,"MQTT STOP",STOP_REASON_REMOTE);
-            } else if(choice==B1_START && b4_ended){
-                tm_printf((UB*)"[CAR] MQTT START refused: car still lifted/overturned (Buddy 4).\n");
+            } else if(choice==B1_START && pickup_ended){
+                tm_printf((UB*)"[CAR] MQTT START refused: pickup stop is still active.\n");
             } else if(choice==B1_START && events.reasons==STOP_REASON_NONE && !events.cutoff_fired &&
                       !controller_urgent_stop_pending() && controller_get_status(&status) &&
                       (status.mode==SYSTEM_MODE_STARTUP || status.mode==SYSTEM_MODE_IDLE || status.mode==SYSTEM_MODE_STOPPED) &&
@@ -802,7 +906,7 @@ static void supervise(void)
                 {
                     tm_printf((UB*)"[CAR] START refused: measured PID/load/STOP/pivot calibration unqualified.\n");
                 }
-                else if (b4_ended)
+                else if (pickup_ended)
                 {
                     tm_printf((UB*)"[CAR] START refused: car still lifted/overturned. "
                         "Put it down upright and keep it still for 1 s.\n");
@@ -928,6 +1032,17 @@ static void supervisor_task(INT code, void *exinf)
     tm_printf((UB*)"        Clear table ~40 cm to each side and ~1 m ahead. Hand on GP21 STOP.\n");
 #endif
     tm_printf((UB*)"[CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.\n");
+#if APP_CAR_B2_TRIAL
+    tm_printf((UB*)"[CAR DEMO] damp=%d/%dms search=%lums backtrack=%lumm "
+        "retry=%d watchdog_retry=%d optical=%d adc=%lu lift=%lumm/%lums jolt_pause=%d\n",
+        (int)LINE_DAMP_STEER, (int)LINE_DAMP_MS,
+        (unsigned long)CONTROLLER_LINE_LOST_MS,
+        (unsigned long)CONTROLLER_LINE_BACKTRACK_MM,
+        (int)CONTROLLER_BARCODE_RETRY, (int)CAR_WATCHDOG_RETRY,
+        (int)CAR_OFF_GROUND, (unsigned long)OFF_GROUND_ADC,
+        (unsigned long)S4_LIFT_HEIGHT_MM, (unsigned long)S4_LIFT_WINDOW_MS,
+        (int)S4_LIFT_JOLT_PAUSE);
+#endif
 #if APP_NO_BARCODE_CAL
     tm_printf((UB*)"[CAR] Start-up calibration SKIPPED (NO_BARCODE_CAL=1); barcodes use fixed thresholds.\n");
 #elif APP_S3_LINE_PID
