@@ -27,15 +27,19 @@ subsystem's contracts, calibration and evidence.
 
 | Item | State |
 |---|---|
-| Portable math, estimator, packing, seqlock, MQTT payloads | Implemented; host tests pass (`testing/host/test_terrain_estimator.c`, `ctest -L subsystem4`) |
-| LSM303 driver and IMU task (micro T-Kernel) | Implemented; `CAR_RUN=1` and `CAR_MQTT=1` images build with no `-Wall -Wextra` warnings in Buddy 4 files; **not yet run on hardware** |
+| Portable math, estimator, packing, seqlock, MQTT payloads | Implemented; host tests pass (`testing/host/test_terrain_estimator.c`, built twice as `terrain_demo_baseline_tests` and `terrain_demo_jolt_pause_tests`; run with `ctest -R terrain`) |
+| LSM303 driver and IMU task (micro T-Kernel) | Implemented and **running on the car** in the combined demo build (`CAR_RUN=1 CAR_MQTT=1`, see [docs/DEMO_BUILD.md](../../docs/DEMO_BUILD.md)) |
+| Hardware evidence (24–25 Nov, [testing/DEMO_EVIDENCE.md](../../testing/DEMO_EVIDENCE.md) E2–E4) | 64 complete, valid, non-stale `[B4]` summaries with odometry present; median processing about 3.15 ms per sample; a valid **9 mm ±8 mm** hump event; three pickup stops latched. **Open:** fixture truth for the hump height, an instrumented pickup timing series, overturn test |
 | On-target self-test S4-T01..T11 | Implemented (`make TEST=1`); not yet run |
 | Lifecycle hookup (`subsystem4_init/start/test`) | Done: `car_run_target.c` inits Buddy 4 after the others and starts it after Buddy 5. Optional: a failure is printed and the car runs without it |
-| Root I2C configuration | Done: I2C on, I2C1 on GP2/GP3, boot starts unit 1 `"iicb"` only (Integration step 1) |
-| Controller, Buddy 2 and Buddy 1 links | Done in `CAR_RUN=1` (see "Whole-car wiring"); **not yet run on the car** |
-| Buddy 3 hump pause (tribunal R2) | **Not wired**: Buddy 3 has no hump input yet (see "Open items") |
+| I2C bus | The driver bit-bangs I2C on GP2/GP3 itself; the course `"iicb"` device is not used (it stalled in Wi-Fi builds). See Integration step 1 |
+| Controller, Buddy 2 and Buddy 1 links | Done in `CAR_RUN=1` and used in the demo build (see "Whole-car wiring") |
+| Stale-data handling (F3) | Done: if the IMU sequence stops changing for `B4_STALE_MS` (200 ms), the controller drops the terrain cap, the MQTT section stops being sent and the pickup/restart checks treat Buddy 4 as unavailable. No STOP |
+| End of run (pickup / overturn) | Done and seen on the car: latched stop, both START paths refused until the car is back upright and still. Lift threshold and window are now build knobs (`LIFT_MM`, `LIFT_WINDOW_MS`, `LIFT_JOLT_PAUSE`) |
+| Heading log / heading assist | Optional, off in the demo build: `HEADING_LOG=1` (10 Hz `[B4 HDG]` trace) and `HDG_ASSIST=1` (compass heading hold while both line sensors are white) |
+| Buddy 3 hump pause (tribunal R2) | **Not wired**, by decision: barcode reading is not suspended because Buddy 4 sees a hump (see "Open items") |
 | Fault reporting | Detail mask, events and `s4_sensor_failures()`, shown in the `[B4]` console line and MQTT section 4. **Not** latched into the shared hardware fault mask (see "Whole-car wiring") |
-| Thresholds in `s4_config.h` | Hump thresholds sized for the 10 mm x 195 mm demo hump by host simulation; `S4_CASTER_ARM_MM`, `S4_TRACK_MM` and `S4_CLIMB_NOSE_DOWN` are **placeholders to measure** |
+| Thresholds in `s4_config.h` | Hump thresholds sized for the 10 mm x 195 mm demo hump by host simulation; `S4_CASTER_ARM_MM`, `S4_TRACK_MM` and `S4_CLIMB_NOSE_DOWN` still **to be measured** on the car |
 
 ## Files
 
@@ -51,7 +55,7 @@ builds one level below `app_program/`.
 | [terrain_estimator.h](terrain_estimator.h) / [.c](terrain_estimator.c) | no | The algorithm: calibration, filters, state machine, hump height, end of run (lift/overturn), turn |
 | [imu_math.h](imu_math.h) / [.c](imu_math.c) | no | Fixed-point decode, axis mapping, atan2, isqrt, sine, heading |
 | [drv_lsm303.h](drv_lsm303.h) / [.c](drv_lsm303.c) | yes | LSM303DLHC over a software I2C master on GP2/GP3 (the I2C1 block stalled in Wi-Fi builds) |
-| [task_imu.c](task_imu.c) | yes | The IMU task, cyclic tick, request flag, event queue, bus fault recovery |
+| [task_imu.c](task_imu.c) | yes | The IMU task, cyclic tick, request flag, event queue, bus fault recovery, optional `[B4 HDG]` trace and `s4_heading_read()` for the heading assist |
 | [s4_selftest.c](s4_selftest.c) | yes | On-target checks, built only with `TEST=1` |
 | [s4_config.h](s4_config.h) | no | All tuning values, periods, priority, mounting |
 
@@ -62,7 +66,7 @@ them be tested on a PC.
 
 ```text
  cyclic handler (20 ms) --tick--> +------------------------------+
- any task: s4_request() --bits--> |  IMU task (only I2C1 owner)  |
+ any task: s4_request() --bits--> | IMU task (only GP2/GP3 user) |
  binding: read_odometry_mm() ---> |  drv_lsm303 -> s4_est_step   |
                                   +-----+--------------+---------+
                     s4_shared_publish() |              | 4-byte events
@@ -76,16 +80,17 @@ them be tested on a PC.
 
 ## Integration steps
 
-1. **I2C1 on GP2/GP3 (done; shared files, so get team review).**
-   - `config/config_device.h`: `DEVCNF_USE_IIC` is `1`.
-   - `device/i2c/sysdepend/rp2040/i2c_cnf_sysdep.h`: `DEVCNF_I2C1_SDA_PIN 2`,
-     `DEVCNF_I2C1_SCL_PIN 3`. The old I2C1 default GP6/GP7 must not return:
-     GP7 is Buddy 3's left line sensor.
-   - `kernel/sysdepend/pico_rp2040/devinit.c`: starts unit 1 (`"iicb"`)
-     only, so unit 0's default GP8/GP9 (Buddy 2 motor) pins are never claimed.
+1. **I2C on GP2/GP3 (done).** `drv_lsm303.c` drives GP2 (SDA) and GP3
+   (SCL) directly as open-drain SIO pins with pull-ups, at about 150 kHz
+   (about 1 ms of CPU per sample). The course I2C1 device (`"iicb"`) stopped
+   transmitting in every Wi-Fi build, so it is not used for the IMU.
+   The root config still has `DEVCNF_USE_IIC 1`, I2C1 pins 2/3
+   (`i2c_cnf_sysdep.h`) and unit 1 started in `devinit.c`. The driver takes
+   the pins back from it when it opens. Keep those settings: they stop
+   unit 0 claiming GP8/GP9 (Buddy 2 motor) and stop GP6/GP7 being used
+   (GP7 is Buddy 3's left line sensor).
 
-   Every build now claims GP2/GP3 for I2C at boot, with internal pull-ups. If
-   the bus is missing, the task still runs and reports `S4_FAULT_I2C` and
+   If the bus is missing, the task still runs and reports `S4_FAULT_I2C` and
    terrain `UNKNOWN`/`INVALID` with the degraded speed cap.
 2. **Wiring.** Connect the GY-511 to Robo Pico **Grove port 2** (or the
    Maker/QWIIC port, which shares GP2/GP3): GP2 to SDA, GP3 to SCL, 3V3 to
@@ -106,32 +111,61 @@ them be tested on a PC.
 
 | Link | How | Notes |
 |---|---|---|
-| Buddy 4 → controller: speed cap | `controller_task_bind_terrain(b4_read_terrain)`: the controller task reads the snapshot every 10 ms tick with `s4_terrain_report_from_words()` | `vehicle_controller_update_terrain()`; line tracking takes the lowest cap. The hump cap (100 mm/s) only bites above it: the official car cruises at 60 mm/s, so today it changes nothing |
-| Buddy 2 → Buddy 4: odometry | Binding `read_odometry_mm` = `b4_read_odometry()`, called by the IMU task each period | Integrates `subsystem2_motion_telemetry()` wheel speeds over its sample time, each wheel signed by its last non-zero target, so a pivot adds no distance. Buddy 2's code is unchanged |
-| Buddy 4 → Buddy 1: MQTT | `b4_wifi_telemetry()` sends `s4_telemetry_pack()` as section 4 every 200 ms (`CAR_MQTT=1`); the controller's terrain state also fills section 2 | The dashboard's `decodeBuddy4()` already matches `s4_packed.h` |
-| Buddy 4 → console | `[B4]` line every second next to `[CAR]`, plus event lines (terrain, hump, calibration) | See "Reading the serial log" |
+| Buddy 4 → controller: speed cap | `controller_task_bind_terrain(b4_read_terrain)`: the controller task reads the snapshot every 10 ms tick with `s4_terrain_report_from_words()` | `vehicle_controller_update_terrain()`; line tracking takes the lowest cap. The hump cap (100 mm/s) only bites above it: the demo build cruises at 80 mm/s, so today it changes nothing |
+| Stale IMU data | `b4_read_terrain()` tracks the snapshot sequence (`S4_AT_SEQ`). If it has not changed for `B4_STALE_MS` (default 200 ms; the IMU publishes every 20 ms) the report becomes `TERRAIN_UNKNOWN` with cap 0 | The old cap is dropped, never kept. No STOP. The supervisor prints `[B4] IMU data stale ...` / `... fresh again` once per change, and `stale=` is in the `[B4]` line. Stale data also stops MQTT section 4 and section 2's terrain field, and the end-of-run and remote-restart checks |
+| Buddy 2 → Buddy 4: odometry | Binding `read_odometry_mm` = `b4_read_odometry()`, called by the IMU task each period | Integrates `subsystem2_motion_telemetry()` wheel speeds over its sample time, each wheel signed by its last non-zero target, so a pivot adds no distance. Up to 10 missed reads repeat the last value; a gap over 200 ms adds no distance. Buddy 2's code is unchanged |
+| Buddy 4 → Buddy 1: MQTT | `b4_wifi_telemetry()` sends `s4_telemetry_pack()` as section 4 every 200 ms (`CAR_MQTT=1`), only while the data is fresh; the controller's terrain state also fills section 2 | The dashboard's `decodeBuddy4()` matches `s4_packed.h` and shows calibration, terrain, the last hump and end of run |
+| Buddy 4 → supervisor: end of run | `b4_end_of_run()` every supervisor cycle (see "End of run → motors stop" below) | Both GP20 and MQTT START are refused while the latch is set. MQTT START after a physical stop also needs `imu_ready_for_remote_restart()`: fresh, valid, level-calibrated, lift reading 0 and no latch |
+| Optical pickup (optional, `OFF_GROUND=1`) | `off_ground_end_of_run()` with `pickup_guard.h`: Buddy 3's line-sensor ADC reading "air" | Off in the demo build: it needs a measured ADC threshold first (see [DEMO_BUILD.md](../../docs/DEMO_BUILD.md) "Pickup measurement gate"). A recent Buddy 4 lift reading of at least 2 cm shortens its confirmation from 1000 ms to 300 ms. The IMU lift/overturn stop stays active either way |
+| Buddy 4 → controller: heading (optional, `HDG_ASSIST=1`) | `s4_heading_read()` from `controller_service.c` | Heading reference captured at run start; a small capped counter-curvature holds it within about ±2° only while both line sensors are white. The tape always wins. `[HDG]` status lines. Off in the demo build: motor currents disturb the magnetometer |
+| Buddy 4 → console | `[B4]` line every second next to `[CAR]`, plus event lines (terrain, hump, calibration, end of run). `HEADING_LOG=1` adds a 10 Hz `[B4 HDG]` trace for `tools/heading_check.py` | See "Reading the serial log" |
 | Buddy 4 → controller: faults | **Not mapped.** | Any bit in the shared hardware fault mask blocks junction handling and MQTT START, so an unplugged IMU would stop a run. The provisional `HARDWARE_FAULT_IMU/MAG` bits stay unused until the team agrees a non-blocking class |
 
 ### Reading the serial log
 
 ```text
-[B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=-0.5 deg vib=8 mg motion=1 odom=1 faults=0x2 fail=0x0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 1450 us/sample
+[B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=-0.5 deg vib=8 mg motion=1 odom=1 faults=0x2 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | end=no lift=0 cm | 3150 us/sample stale=0
 [B4] terrain ASCENDING, cap 100 mm/s
 [B4] terrain CREST, cap 100 mm/s
 [B4] terrain DESCENDING, cap 100 mm/s
 [B4] terrain SETTLING, cap 100 mm/s
-[B4] hump 10 mm +/-5, peak 2 deg, 27 cm, valid
+[B4] hump 10 mm +/-5, peak 2 deg, 20 cm, valid
 [B4] terrain LEVEL, cap 0 mm/s
 ```
+
+The `hump` line is followed by an indented detail line showing how the height
+was worked out (one wheel or full width).
 
 - `cal=RUNNING-keep still` / `none`: level calibration is running or failed; it retries every 2 s once the car is still.
 - `faults` is the 7-bit detail mask: 0x01 I2C, 0x02 magnetometer, 0x04 stale, 0x08 uncalibrated, 0x10 saturated, 0x20 tilt (0x40 is reserved, formerly collision). 0x2 alone is normal until the magnetometer is calibrated or if it is absent.
 - `vib` is the vibration level while driving. Host simulation shows no false humps up to about 30 mg of noise; if it reads well above that and you see `INVALID` humps on flat floor, raise `S4_RAISE_ON_MM` to 5 or `S4_PITCH_SMOOTH_SHIFT` to 4. At 45 mg, simulation gave about one INVALID episode a minute and no valid ones.
 - `odom=1` means the height came from Buddy 2's wheel speeds; 0 means the fallback speed was used.
+- `i2c_err` counts bus errors since boot (the task recovers the bus itself).
+- `end` is `no`, `lifted` or `overturned`; `lift` is the current lift estimate in cm.
+- `us/sample` is the processing time of one sample, not the 20 ms sample period. On the car the median was about 3.15 ms.
+- `stale=1` means no new IMU sample for `B4_STALE_MS`: the speed cap is ignored until it returns.
+
+### Build knobs (Makefile, `build_make/pico_rp2040.mk`)
+
+| Knob | Default (demo build) | Effect |
+|---|---|---|
+| `LIFT_MM` | 200 | `S4_LIFT_HEIGHT_MM`: estimated rise that ends the run |
+| `LIFT_WINDOW_MS` | 1200 | `S4_LIFT_WINDOW_MS`: the rise must happen this fast |
+| `LIFT_JOLT_PAUSE` | 0 | 1: a jolt during a lift only pauses the integration (the window keeps counting) instead of cancelling the lift. Used in the recovery test build only |
+| `B4_STALE_MS` | 200 | IMU data older than this is stale (cap dropped, no STOP) |
+| `HEADING_LOG` | 0 | 1: 10 Hz `[B4 HDG]` heading trace |
+| `HDG_ASSIST` | 0 | 1: controller compass heading hold while both sensors are white |
+| `OFF_GROUND`, `OFF_GROUND_ADC`, ... | 0 | Optional optical pickup; refuses to build without a measured ADC threshold |
+
+A 150 mm / 2000 ms lift setting was tried in host simulation and rejected: the
+120 mm below-threshold lift test then read 150 mm and tripped. The 200 mm /
+1200 ms limits stay until real lifts are characterised.
 
 ### Open items
 
-- **Buddy 3 hump pause (tribunal R2).** Status bit 23 is published, but Buddy 3 has no input for it, and the controller does not hold steering on a hump. On a 10 mm hump the line sensors tilt by only about 4°, so this may not be needed. Buddy 3 should decide after a hump run.
+- **Buddy 3 hump pause (tribunal R2).** Status bit 23 is published, but nothing consumes it. The team decided barcode reading is not suspended just because Buddy 4 sees a hump; on a 10 mm hump the line sensors tilt by only about 4°.
+- **Hump accuracy (S4-U11).** The car reported a valid 9 mm ±8 mm hump, but the fixture was not measured. Run three passes over each measured fixture and record them in [TEST_LOG.md](../../testing/subsystem4/TEST_LOG.md).
+- **Pickup timing (S4-L01) and overturn (S4-L02).** Pickup stops were logged; an instrumented from-motion series and the overturn fixture test are still to do.
 - **MQTT commands to Buddy 4** (`s4_command()`: recalibrate, magnetometer calibration, range report) are not routed by Buddy 1 yet.
 - **Event queue.** Nothing reads `s4_mbf_events`; the oldest event is dropped when it is full (`s4_events_dropped`). Events still reach the console.
 
@@ -149,8 +183,9 @@ applies.
 | B4 → controller | `tk_rcv_mbf(s4_mbf_events, &msg, tmo)` | 4-byte events, single reader. When the queue is full the oldest event is dropped (`s4_events_dropped`). |
 | B4 → Buddy 1 | `s4_telemetry_pack(buf, 17)` | Binary frame; decode with the tables in DATA_REPRESENTATION.md. |
 | Buddy 1 → B4 | `s4_command(byte)` | After Buddy 1 has validated authority: 1 recalibrate, 2 clear latched, 3/4 magnetometer calibration start/stop, 5 print the observed ranges and sample timing. |
-| B4 → Buddy 3 | status word bit 23 (hump flag) | Published, but **not consumed yet**: Buddy 3 has no hump input (tribunal decision R2, see "Open items"). |
-| B4 → controller | `s4_sensor_failures()` (`S4_FAILURE_IMU`, `S4_FAILURE_MAG`) | Persistent sensor failures, latched until reset. Shown in the `[B4]` line (`fail=`); not mapped into the shared hardware fault mask (it would block junctions and START). The detail mask (status bits 19..13) and `S4_EV_FAULT` events keep the full evidence; UNCAL, SATURATED, TILT and COLLISION are status, not failures. |
+| B4 → Buddy 3 | status word bit 23 (hump flag) | Published, but **not consumed**: barcode reading is not suspended on a hump (tribunal decision R2, see "Open items"). |
+| B4 → controller | `s4_heading_read(&heading_ddeg, &turn)` | Optional heading assist (`HDG_ASSIST=1`); false until the heading is valid. |
+| B4 → controller | `s4_sensor_failures()` (`S4_FAILURE_IMU`, `S4_FAILURE_MAG`) | Persistent sensor failures, latched until reset. Shown in the `[B4]` line (`fail=`); not mapped into the shared hardware fault mask (it would block junctions and START). The detail mask (status bits 19..13) and `S4_EV_FAULT` events keep the full evidence; UNCAL, SATURATED and TILT are status, not failures. |
 | Any → B4 | `s4_request(S4_REQ_*)` | ISR-safe. |
 
 Week 8 tribunal decisions applied here:
@@ -166,15 +201,20 @@ Week 8 tribunal decisions applied here:
 - **Shared fault mask:** the tribunal agreed IMU faults go in the shared
   bitmask. The team's [contracts/hardware_faults.h](../contracts/hardware_faults.h)
   makes the Vehicle Controller its single owner, so Buddy 4 never writes it.
-  Buddy 4 reports evidence instead (detail mask and `S4_EV_FAULT` events),
-  and the controller task still needs an event to receive it.
+  Buddy 4 reports evidence instead (detail mask, `s4_sensor_failures()` and
+  `S4_EV_FAULT` events). The controller does not map it yet (see "Whole-car
+  wiring").
 
 **End of run → motors stop.** Buddy 4 publishes the end-of-run latch (status
 bit 24, cause in bits 26..25, lift height in motion bits 23..16) and an
 `S4_EV_END_RUN` event. The car supervisor (`car_run_target.c`) reads the
-snapshot every 5 ms with `s4_end_of_run_from_words()`. While the latch is set
-it halts the motors and posts `CONTROLLER_EVENT_LATCH_STOP` with
-`STOP_REASON_PHYSICAL` every 100 ms, and refuses GP20 and MQTT START. That is
+snapshot every 5 ms with `s4_end_of_run_from_words()`, only while the data is
+fresh. While the latch is set it halts the motors and posts
+`CONTROLLER_EVENT_LATCH_STOP` with `STOP_REASON_PHYSICAL` every 100 ms, and
+refuses GP20 and MQTT START (`[CAR] START refused: car still
+lifted/overturned` / `[CAR] MQTT START refused: pickup stop is still
+active`). If the data goes stale while latched, the stop stays until a fresh,
+valid snapshot shows the latch cleared. That is
 the same stop reason as the GP21 STOP button: an operator's physical action,
 so no new telemetry field is needed and a fresh START clears it once the car
 is back down.
@@ -278,14 +318,15 @@ transition needs `S4_CONFIRM_SAMPLES` consecutive samples.
 | any | UNKNOWN | not calibrated, or recalibrating |
 
 **Speed caps.** LEVEL has no cap. The hump states use 100 mm/s. UNKNOWN,
-INVALID, tilt over 25°, and the impact hold all use 100 mm/s. The official
-car (`CAR_RUN=1`) cruises at 60 mm/s, so the caps only take effect on faster
-profiles.
+INVALID, tilt over 25°, and the impact hold all use 100 mm/s. The demo build
+cruises at 80 mm/s, so the caps only take effect on faster profiles. Stale
+IMU data removes the cap rather than applying it.
 
 **Motion and jolts.** The vibration level is the filtered deviation of |a|
 from 1 g. A horizontal jolt above 1000 mg relative to the slow filter (a knock
 or bump) is kept out of the attitude filters and pauses hump integration for
-0.5 s, so it cannot start a false hump. It is not reported: IMU collision
+0.5 s, so it cannot start a false hump. It only shows as the `impact`
+motion class; no collision event is raised, because IMU collision
 detection was removed from the requirements.
 
 **End of run: lifted or overturned.** Two independent triggers; either one
@@ -299,14 +340,15 @@ latches the stop.
   only delayed. g is the filtered |f| tracked while at rest, which absorbs
   the sensor's scale error. To stop drift, integration only runs in an
   episode that starts with 40 mg of upward acceleration. The episode ends
-  after 1.2 s, or once the car has dropped 5 cm below its start. A jolt
-  cancels it.
+  after 1.2 s (`LIFT_WINDOW_MS`), or once the car has dropped 5 cm below its
+  start. A jolt cancels it; with `LIFT_JOLT_PAUSE=1` it only skips that
+  sample, and the window keeps running.
 - *Overturned.* The filtered gravity vector is more than 60° from the
   calibrated UP axis for 0.3 s. Ramps are far below that.
 
 The latch clears once the car rests upright (within 30°) and still for 1 s.
-The controller keeps its own stop until START. Host tests (`ctest -L
-subsystem4`): lifts of 23 to 30 cm trigger in 0.46 to 0.60 s, upright,
+The controller keeps its own stop until START. Host tests (`ctest -R
+terrain`): lifts of 23 to 30 cm trigger in 0.46 to 0.60 s, upright,
 tilted 45° or 90°, or turned upside down. Overturning 120° in place triggers
 as "overturned". A 12 cm lift, a 25° tilt on the floor and a 1.4 g sideways
 knock do not trigger. Five minutes of driving at 30 mg vibration produced a
@@ -317,24 +359,26 @@ north = a × east) and comes from the magnetometer, since the LSM303DLHC has
 no gyroscope. The turn rate is the filtered heading derivative. A turn starts
 above 20 °/s, ends below 8 °/s, and produces a "turned right 89°"-style
 event. Motor currents disturb the magnetometer, so treat heading as
-indicative until it has been checked on the car. Buddy 2's encoder
-differential is the more reliable turn source.
+indicative until it has been checked on the car (`HEADING_LOG=1` and
+`tools/heading_check.py`). Buddy 2's encoder differential is the more
+reliable turn source.
 
 ## Calibration and demo procedure
 
+Flash the combined demo image built with the command in
+[docs/DEMO_BUILD.md](../../docs/DEMO_BUILD.md) (it includes
+`LIFT_MM=200 LIFT_WINDOW_MS=1200 LIFT_JOLT_PAUSE=0`).
+
 1. Power on with the car still and level. Wait for `cal=level` in the `[B4]` line.
-2. Optional magnetometer calibration (needs `s4_command()` routed from MQTT, not done yet): send command 3, spin the car slowly
-   through at least 360° on the floor, then send command 4. Look for
-   `[B4] magnetometer calibration done`.
-3. Drive over the hump. The console prints the terrain transitions and
-   `[B4] hump 10 mm +/-5, peak 2 deg, 27 cm, valid`.
-4. Measure the real hump with a ruler. Append the comparison to
-   `testing/subsystem4/TEST_LOG.md` (test S4-H01) and tune `s4_config.h`
-   from it.
-5. **End the run by lifting the car** at least 20 cm in one deliberate
+2. Drive over the hump. The console prints the terrain transitions and
+   `[B4] hump 10 mm +/-5, peak 2 deg, 20 cm, valid`.
+3. Measure the real hump with a ruler. Append the comparison to
+   [TEST_LOG.md](../../testing/subsystem4/TEST_LOG.md) (test S4-U11) and
+   tune `s4_config.h` from it.
+4. **End the run by lifting the car** at least 20 cm in one deliberate
    movement (under about 1 s), at any angle, or by turning it over. Expect
-   `[B4] END OF RUN: car lifted 2x cm` and `[CAR] END OF RUN: ... motors
-   stopped`. The dashboard shows "End of run · car lifted .. cm". Put it down
+   `[B4] END OF RUN: car lifted 2x cm (limit 20 cm)` and `[CAR] END OF RUN:
+   car lifted ... cm (Buddy 4 IMU); motors stopped.` The dashboard shows "End of run · car lifted .. cm". Put it down
    upright and keep it still for 1 s (`[CAR] Buddy 4: car back on its
    wheels`), then GP20 or MQTT START runs again.
 
@@ -351,7 +395,6 @@ differential is the more reliable turn source.
 - With the caster in front (`S4_CLIMB_NOSE_DOWN 1`), climbing reads
   nose-down like braking, so a hard stop can open a false episode. A ramp
   under one wheel is still detected through roll alone.
-
 - Pitch includes linear acceleration: 0.1 g of acceleration reads as about
   5.7° of pitch. Hard acceleration while on a hump inflates the height. The
   hump speed cap limits this.
@@ -360,13 +403,21 @@ differential is the more reliable turn source.
   the car deliberately. Horizontal acceleration adds a little to |f| (300 mg
   sideways reads as +44 mg), so a hard sideways knock that is not caught as a
   jolt could add some rise. A large tilt changes the accelerometer's offset
-  error and so the rise estimate; the overturn trigger covers that case. Not
-  yet measured on the car: record real lifts in TEST_LOG.md (S4-L01).
-- Flat-spin magnetometer calibration cannot separate hard iron from the
-  vertical field leaking in through a tilted mounting. Mount the board flat.
-  Soft-iron distortion is not corrected.
-- Thresholds are uncalibrated, and the 20 ms period, priority and stack are
-  provisional until the team schedule (TEAM.md section 4) is agreed and
-  measured.
-- Nothing here has run on hardware yet. Host tests prove the logic, not the
-  sensor, the wiring or the timing.
+  error and so the rise estimate; the overturn trigger covers that case.
+  Pickup stops have been seen on the car, but the reported lift height has
+  not been compared with a ruler (S4-L01).
+- The magnetometer cannot be calibrated in the current build: `s4_command()`
+  is not routed from MQTT, so `faults=0x2` stays set and the heading is
+  uncalibrated. Even when routed, flat-spin calibration cannot separate hard
+  iron from the vertical field leaking in through a tilted mounting, and
+  soft-iron distortion is not corrected.
+- IMU-only pickup detection cannot catch an arbitrarily slow lift or tell
+  that the car is being held still in the air. The optional optical pickup
+  is meant to cover that once its threshold is measured.
+- Hump thresholds and the caster arm / track values are not yet tuned
+  against measured fixtures. The 20 ms period, priority and stack ran
+  without problems on the car (about 3 ms processing per sample) but are
+  not formally scheduled.
+- The car has run Buddy 4 (calibration, terrain, hump events, pickup stops),
+  but hump accuracy, pickup timing and overturn are not yet measured against
+  ground truth. See [TEST_LOG.md](../../testing/subsystem4/TEST_LOG.md).
