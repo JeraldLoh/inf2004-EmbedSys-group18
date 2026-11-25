@@ -167,16 +167,51 @@ static void diagnostic_worker(INT code, void *exinf)
  * Physical STOP, motor watchdog, command lease and stop reasons are unchanged. */
 #define B2_STATUS_LOSS_LIMIT_MS 250U
 
+/* Bench aid only, never in the demo build: make WATCHDOG_TEST=1. Once, 5 s
+ * after the first AUTO, this task sleeps 150 ms so the 100 ms motor
+ * watchdog fires for real. */
+#ifndef CAR_WATCHDOG_TEST
+#define CAR_WATCHDOG_TEST 0
+#endif
+#if CAR_WATCHDOG_TEST
+#define WATCHDOG_TEST_DELAY_MS 5000U
+#define WATCHDOG_TEST_SLEEP_MS 150
+#endif
+
 static void executor_task(INT code, void *exinf)
 {
     stop_reason_mask_t fault_pending = STOP_REASON_NONE;
     uint32_t unknown_since_ms = 0U;
     bool unknown_active = false;
+    uint32_t retrace_logged = 0U;
+#if CAR_WATCHDOG_TEST
+    bool wd_test_timing = false;
+    bool wd_test_done = false;
+    uint32_t wd_test_start_ms = 0U;
+#endif
     (void)code; (void)exinf;
     for (;;)
     {
         controller_status_t controller;
         bool known = controller_get_status(&controller);
+        uint32_t retrace_seq = retrace_logged;
+        uint32_t retrace_l_mm = 0U;
+        uint32_t retrace_r_mm = 0U;
+#if CAR_WATCHDOG_TEST
+        if (!wd_test_done && known && (controller.mode == SYSTEM_MODE_AUTO))
+        {
+            if (!wd_test_timing)
+            {
+                wd_test_timing = true;
+                wd_test_start_ms = now_ms();
+            }
+            else if ((now_ms() - wd_test_start_ms) >= WATCHDOG_TEST_DELAY_MS)
+            {
+                wd_test_done = true;
+                (void)tk_dly_tsk(WATCHDOG_TEST_SLEEP_MS);
+            }
+        }
+#endif
         if (lock())
         {
             measured_motion_executor_t *e = &motion.executor;
@@ -188,6 +223,9 @@ static void executor_task(INT code, void *exinf)
             bool current = known && (e->status.generation == 0U ||
                 controller.authority_generation-e->status.generation < 0x80000000UL);
             bool status_lost = false;
+            retrace_seq = e->retrace_seq;
+            retrace_l_mm = e->retrace_mm[0];
+            retrace_r_mm = e->retrace_mm[1];
             if (known) { unknown_active = false; }
             else
             {
@@ -207,6 +245,12 @@ static void executor_task(INT code, void *exinf)
                  e->status.last_stop == MOTION_RESULT_TIMEOUT))
             { ++driver_errors; fault_pending = STOP_REASON_MOTION_FAULT; }
             unlock();
+        }
+        if (retrace_seq != retrace_logged)
+        {
+            retrace_logged = retrace_seq;
+            tm_printf((UB*)"[B2] retrace L=%lumm R=%lumm\n",
+                (unsigned long)retrace_l_mm, (unsigned long)retrace_r_mm);
         }
         /* No controller calls while holding the motion mutex: the controller
          * tick owns its guard while submitting a line or junction command. */
@@ -350,6 +394,8 @@ bool subsystem2_motion_telemetry(subsystem2_motion_telemetry_t *out)
     out->right_target_mm_s = e->status.target_um_s[1]/1000;
     out->speed_valid = out->valid && e->status.wheels.speed_valid;
     out->qualified = e->config.qualified;
+    out->path_mm = (uint32_t)((e->status.wheels.travel_um[0] +
+        e->status.wheels.travel_um[1]) / 2000U);
     out->encoder_left_counts=e->config.measurement.counts_per_rev[0];
     out->encoder_right_counts=e->config.measurement.counts_per_rev[1];
     out->wheel_diameter_mm=e->config.measurement.diameter_mm;

@@ -21,8 +21,10 @@ ER controller_task_start(void);
  * reject a full queue; STOP uses an independent sticky lane and disables
  * outputs immediately even when FIFO is full. */
 bool controller_post(const controller_event_t *event);
-/* Queue one conditional remote START, invalidated by every newer STOP. */
-bool controller_post_remote_start(void);
+/* Sample before evaluating START interlocks. A newer STOP invalidates the
+ * ticket at both queue admission and execution. */
+uint32_t controller_remote_start_ticket(void);
+bool controller_post_remote_start(uint32_t ticket, stop_reason_mask_t expected_stops);
 
 /* Copy of the latest status; false if not initialised or busy. */
 bool controller_get_status(controller_status_t *status);
@@ -30,6 +32,7 @@ bool controller_get_status(controller_status_t *status);
  * the line-tracking outputs, before any start. Not with the typed motion
  * adapter below. */
 ER controller_task_bind_junction(const controller_junction_outputs_t *outputs);
+ER controller_task_bind_route_map(uint32_t (*read_revision)(void));
 /* Bind after controller init and before any start. Existing STOP-only users
  * need no change. No hook means motion commands fail closed. */
 ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
@@ -48,5 +51,19 @@ bool controller_urgent_stop_pending(void);
 
 /* May source drive now? See controller_service_authority(). Any task. */
 bool controller_authority(motion_source_t source, authority_generation_t *generation);
+
+/* Buddy 5 proposes each move, the controller approves it. Bind the Buddy 2
+ * goal and continuous functions once, after controller init and before any
+ * start (the controller does not include Buddy 2 headers). Then Buddy 5 calls
+ * controller_obstacle_goal / controller_obstacle_continuous instead of Buddy
+ * 2. Each one needs request->source == MOTION_SOURCE_OBSTACLE, the obstacle
+ * authority and the current authority generation, and counts accepted and
+ * rejected moves in controller_status_t. Halt stays a direct Buddy 2 call:
+ * stopping is always allowed. */
+ER controller_task_bind_obstacle_motion(
+    bool (*goal)(const motion_goal_request_t *goal),
+    bool (*continuous)(const motion_continuous_request_t *request));
+bool controller_obstacle_goal(const motion_goal_request_t *goal);
+bool controller_obstacle_continuous(const motion_continuous_request_t *request);
 
 #endif

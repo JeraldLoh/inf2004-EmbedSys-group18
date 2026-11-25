@@ -7,6 +7,7 @@
 #include "b2_gesture.h"
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem5/subsystem5.h"
+#include "../subsystem4/s4_imu.h"
 #include <assert.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -90,6 +91,18 @@ ER controller_task_bind_junction(const controller_junction_outputs_t *o) {
     assert(inits++==3U && o->goal_result(o->context,1U,&result)); return E_OK;
 }
 ER controller_task_start(void) { assert(starts++==2U); return E_OK; }
+ER controller_task_bind_obstacle_motion(bool (*goal)(const motion_goal_request_t *),
+    bool (*continuous)(const motion_continuous_request_t *))
+{
+    assert(goal == subsystem2_motion_goal && continuous == subsystem2_motion_continuous);
+    return E_OK;
+}
+bool controller_obstacle_goal(const motion_goal_request_t *goal)
+{ return subsystem2_motion_goal(goal); }
+bool controller_obstacle_continuous(const motion_continuous_request_t *request)
+{ return subsystem2_motion_continuous(request); }
+ER controller_task_bind_terrain(bool (*reader)(terrain_report_t *))
+{ (void)reader; return E_OK; }
 bool controller_post(const controller_event_t *e) {
     if(e->type==CONTROLLER_EVENT_SET_MODE && e->mode==SYSTEM_MODE_AUTO) {
         ++auto_posts; status.mode=SYSTEM_MODE_AUTO;
@@ -106,6 +119,8 @@ line_status_t subsystem3_line_status(void) { line_status_t s={0}; s.left_black=1
 int8_t subsystem3_steer(bool *analogue) { if (analogue != NULL) { *analogue = false; } return 0; }
 BOOL subsystem3_take_route(route_instruction_t *r) { (void)r; return FALSE; }
 BOOL subsystem3_take_junction(junction_observation_t *j) { (void)j; return FALSE; }
+BOOL subsystem3_take_barcode_failure(uint32_t *ms) { (void)ms; return FALSE; }
+void subsystem3_barcode_reset(void) { }
 BOOL subsystem3_probe_requested(void) { return FALSE; }
 ER subsystem3_probe_begin(void) { return E_OK; }
 ER subsystem3_probe_end(void) { return E_OK; }
@@ -114,11 +129,19 @@ void subsystem3_calibrate_barcode(void) { }
 BOOL subsystem3_barcode_calibrated(void) { return TRUE; }
 ER subsystem5_bind(const subsystem5_bindings_t *b) {
     motion_goal_result_t r;
-    assert(inits++==5U && b->motion.goal==subsystem2_motion_goal);
+    assert(inits++==5U && b->motion.goal==controller_obstacle_goal);
+    assert(b->motion.continuous==controller_obstacle_continuous);
     assert(b->motion.goal_result(1U,&r)); return E_OK;
 }
 ER subsystem5_init(void) { assert(inits++==6U); return E_OK; }
 ER subsystem5_start(void) { assert(starts++==4U); return E_OK; }
+/* This startup fixture exercises the supported optional-IMU-absent path. */
+UW s4_bus_errors, s4_sample_time_us;
+ER subsystem4_init(void) { return E_OBJ; }
+ER subsystem4_start(void) { return E_OBJ; }
+ER s4_imu_bind(const s4_bindings_t *bindings) { (void)bindings; return E_OK; }
+UW s4_sensor_failures(void) { return 0U; }
+void s4_print_task_state(void) { }
 int main(int argc,char **argv) {
     assert(argc==2); scenario=argv[1];
     qualified=strcmp(scenario,"qualified")==0;

@@ -13,6 +13,8 @@
 #define BARCODE_WIDE_NUMERATOR 17U
 #define BARCODE_WIDE_DENOMINATOR 10U
 #define BARCODE_SYMBOL_RUNS 29U   /* 3 characters x 9 + 2 gaps */
+#define BARCODE_START_PATTERN 0x094U
+#define BARCODE_MIRRORED_START_PATTERN 0x052U
 
 /* Full Code 39 table. Each character is 9 elements read in order
  * bar space bar space bar space bar space bar; bit 8 is the first element
@@ -216,6 +218,74 @@ static void push_run(barcode_decoder_t *decoder, uint32_t width_us)
     {
         decoder->run_us[decoder->run_count++] = width_us;
     }
+}
+
+static uint16_t trace_pattern(const uint32_t *runs, unsigned start, unsigned count,
+                              const uint32_t limit[2], bool reverse)
+{
+    uint16_t bits = 0U;
+    for (unsigned i = 0U; i < count; ++i)
+    {
+        unsigned position = start + (reverse ? count - 1U - i : i);
+        bits = (uint16_t)((bits << 1) | (runs[position] > limit[position & 1U]));
+    }
+    return bits;
+}
+
+bool barcode_decoder_retry_signature(const barcode_decoder_t *decoder)
+{
+    /* Require a start character, a narrow character gap, and part of the
+     * payload. Use independent black/white thresholds as in normal decode. */
+    if (decoder == NULL || decoder->trace_count < 13U) return false;
+    const uint32_t *runs = decoder->trace_run_us;
+    uint32_t low[2] = {UINT32_MAX, UINT32_MAX};
+    uint32_t high[2] = {0U, 0U};
+    for (unsigned i = 0; i < 9U; ++i)
+    {
+        unsigned colour = i & 1U;
+        if (runs[i] < low[colour]) low[colour] = runs[i];
+        if (runs[i] > high[colour]) high[colour] = runs[i];
+    }
+    if (high[0] * 10U < low[0] * 17U ||
+        high[1] * 10U < low[1] * 17U) return false;
+    uint32_t limit[2] = {(low[0] + high[0]) / 2U, (low[1] + high[1]) / 2U};
+    uint16_t start = trace_pattern(runs, 0U, 9U, limit, false);
+    if (runs[9] > limit[1]) return false;
+    if (start == BARCODE_START_PATTERN) return true;
+
+    /* A backwards '*' has the same width pattern as forward 'P'. Check
+     * both character gaps and the beginning of the closing marker before
+     * asking the controller for a reread. */
+    /* Five runs include both wide bars of the closing marker. The sixth
+     * run is a narrow space that can merge with the next space if the
+     * sensor loses a bar near the end of the print. */
+    const unsigned stop_prefix_runs = 5U;
+    if (start != BARCODE_MIRRORED_START_PATTERN ||
+        decoder->trace_count <= 20U || runs[19] > limit[1])
+        return false;
+
+    unsigned stop_count = decoder->trace_count - 20U;
+    if (stop_count < stop_prefix_runs)
+    {
+        if (trace_pattern(runs, 20U, stop_count, limit, false) !=
+            (BARCODE_MIRRORED_START_PATTERN >> (9U - stop_count)))
+            return false;
+
+        /* A partial scan can corrupt the last two runs of the payload.
+         * Its first seven must still be the prefix of a Code 39 character
+         * in this orientation. No route is issued from this prefix. */
+        uint16_t payload_prefix = trace_pattern(runs, 10U, 7U, limit, true);
+        for (uint16_t suffix = 0U; suffix < 4U; ++suffix)
+        {
+            char candidate = code39_character((uint16_t)(payload_prefix | (suffix << 7)));
+            if (candidate != '?' && candidate != '*') return true;
+        }
+        return false;
+    }
+    char data = code39_character(trace_pattern(runs, 10U, 9U, limit, true));
+    return data != '?' && data != '*' &&
+        trace_pattern(runs, 20U, stop_prefix_runs, limit, false) ==
+            (BARCODE_MIRRORED_START_PATTERN >> (9U - stop_prefix_runs));
 }
 
 static void finish_or_reset(barcode_decoder_t *decoder)

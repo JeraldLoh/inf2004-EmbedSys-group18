@@ -8,8 +8,10 @@ int b1_live_validate(const b1_live_status *s){
  s->bypass.backing_off<=1 && s->bypass.segments<=7 && s->bypass.segment<=s->bypass.segments && s->bypass.side<=2;
 }
 unsigned b1_encode_live_status(unsigned char *p,unsigned cap,const b1_live_status *s,int demo){
- if(!p || cap<B1_LIVE_SIZE || !b1_live_validate(s) || (demo!=0 && demo!=1))return 0;
- memset(p,0,B1_LIVE_SIZE);p[0]=0xb1;p[1]=4;p[2]=4;p[3]=(unsigned char)demo;
+ if(!p || !b1_live_validate(s) || (demo!=0 && demo!=1))return 0;
+ unsigned size=s->line.map_revision?B1_LIVE_MAP_SIZE:B1_LIVE_SIZE;
+ if(cap<size)return 0;
+ memset(p,0,size);p[0]=0xb1;p[1]=size==B1_LIVE_MAP_SIZE?5:4;p[2]=4;p[3]=(unsigned char)demo;
  u32(p+4,s->uptime_ms);p[8]=(unsigned char)s->present;
  p[9]=(unsigned char)(s->motion.targets_valid|(s->motion.qualified<<1)|(s->motion.searching<<2));
  p[10]=(unsigned char)s->line.paused;p[11]=(unsigned char)(s->bypass.fast|(s->bypass.active<<1)|(s->bypass.backing_off<<2));
@@ -22,5 +24,6 @@ unsigned b1_encode_live_status(unsigned char *p,unsigned cap,const b1_live_statu
  p[80]=(unsigned char)s->line.barcode_state;p[81]=(unsigned char)s->line.barcode_character;p[82]=(unsigned char)s->line.barcode_route;
  p[83]=(unsigned char)s->line.barcode_digital;
  u32(p+84,s->line.barcode_sequence);u32(p+88,s->line.barcode_failures);u32(p+92,s->line.barcode_event_ms);
- return B1_LIVE_SIZE;
+ if(size==B1_LIVE_MAP_SIZE)u32(p+96,s->line.map_revision);
+ return size;
 }

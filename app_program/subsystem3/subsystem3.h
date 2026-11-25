@@ -14,6 +14,8 @@ IMPORT void subsystem3_debug(uint32_t *loops, uint32_t *stage);
 
 /* Latest line status (1 packed byte, safe to read from any task/core). */
 IMPORT line_status_t subsystem3_line_status(void);
+IMPORT bool subsystem3_line_fresh(void);
+IMPORT bool subsystem3_barcode_white_ready(void);
 
 /* Steering proposal for Buddy 2: -100 (full left) .. 0 .. +100 (full right).
  * It grows the longer the car stays off centre and briefly counter-steers
@@ -24,6 +26,23 @@ IMPORT int8_t subsystem3_steer(bool *analogue);
 /* Take the newest decoded barcode / junction. Each returns true once per event. */
 IMPORT BOOL subsystem3_take_route(route_instruction_t *route);
 IMPORT BOOL subsystem3_take_junction(junction_observation_t *junction);
+
+/* A barcode capture that looked like a barcode (at least
+ * S3_BARCODE_RETRY_MIN_ELEMENTS elements) but did not decode. elapsed_ms is
+ * the time from the first bar to the failure. Returns true once per event
+ * (read and clear, like subsystem3_take_route). Shorter failures are tape
+ * crossings and publish nothing. */
+IMPORT BOOL subsystem3_take_barcode_failure(uint32_t *elapsed_ms);
+
+/* Ask s3_task to drop a half-finished barcode capture and any pending "read
+ * failed" event. The controller calls it when the car is stopped before a
+ * re-read pass, so the decoder is idle when the bars arrive. */
+IMPORT void subsystem3_barcode_reset(void);
+
+/* One coherent aligned word: ADC bits 0..11, L/R black bits 12/13,
+ * ADC-valid bit 14, acquisition sequence bits 16..31. No decoded/classified
+ * barcode state is used to decide whether the floor is reflecting. */
+IMPORT uint32_t subsystem3_ground_sample(void);
 
 /* No-barcode junction probe (see subsystem3.c). The controller:
  *   1. sees subsystem3_probe_requested() == TRUE

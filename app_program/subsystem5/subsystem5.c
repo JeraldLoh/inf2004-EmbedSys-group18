@@ -312,6 +312,9 @@ static bool enc_pass_clear; /* the side sonar ended the pass leg */
 static uint32_t enc_capped0; /* pass_capped at detection */
 static uint32_t enc_unseen0; /* pass_unseen at detection */
 static uint32_t rejoined_count;
+static uint32_t rejoin_unverified;
+static bool rejoin_pending, rejoin_moving;
+static uint32_t rejoin_started, rejoin_path, rejoin_motion_at;
 static uint32_t cleared_count;
 static uint32_t aborted_count;
 
@@ -428,6 +431,13 @@ static void result_on_event(const av_event_t *e)
     switch (e->type)
     {
         case AV_EVT_OBSTACLE_DETECTED:
+            if (rejoin_pending)
+            {
+                rejoin_unverified++;
+                print_result("REJOIN_UNVERIFIED", e->time_ms - rejoin_started,
+                    "new obstacle before confirmation");
+            }
+            rejoin_pending = false;
             enc_profile = false;
             profile_scans = 0U;
             enc_aligned = false;
@@ -445,8 +455,10 @@ static void result_on_event(const av_event_t *e)
             enc_aligned = true;
             break;
         case AV_EVT_LINE_REACQUIRED:
-            rejoined_count++;
-            print_result("REJOINED", e->duration_ms, NULL);
+            rejoin_started = e->time_ms;
+            rejoin_pending = true;
+            rejoin_moving = false;
+            tm_printf((UB*)"\n[B5] line contact; waiting for tracking and wheel progress\n");
             break;
         case AV_EVT_OBSTACLE_CLEARED:
             if (!av.off_line)   /* off the line it goes on to the line search */
@@ -492,7 +504,8 @@ static void wifi_profile(const obstacle_profile_t *p)
         return;
     }
     b5_wifi.ahead_mm = (uint32_t)cm_to_mm(p->distance_cm);
-    b5_wifi.width_mm = (uint32_t)cm_to_mm(p->width_cm);
+    b5_wifi.width_mm = p->left.found && p->right.found
+        ? (uint32_t)cm_to_mm(p->width_cm) : 0U;
     b5_wifi.centre_x_mm = cm_to_mm(p->center.x_cm);
     b5_wifi.centre_y_mm = cm_to_mm(p->center.y_cm);
     b5_wifi.left_found = p->left.found ? 1U : 0U;
@@ -595,12 +608,10 @@ static void cb_on_event(void *ctx, const av_event_t *e)
                 e->heading_deg);
             break;
         case AV_EVT_SCAN_POINT:
-            if (av_state(&av) == AV_STATE_BYPASS)   /* the pass-leg side watch */
-            {
-                tm_printf((UB*)"[B5] side servo=%d dist=%d cm (status %d)\n",
-                    e->point.angle_deg, (int)e->point.reading.cm,
-                    (int)e->point.reading.status);
-            }
+            tm_printf((UB*)"[B5 SCAN] servo=%d logical=%s heading=%d status=%s mm=%d\n",
+                e->point.angle_deg, side_name(scan_side_of(&av.geom, e->point.angle_deg)),
+                av.heading_deg, range_status_name(e->point.reading.status),
+                e->point.reading.status == RANGE_OK ? cm_to_mm(e->point.reading.cm) : -1);
             break;
         case AV_EVT_SIDE_BLOCKED:
             tm_printf((UB*)"[B5] %s blocked: %d cm at servo %d is inside the bypass strip\n",
@@ -771,6 +782,37 @@ static void subsystem5_task(INT stacd, void *exinf)
             queue_events(events, count);
         }
         flush_events();
+        if (rejoin_pending)
+        {
+            uint32_t now = cb_now_ms(NULL), path;
+            if (!armed || (uint32_t)(now - rejoin_started) > 1600U)
+            {
+                rejoin_pending = false;
+                rejoin_unverified++;
+                print_result("REJOIN_UNVERIFIED", now - av.t_detect,
+                    "tracking and wheel progress not confirmed");
+            }
+            else if (bindings.line_progress != NULL && bindings.line_progress(&path))
+            {
+                if (!rejoin_moving)
+                {
+                    rejoin_moving = true;
+                    rejoin_path = path;
+                    rejoin_motion_at = now;
+                }
+                else if ((uint32_t)(now - rejoin_motion_at) >= 300U &&
+                         (uint32_t)(path - rejoin_path) >= 20U)
+                {
+                    rejoin_pending = false;
+                    rejoined_count++;
+                    print_result("REJOINED", now - av.t_detect, "tracking handoff and wheel progress");
+                }
+            }
+            else
+            {
+                rejoin_moving = false;
+            }
+        }
 #if APP_CAR_MQTT
         {
             uint32_t at=cb_now_ms(NULL);
@@ -785,8 +827,8 @@ static void subsystem5_task(INT stacd, void *exinf)
                 b5_wifi.total_rescans=m->rescans;b5_wifi.total_reverses=m->reverses;
                 b5_wifi.emergency_stops=m->emergency_stops;b5_wifi.sensor_faults=m->sensor_faults;
                 b5_wifi.failures=m->failures;b5_wifi.motion_timeouts=m->motion_timeouts;
-                b5_wifi.line_search_ok=m->reacquire_ok;b5_wifi.line_search_retry=m->reacquire_retries;
-                b5_wifi.line_search_fail=m->reacquire_fail;b5_wifi.car_turns=m->car_turns;
+                b5_wifi.line_search_ok=rejoined_count;b5_wifi.line_search_retry=m->reacquire_retries;
+                b5_wifi.line_search_fail=m->reacquire_fail+rejoin_unverified;b5_wifi.car_turns=m->car_turns;
                 b5_wifi.profiles_complete=m->profiles_complete;b5_wifi.profiles_partial=m->profiles_partial;
                 b5_wifi.last_scan_ms=m->last_scan_ms;b5_wifi.last_encounter_ms=m->last_encounter_ms;
                 b5_wifi.max_encounter_ms=m->max_encounter_ms;

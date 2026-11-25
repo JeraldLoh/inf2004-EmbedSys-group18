@@ -14,7 +14,9 @@
 #define CAR_TRIAL_LINE_INNER_SPEED_PERCENT 85U
 /* Match Buddy 3: both-white can mean the line is between the sensors.
  * Do not infer line loss from elapsed time without a black reading. */
-#define CONTROLLER_LINE_LOST_MS 0U
+#ifndef CONTROLLER_LINE_LOST_MS
+#define CONTROLLER_LINE_LOST_MS 0U   /* make LINE_LOST_MS=1500 turns it on */
+#endif
 #endif
 
 #endif

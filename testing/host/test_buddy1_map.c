@@ -39,23 +39,22 @@ static void run(const unsigned char *bytes,unsigned n){
 }
 int main(void){
  assert(b1_init()==E_OK);b1_connection(1);
- barcode_map_defaults();
 
- /* SHOW: the power-on map A=L B=R C=S D=U is reported, nothing changes.
-  * A..D = 1,2,3,4 in 3-bit slots: 0b100_011_010_001 = 0x8d1 -> bytes d1 08. */
+ /* SHOW: the power-on map is empty. */
  unsigned char show[8]={0xb1,2,3,4,5,0,0,0};
  run(show,8);
  assert(strstr(reply,"\"status\":\"applied\""));
  assert(strstr(reply,"\"command_id\":5"));
- assert(strstr(reply,"\"map\":\"d1080000000000000000000000000000\"")==NULL);  /* 28 hex, not 32 */
- assert(strstr(reply,"\"map\":\"d108000000000000000000000000\""));
- assert(barcode_map_get('A')==ROUTE_COMMAND_LEFT);
+ assert(strstr(reply,"\"map\":\"0000000000000000000000000000\""));
+ assert(strstr(reply,"\"map_revision\":2"));
+ assert(barcode_map_get('A')==ROUTE_COMMAND_NONE);
 
  /* SET replaces the whole table: K=L, Q=R, Z=S, 7=U, A..D cleared. */
  unsigned char set[22]={0xb1,2,3,3,6,0,0,0};
  b1_map_put(set+8,'K'-'A',1);b1_map_put(set+8,'Q'-'A',2);b1_map_put(set+8,'Z'-'A',3);b1_map_put(set+8,26+7,4);
  run(set,22);
  assert(strstr(reply,"\"status\":\"applied\"")&&strstr(reply,"\"command_id\":6"));
+ assert(strstr(reply,"\"map_revision\":4"));
  assert(barcode_map_get('K')==ROUTE_COMMAND_LEFT&&barcode_map_get('q')==ROUTE_COMMAND_RIGHT);
  assert(barcode_map_get('Z')==ROUTE_COMMAND_STRAIGHT&&barcode_map_get('7')==ROUTE_COMMAND_UTURN);
  assert(barcode_map_get('A')==ROUTE_COMMAND_NONE&&barcode_map_get('D')==ROUTE_COMMAND_NONE);
@@ -65,6 +64,11 @@ int main(void){
  run(set,22);
  assert(strstr(reply,"\"status\":\"rejected\"")&&!strstr(reply,"\"map\""));
  assert(barcode_map_get('A')==ROUTE_COMMAND_NONE&&barcode_map_get('K')==ROUTE_COMMAND_LEFT);
+
+ /* A second letter for Left is rejected without advancing the map. */
+ b1_map_put(set+8,0,1);
+ run(set,22);
+ assert(strstr(reply,"\"status\":\"rejected\"")&&barcode_map_revision()==4U);
 
  /* START still works and carries no map field. */
  unsigned char start[8]={0xb1,2,3,1,8,0,0,0};

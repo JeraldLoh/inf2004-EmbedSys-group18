@@ -1,5 +1,19 @@
 # Buddy 3 Line barcode and junction perception test record
 
+## November demo cases and bench follow-up
+
+Use the [shared setup, tolerances and recording rules](../DEMO_TRACEABILITY.md) and [evidence ledger](../DEMO_EVIDENCE.md). These procedures govern the normal combined image. Earlier plans and results below apply to their recorded profiles.
+
+| ID | Priority, owner and requirement | Setup and steps | Pass criteria and evidence | Status |
+|---|---|---|---|---|
+| S3-T01 | P0 · B3 · Active IR pins and polarity | With wheels secured, place each line head over tape and background separately, then centred on the straddled line. Capture raw GP7/GP0 values and decoded black flags, verify GP26 is the separate barcode input. | Each head resolves black vs white on the intended channel. Centred both-white is ordinary tracking evidence in this geometry. Save raw/mapped states and mount photo. | Current profile calibration Not run. |
+| S3-T02 | P0 · B3 · Barcode contrast / ADC validity | On normal profile at actual height, sweep a known Code 39 strip and quiet zone through the GP26 sensor under representative lighting. Log black/white ranges, thresholds, gaps, rejected readings and recovery. | No overlap across operating thresholds in a usable sweep, no invalid sample counted as a bar. Record margin; 300 counts belongs to the historical bench criterion. Save thresholds and sample CSV. | E2–E4 ADC/capture evidence, controlled contrast pending. |
+| S3-T03 | P0 · B3 · Known code detection and decode | Use measured Code 39 prints with start/stop and quiet zones. At normal speed run ten passes per installed character and intended scan direction plus ten blank/crossing controls. Log capture, runs/windows, decode and expected truth independently. | P: ≥9/10 correct per character/direction, zero wrong characters and zero accepted controls. Record capture and correct decode rates independently. Save fixture photo and per-pass export extract. | E2/E4 real complete decodes and partial captures; rates Not run. |
+| S3-T04 | P0 · B3 with B2 · Straight and bend tracking | Run practice loop with straights and both bends three times, then repeat with one modest documented lighting or surface variation. Record sensor flags, steer, wheel targets and overhead path. | P: zero manual corrections/track departures over each loop, steering sign matches each turn and no ordinary line-loss reverse. | E1 historical operator observation; controlled repetition open. |
+| S3-T05 | P1 · B3 · Junction debounce | Cross a marked + ten times with normal mounting. Insert short single-sensor transients and ordinary centred white in marked portions; use route case for T/+ decisions. | P: 10/10 crossings each generate one junction, zero extra events in controls. Save physical crossing and event sequence. | E3/E4 junction events, fixture-based count Not run. |
+| S3-T06 | P1 · B3 · Legacy no-barcode probe applicability | Inspect normal firmware phase and run INT-29b with + and T fixtures. Preserve the legacy probe-angle case for matching bench images. | In normal combined, record actual pause/straight fallback; capture any unexpected automatic right turn or probe. Legacy procedure is applicable only with its matching profile. | Normal-profile regression Not run. |
+| S3-T07 | P0 · B3/controller · Route validity interval | Measure decode-to-junction time for normal fixtures at full supply and representative low supply. Hold an expired instruction on the stand for INT-28c. | Decode arrives within configured 10 s TTL, P: at least 2 s margin in each nominal run, and expired instructions cannot execute. Save timestamps and expiry disposition. | E3 route completion observed. Timing margin Not run. |
+
 Host tests check the logic only. Hardware cases still need G1 electrical
 clearance; active motion needs explicit bounded-test approval and a physical
 power cut.
@@ -62,3 +76,10 @@ profile, configuration and raw log/video.
 | 2026-10-21 | S3-H01..S3-H12 | buddy3 working tree, before first commit; host gcc 11, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 12/12 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H12)" | Logic only; no hardware. Re-run and replace commit field after committing. |
 | 2026-10-28 | S3-H01..S3-H14 | buddy3 working tree (uncommitted, adds barcode_map); host gcc, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 14/14 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H14)" | Logic only; no hardware. |
 | 2026-10-28 | S3-H01..S3-H16 | buddy3 working tree (adds line_drive, s3_bench); host gcc `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 16/16 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H16)"; B2 suite 38/38; normal, B2_BENCH, S3_BENCH=1, S3_BENCH=2 images compile and link (arm-none-eabi-gcc 13.2, pico-sdk 2.2.0) | Logic and build only; not flashed. |
+
+## November evidence review
+
+| Date | Test ID | Commit/profile | Tester | Result | Evidence | Notes |
+|---|---|---|---|---|---|---|
+| 2026-11-25 | S3-T03 | Partial-marker, closing-bars and controller-trace, local changes on da4e9d9 | Operator (name unrecorded) | Partial | [Evidence E2–E4](../DEMO_EVIDENCE.md) | Successful 29-run captures and failed captures on track. Fixture-by-fixture accuracy and trial denominator open. |
+| 2026-11-24–25 | S3-T04 | Original 80 mm/s baseline, da4e9d9 | Operator (name unrecorded) | Partial | [Evidence E1](../DEMO_EVIDENCE.md) | Operator observed good tracking on straights and bends. Confirm controlled repetitions on chosen normal profile. |

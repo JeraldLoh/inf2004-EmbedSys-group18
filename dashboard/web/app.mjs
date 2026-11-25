@@ -1,21 +1,50 @@
-import {barcodeEvents,renderBarcodeStatus} from './barcode-status.mjs?v=barcode-digital-8';
+import {renderBarcodeStatus} from './barcode-status.mjs?v=barcode-retry-1';
 import {robotEvents,lineSearchEvents,calibrationEvents} from './robot-events.mjs?v=barcode-digital-4';
 import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
 import {encodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
 import {encodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {encodeCommand,decodeCommand} from './commands.mjs?v=barcode-digital-4';
-import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs?v=barcode-digital-4';
-import {renderSensorHighlights} from './sensor-panels.mjs?v=b5-outputs-1-no-mag';
+import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs?v=route-slots-1';
+import {renderSensorHighlights} from './sensor-panels.mjs?v=route-slots-1';
+import {renderRoverOverview} from './rover-overview.mjs?v=overview-1';
 import {createHumpLog,updateHumpLog,renderHumpLog} from './hump-log.mjs?v=humps-1';
 let humpLog=createHumpLog();
-import {RobotState,validateCommand} from './state.mjs?v=barcode-digital-4';
-import {MqttConnection,validateConnection} from './mqtt.mjs?v=barcode-digital-4';
-import {ACTIONS,DEFAULT_MAP,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,mapSummary,sortedEntries,sameMap} from './route-map.mjs?v=barcode-digital-4';
+import {RobotState,validateCommand} from './state.mjs?v=route-slots-1';
+import {MqttConnection,validateConnection} from './mqtt.mjs?v=combined-1';
+import {ACTIONS,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,sameMap,assignDirection,lettersForDirection} from './route-map.mjs?v=route-current-1';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;
 let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=false,simSeq=0,simDistance=0,simHumps=0,commandSeq=0,previousStatus='',lastUpdateText='',lastMotorStamp='';
 let buildEvidence=null;
 fetch('./build-memory.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{buildEvidence=v;render();}).catch(()=>{});
 let prefix='group18/robot1',endpoint='ws://localhost:9001';
+const diagnosticLimit=12000,diagnosticChunks=[],diagnosticDecoder=new TextDecoder();
+let diagnosticCount=0,diagnosticLast=null;
+function receiveDiagnostic(payload){
+ const chunk=diagnosticDecoder.decode(payload),split=chunk.indexOf('\n');
+ if(split<0)return;
+ const match=/^fw=(\S+) seq=(\d+) uptime_ms=(\d+) dropped_bytes=(\d+)$/.exec(chunk.slice(0,split));
+ if(!match)return;
+ const record={received_at:new Date().toISOString(),firmware:match[1],sequence:Number(match[2]),uptime_ms:Number(match[3]),pico_dropped_bytes:Number(match[4]),text:chunk.slice(split+1)};
+ if(diagnosticLast){
+  if(record.uptime_ms<diagnosticLast.uptime_ms||record.sequence<diagnosticLast.sequence)record.reboot=true;
+  else if(record.sequence!==diagnosticLast.sequence+1)record.sequence_gap=record.sequence-diagnosticLast.sequence-1;
+ }
+ diagnosticLast=record;
+ diagnosticChunks[diagnosticCount%diagnosticLimit]=record;
+ diagnosticCount++;
+ $('diagnostic-log-status').textContent=`${diagnosticCount} batches received · ${record.pico_dropped_bytes} bytes dropped by Pico`;
+ $('download-diagnostics').disabled=false;
+}
+function downloadDiagnostics(){
+ const first=Math.max(0,diagnosticCount-diagnosticLimit);
+ const lines=[JSON.stringify({topic:prefix+'/log',exported_at:new Date().toISOString(),browser_batches_discarded:first})+'\n'];
+ for(let i=first;i<diagnosticCount;i++)lines.push(JSON.stringify(diagnosticChunks[i%diagnosticLimit])+'\n');
+ const url=URL.createObjectURL(new Blob(lines,{type:'application/x-ndjson'}));
+ const link=document.createElement('a');link.href=url;
+ link.download='group18-serial-'+new Date().toISOString().replaceAll(':','-')+'.ndjson';
+ link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('download-diagnostics').onclick=downloadDiagnostics;
 try{const saved=JSON.parse(localStorage.getItem('rover18.connection'));if(saved){prefix=saved.prefix||prefix;endpoint=saved.endpoint||endpoint;}}catch{}
 function log(message,type='system'){
  const li=document.createElement('li'),time=document.createElement('time'),tag=document.createElement('span'),text=document.createElement('span');
@@ -27,6 +56,10 @@ const client=new MqttConnection({
  onLog:log,
  onMessage(message){
   if(preview||!message.topic.startsWith(prefix+'/'))return;
+  if(message.topic===prefix+'/log'){
+   if(!message.retained)receiveDiagnostic(message.payload);
+   return;
+  }
   receive(message.topic.slice(prefix.length+1),message.payload,now(),message.retained);
  }
 });
@@ -34,14 +67,26 @@ function receive(topic,payload,time,retained=false){
  try{
   const previousTelemetry=state.telemetry,previousLiveStatus=state.liveStatus;
   if(!state.receive(topic,payload,time,retained))return;
-  if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus),...barcodeEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
+  if(!preview&&!pendingRoute&&
+     (topic==='heartbeat'&&!state.routeMap||
+      topic==='live_status'&&state.liveStatus.line.map_revision!==undefined&&
+      state.liveStatus.line.map_revision!==state.routeMapRevision)&&
+     state.status(time)==='online'&&time>=routeReadAt){
+   routeReadAt=time+1;sendRoutes(true);
+  }
+  if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
   if(topic==='telemetry')for(const event of robotEvents(previousTelemetry,state.telemetry))log(event.text,event.type);
   if(topic==='telemetry'){const r=updateHumpLog(humpLog,state.telemetry);humpLog=r.log;for(const event of r.events)log(event.text,event.type);}
   if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';const m=motionView(state.telemetry),b=state.telemetry.buddies?.[2],stamp=b?`${b.updated_ms}:${b.sequence}`:'';if(m.fresh&&stamp!==lastMotorStamp){history.push({time:time-m.age/1000,speed:m.speed});lastMotorStamp=stamp;}if(history.length>305)history.shift();}
   if(topic==='command_result'&&state.result.map!==undefined){
-   $('route-feedback').textContent=(preview?'Preview · simulated rover map.':'Rover confirmed its map')+' · command #'+state.result.command_id+'.';
-   log((preview?'Preview':'Robot')+' route map #'+state.result.command_id+': '+mapSummary(state.routeMap),'command');
+   if(pendingRoute===state.result.command_id){
+    pendingRoute=0;
+    if(pendingMapSet)routeDirty=false;
+   }
+   if(!routeDirty){routeDraft={...state.routeMap};drawDirectionSlots();}
+   $('route-feedback').textContent=preview?'Preview map confirmed.':'Rover confirmed the current map.';
   }else if(topic==='command_result'&&state.result.status==='rejected'&&pendingRoute===state.result.command_id){
+   pendingRoute=0;
    $('route-feedback').textContent='Rover rejected map #'+state.result.command_id+'. Nothing changed on the rover.';
    log('Robot rejected route map #'+state.result.command_id,'warning');
   }else if(topic==='command_result'){
@@ -52,13 +97,13 @@ function receive(topic,payload,time,retained=false){
  }catch(error){log('Ignored message: '+error.message,'warning');}
  render();
 }
-function reset(){state=new RobotState();humpLog=createHumpLog();pendingRoute=0;if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
+function reset(){state=new RobotState();humpLog=createHumpLog();pendingRoute=0;routeDraft={};routeDirty=false;drawDirectionSlots();if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
 function setPreview(value){
  clearInterval(previewTimer);client.disconnect();preview=value;reset();
  document.body.classList.toggle('preview',preview);
  $('preview-toggle').classList.toggle('active',preview);$('preview-toggle').textContent=preview?'◈  Exit preview':'◈  Explore preview';
  if(preview){
-  state.connected=true;simRunning=false;simSeq=0;simDistance=0;previewRouteMap={...DEFAULT_MAP};
+  state.connected=true;simRunning=false;simSeq=0;simDistance=0;previewRouteMap={};
   log('Preview mode. Generated readings only; no broker connection or robot commands.','preview');
   const sample=()=>{
    const t=now(),ms=Math.floor(t*1000)>>>0;
@@ -103,70 +148,77 @@ function send(command){
  }catch(error){$('command-feedback').textContent=error.message;log(error.message,'warning');}
 }
 // ---- Barcode routes (Buddy 3) -------------------------------------------
-let routeDraft={},routeChoice=1,pendingRoute=0,previewRouteMap={...DEFAULT_MAP};
-try{const saved=JSON.parse(localStorage.getItem('rover18.routes'));if(saved&&typeof saved==='object'){mapToHex(saved);routeDraft=saved;}}catch{}
-function saveRoutes(){try{localStorage.setItem('rover18.routes',JSON.stringify(routeDraft));}catch{}}
-function turnButton(action,pressed,label){
- const b=document.createElement('button');b.type='button';b.title=action.name;
- const icon=document.createElement('b');icon.textContent=action.icon;const text=document.createElement('span');text.textContent=label?action.name:action.key;
- b.append(icon,text);return b;
+let routeDraft={},pendingRoute=0,routeDeadline=0,routeReadAt=0,routeDirty=false,pendingMapSet=false,previewRouteMap={};
+const directionInputs=new Map();
+const confirmedLetters=new Map();
+for(const direction of ACTIONS){
+ const row=document.createElement('div'),name=document.createElement('dt'),mapped=document.createElement('dd');
+ name.textContent=direction.icon+' '+direction.name;
+ mapped.textContent='—';
+ row.append(name,mapped);$('route-onboard').append(row);confirmedLetters.set(direction.value,mapped);
+ const label=document.createElement('label'),input=document.createElement('input');
+ label.className='route-letter-label';
+ label.append(direction.icon+' '+direction.name);
+ input.maxLength=1;input.spellcheck=false;input.setAttribute('aria-describedby','route-error');
+ input.oninput=()=>{
+  const letter=input.value.trim().toUpperCase();
+  if(letter&&charIndex(letter)<0){
+   $('route-error').textContent='Use one letter A–Z or digit 0–9.';
+   drawDirectionSlots();
+   return;
+  }
+  $('route-error').textContent='';
+  routeDraft=assignDirection(routeDraft,direction.value,letter);
+  routeDirty=true;drawDirectionSlots();renderRouteSync();
+ };
+ label.append(input);$('route-form').append(label);directionInputs.set(direction.value,input);
 }
-function buildRouteChoice(){
- const host=$('route-choice');host.replaceChildren();
- for(const a of ACTIONS){const b=turnButton(a,false,true);b.setAttribute('role','radio');b.setAttribute('aria-checked',String(a.value===routeChoice));b.onclick=()=>{routeChoice=a.value;buildRouteChoice();$('route-letter').focus();};host.append(b);}
-}
-function renderRouteList(){
- const list=$('route-list');list.replaceChildren();
- const entries=sortedEntries(routeDraft);
- if(!entries.length){const li=document.createElement('li');li.className='empty';li.textContent='No letters yet. Every junction will use the probe.';list.append(li);}
- for(const [c,v] of entries){
-  const li=document.createElement('li'),ch=document.createElement('span'),turns=document.createElement('div'),rm=document.createElement('button');
-  ch.className='route-char';ch.textContent=c;turns.className='route-turns';
-  for(const a of ACTIONS){const b=turnButton(a,a.value===v,false);b.setAttribute('aria-pressed',String(a.value===v));b.setAttribute('aria-label',c+' '+a.name);b.onclick=()=>{routeDraft[c]=a.value;saveRoutes();renderRouteList();renderRouteSync();};turns.append(b);}
-  rm.className='route-remove';rm.type='button';rm.textContent='×';rm.setAttribute('aria-label','Remove '+c);rm.onclick=()=>{delete routeDraft[c];saveRoutes();renderRouteList();renderRouteSync();};
-  li.append(ch,turns,rm);list.append(li);
+function drawDirectionSlots(){
+ for(const [direction,input] of directionInputs){
+  input.value=lettersForDirection(routeDraft,direction)[0]??'';
  }
 }
 function renderRouteSync(){
- const sync=$('route-sync'),onboard=state.routeMap;
- $('route-onboard').textContent=onboard?mapSummary(onboard):'Unknown · send or read to confirm';
- const synced=onboard&&sameMap(onboard,routeDraft);
- sync.textContent=!onboard?'Not confirmed by rover':synced?'✓ In sync with rover':'● Changes not sent';
- sync.className='route-sync'+(synced?' synced':onboard?' pending':'');
+ if(pendingRoute&&now()>=routeDeadline){
+  pendingRoute=0;$('route-feedback').textContent='No map response. Try again.';
+ }
+ const sync=$('route-sync'),revision=state.liveStatus?.line.map_revision;
  const online=state.status(now())==='online';
- $('route-send').disabled=!online;$('route-read').disabled=!online;
-}
-function addRoute(e){
- e.preventDefault();
- const input=$('route-letter'),c=input.value.trim().toUpperCase();
- if(charIndex(c)<0){$('route-error').textContent='Use one letter A–Z or digit 0–9.';input.focus();return;}
- const replaced=routeDraft[c]&&routeDraft[c]!==routeChoice;
- routeDraft[c]=routeChoice;saveRoutes();
- $('route-error').textContent=replaced?c+' updated to '+ACTIONS[routeChoice-1].name+'.':'';
- input.value='';input.focus();renderRouteList();renderRouteSync();
+ const onboard=online&&(revision===undefined||revision===state.routeMapRevision)?state.routeMap:null;
+ const synced=onboard&&sameMap(onboard,routeDraft);
+ for(const [direction,label] of confirmedLetters){
+  label.textContent=onboard?lettersForDirection(onboard,direction).join(', ')||'Unassigned':'—';
+ }
+ sync.textContent=pendingRoute?'Waiting for rover':!online?'Offline':synced?'In sync':onboard?'Changes not sent':'Reading map';
+ sync.className='route-sync'+(synced?' synced':'');
+ $('route-send').disabled=!online||!!pendingRoute;
+ $('route-read').disabled=!online||!!pendingRoute;
+ for(const input of directionInputs.values())input.disabled=!!pendingRoute&&pendingMapSet;
+ $('route-clear').disabled=!!pendingRoute&&pendingMapSet;
 }
 function sendRoutes(show){
  try{
   if(state.status(now())!=='online')throw Error('Wait for a fresh rover heartbeat');
   const id=commandSeq=(commandSeq+1)>>>0||1,bytes=show?encodeMapShow(id):encodeMapSet(routeDraft,id);
-  pendingRoute=id;
+  pendingRoute=id;routeDeadline=now()+4;pendingMapSet=!show;
   if(preview){
    const cmd=decodeMapCommand(bytes);if(cmd.kind==='SET')previewRouteMap=cmd.map;
    receive('command_result',JSON.stringify({schema:1,demo:true,status:'applied',command_id:id,map:mapToHex(previewRouteMap)}),now());
-  }else{client.publishBytes(bytes);$('route-feedback').textContent=(show?'Asked rover for its map':'Map sent ('+bytes.length+' bytes)')+' · waiting for reply.';}
-  log((preview?'Preview only: ':'Sent: ')+(show?'MAP SHOW':'MAP '+mapSummary(routeDraft))+' · command #'+id,'command');
- }catch(error){$('route-feedback').textContent=error.message;log(error.message,'warning');}
+  }else{
+   client.publishBytes(bytes);
+   $('route-feedback').textContent=show?'Reading rover map…':'Sending the full map…';
+  }
+ }catch(error){pendingRoute=0;$('route-feedback').textContent=error.message;log(error.message,'warning');}
+ renderRouteSync();
 }
-$('route-form').onsubmit=addRoute;
-$('route-letter').oninput=e=>{e.target.value=e.target.value.toUpperCase();$('route-error').textContent='';};
-$('route-letter').onkeydown=e=>{const a=ACTIONS.find(x=>e.altKey&&x.key===e.key.toUpperCase());if(a){e.preventDefault();routeChoice=a.value;buildRouteChoice();}};
-$('route-send').onclick=()=>sendRoutes(false);$('route-read').onclick=()=>sendRoutes(true);
-$('route-clear').onclick=()=>{routeDraft={};saveRoutes();renderRouteList();renderRouteSync();};
-buildRouteChoice();renderRouteList();
+$('route-form').onsubmit=e=>{e.preventDefault();if(!$('route-send').disabled)sendRoutes(false);};
+$('route-send').onclick=()=>sendRoutes(false);
+$('route-read').onclick=()=>{routeDirty=false;sendRoutes(true);};
+$('route-clear').onclick=()=>{routeDraft={};routeDirty=true;drawDirectionSlots();renderRouteSync();};
 function render(){
  const t=now(),status=state.status(t),view=state.telemetryView(t),fresh=view.fresh;
  // Reader updates independently of the other sensor cards and telemetry.
- renderBarcodeStatus({...view.values,demo:state.demo,live_status:state.liveStatus,live_status_elapsed_ms:state.liveStatusAt===null?Infinity:(t-state.liveStatusAt)*1000},{stale:status!=='online'&&!!state.liveStatus});
+ renderBarcodeStatus({...view.values,demo:state.demo,live_status:state.liveStatus,live_status_elapsed_ms:state.liveStatusAt===null?Infinity:(t-state.liveStatusAt)*1000},{stale:status!=='online'&&!!state.liveStatus,mapRevision:state.routeMapRevision});
  if(['Waiting for rover connection.','Ready · choose Start rover or Stop.'].includes($('command-feedback').textContent))$('command-feedback').textContent=status==='online'?'Ready · choose Start rover or Stop.':'Waiting for rover connection.';
  const names={disconnected:connecting?'Connecting to broker…':view.values?'Communication Unavailable':'Ready when you are',waiting:'Broker connected · waiting for rover',online:preview?'Preview running · sample data':'Rover heartbeat received',offline:'Communication Unavailable'};
  $('session-status').textContent=names[status];
@@ -203,6 +255,7 @@ function render(){
 }
 function renderBuddies(view,t){
  const packet=view.values?{...view.values,live_status:state.liveStatus,live_status_elapsed_ms:state.liveStatusAt===null?Infinity:(t-state.liveStatusAt)*1000}:null,elapsed=view.age===null?0:view.age*1000;
+ renderRoverOverview(packet,{fresh:view.fresh,elapsed,mapRevision:state.routeMapRevision});
  const count=[2,3,4,5].filter(id=>packet?.buddies?.[id]).length;
  $('binary-summary').textContent=count?`${count} subsystems · ${packet.demo?'sample readings':view.fresh?'receiving data':'last received readings'}`:'Waiting for sensor readings';
  for(const id of [2,3,4,5]){

@@ -1,5 +1,9 @@
 # Group 18 testing
 
+Start with the [demo requirement matrix and current procedure index](DEMO_TRACEABILITY.md).
+Use the [evidence ledger](DEMO_EVIDENCE.md) to attribute earlier results and the
+[whole-rover scorecard](system/REHEARSAL_SCORECARD.md) to record each rehearsal.
+
 This follows the course `testing/subsystem1`-`subsystem5`, `integration` and
 `system` evidence format. Tests are not passed until actually executed and
 recorded with their commit/profile/configuration and saved evidence. Do not turn

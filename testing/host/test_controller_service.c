@@ -380,6 +380,9 @@ typedef struct
     int probe_ends;
     motion_goal_request_t goals[8];
     int goal_count;
+    bool read_failed;
+    uint32_t read_elapsed_ms;
+    int decoder_resets;
     bool reject_goal;
     motion_result_code_t goal_code;   /* what goal_result reports */
     bool publish_after_first_take;    /* Buddy 3 publishes between the takes */
@@ -472,11 +475,24 @@ static bool fj_read_line(void *context, controller_line_input_t *line)
     return fake_read_line(&((fake_junction_t *)context)->car, line);
 }
 
+static bool fj_take_failure(void *context, uint32_t *elapsed_ms)
+{
+    fake_junction_t *f = context;
+    if (!f->read_failed) { return false; }
+    f->read_failed = false;
+    *elapsed_ms = f->read_elapsed_ms;
+    return true;
+}
+
+static void fj_decoder_reset(void *context)
+{ ((fake_junction_t *)context)->decoder_resets++; }
+
 static const controller_junction_outputs_t *fj_outputs(fake_junction_t *f)
 {
     static controller_junction_outputs_t outputs;
     controller_junction_outputs_t o = {NULL, fj_take_route, fj_take_junction,
-        fj_probe_requested, fj_probe_begin, fj_probe_end, fj_goal, fj_goal_result};
+        fj_probe_requested, fj_probe_begin, fj_probe_end, fj_goal, fj_goal_result,
+        fj_take_failure, fj_decoder_reset};
     o.context = f;
     outputs = o;
     return &outputs;
@@ -562,7 +578,12 @@ static void test_barcode_left_turn(void)
     assert(service.status.junction_phase == CONTROLLER_JUNCTION_APPROACH);
     assert(f.goal_count == 1);
     assert(f.goals[0].type == MOTION_GOAL_FORWARD);
+#if defined(CONTROLLER_JUNCTION_PIVOT_APPROACH_PERCENT)
+    assert(f.goals[0].target_mm ==
+        (service.junction.approach_mm * CONTROLLER_JUNCTION_PIVOT_APPROACH_PERCENT + 50) / 100);
+#else
     assert(f.goals[0].target_mm == service.junction.approach_mm);
+#endif
     assert(f.goals[0].source == MOTION_SOURCE_JUNCTION);
     assert(f.goals[0].authority_generation == gen);
     assert(service.controller.active_goal &&
@@ -582,11 +603,13 @@ static void test_barcode_left_turn(void)
     assert(f.goals[1].goal_id != f.goals[0].goal_id);
 
     f.goal_code = MOTION_RESULT_COMPLETED;
+    f.car.line.on_line = false; /* both white after a satisfactory pivot */
     controller_service_tick(&service, 3500U);
     assert(service.status.junction_phase == CONTROLLER_JUNCTION_IDLE);
     assert(service.controller.mission == MISSION_VERIFY_LINE);
     assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_CONSUMED);
     assert(service.status.junctions_done == 1U);
+    assert(f.goal_count == 2U && !service.status.line_searching);
     assert(f.car.drives == drives + 1);   /* line following again, same tick */
     /* A new generation: Buddy 2 refuses line requests after a pause (the
      * probe) until the generation moves on. */
@@ -594,8 +617,48 @@ static void test_barcode_left_turn(void)
     assert(service.controller.authority_generation == gen + 1U);
 }
 
+static uint32_t test_map_revision;
+static uint32_t read_test_map_revision(void) { return test_map_revision; }
+
+static void test_map_change_drops_only_pending_route(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    start_junctions(&service, &f);
+    service.read_route_map_revision = read_test_map_revision;
+    test_map_revision = 2U;
+    publish_route(&f, ROUTE_COMMAND_LEFT);
+    controller_service_tick(&service, 100U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
+    test_map_revision = 4U;
+    controller_service_tick(&service, 200U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_CANCELLED);
+
+    publish_route(&f, ROUTE_COMMAND_RIGHT);
+    publish_junction(&f, true, true);
+    controller_service_tick(&service, 300U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_RESERVED);
+    assert(f.goal_count == 1);
+    test_map_revision = 6U;
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 400U);
+    assert(f.goal_count == 2 && f.goals[1].type == MOTION_GOAL_PIVOT_RIGHT);
+}
+
 static void test_straight_and_right_and_uturn(void)
 {
+#if defined(CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT) && \
+    CONTROLLER_JUNCTION_PIVOT_TRAVEL_PERCENT == 90 && \
+    defined(CONTROLLER_JUNCTION_TURN_COMP_PERCENT) && CONTROLLER_JUNCTION_TURN_COMP_PERCENT == 116
+    controller_junction_config_t demo;
+    controller_junction_default_config(&demo);
+    assert(demo.turn_mdeg == 93960);
+#if defined(CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT) && CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT == 105
+    assert(demo.uturn_mdeg == 197316);
+#elif !defined(CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT) || CONTROLLER_JUNCTION_UTURN_TRAVEL_PERCENT == 100
+    assert(demo.uturn_mdeg == 187920);
+#endif
+#endif
     static const route_command_t commands[3] = {ROUTE_COMMAND_STRAIGHT,
         ROUTE_COMMAND_RIGHT, ROUTE_COMMAND_UTURN};
     static const motion_goal_type_t turns[3] = {MOTION_GOAL_FORWARD,
@@ -612,6 +675,10 @@ static void test_straight_and_right_and_uturn(void)
         publish_junction(&f, true, true);
         controller_service_tick(&service, 100U);   /* route then junction */
         assert(f.goal_count == 1);
+        if (commands[i] == ROUTE_COMMAND_STRAIGHT)
+        {
+            assert(f.goals[0].target_mm == service.junction.approach_mm);
+        }
         f.goal_code = MOTION_RESULT_COMPLETED;
         controller_service_tick(&service, 200U);
         if (commands[i] == ROUTE_COMMAND_STRAIGHT)
@@ -948,13 +1015,106 @@ static void test_line_search_off_by_default(void)
     assert((f.goal_count == 0) && !service.status.line_searching);
 }
 
+static void test_backtrack_uses_encoders_and_stops_on_line(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    uint32_t generation;
+    start_junctions(&service, &f);
+    service.line.lost_ms = 100U;
+    service.line.backtrack_mm = 150U;
+    f.car.line.on_line = true;
+    f.car.line.path_valid = true;
+    f.car.line.path_mm = 100U;
+    controller_service_tick(&service, 100U);
+    generation = service.controller.authority_generation;
+    f.car.line.on_line = false;
+    f.car.line.path_mm = 155U;
+    controller_service_tick(&service, 210U);
+    assert(service.search_backtrack && f.goal_count == 1);
+    assert(f.goals[0].type == MOTION_GOAL_REVERSE);
+    assert(f.goals[0].target_mm == 55);
+    f.car.line.on_line = true;
+    controller_service_tick(&service, 220U);
+    assert(!service.searching && !service.controller.active_goal);
+    assert(service.controller.authority_generation == generation + 1U);
+    assert(f.car.motion.stops > 0);
+}
+
+#if CONTROLLER_BARCODE_RETRY
+static void test_retry_episode_and_reverse_routes(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    controller_event_t idle = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_IDLE,
+        STOP_REASON_NONE, MISSION_IDLE, false};
+    controller_event_t run = {CONTROLLER_EVENT_SET_MODE, SYSTEM_MODE_AUTO,
+        STOP_REASON_NONE, MISSION_IDLE, false};
+    start_junctions(&service, &f);
+    f.car.line.path_valid = true;
+    f.car.line.path_mm = 100U;
+    controller_service_tick(&service, 100U);
+    f.car.line.barcode_active = true;
+    controller_service_tick(&service, 200U);
+    f.car.line.barcode_active = false;
+    f.car.line.path_mm = 240U;
+    f.read_failed = true; f.read_elapsed_ms = 2000U;
+    controller_service_tick(&service, 2200U);
+    assert(service.rereading && f.goal_count == 1);
+    assert(service.status.barcode_retry_decision == BARCODE_RETRY_STARTED);
+    assert(service.status.barcode_retry_decision_seq == 1U);
+    assert(service.status.barcode_retry_travel_mm == 140U);
+    assert(f.goals[0].type == MOTION_GOAL_RETRACE && f.goals[0].max_speed_mm_s == 50U);
+    publish_route(&f, ROUTE_COMMAND_LEFT); /* Decoded while reversing. */
+    controller_service_tick(&service, 8000U);
+    assert(!f.route_ready && service.status.routes_accepted == 0U);
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 9000U);
+    assert(service.reread_waiting_white && !service.reread_slow);
+    f.car.line.barcode_white_ready = true;
+    controller_service_tick(&service, 9059U);
+    assert(service.reread_waiting_white && !service.reread_slow);
+    controller_service_tick(&service, 9060U);
+    assert(service.reread_slow && f.decoder_resets == 1);
+    f.read_failed = true;
+    controller_service_tick(&service, 9100U);
+    assert(f.goal_count == 1 && service.reread_slow);
+    controller_service_tick(&service, 17000U);
+    assert(!service.reread_slow);
+    f.read_failed = true;
+    controller_service_tick(&service, 18000U);
+    assert(f.goal_count == 1); /* Same approach cannot start another reverse. */
+    assert(service.status.barcode_retry_decision == BARCODE_RETRY_INTERLOCK);
+    assert(controller_service_handle(&service, &idle));
+    assert(controller_service_handle(&service, &run));
+    f.car.line.barcode_active = true;
+    controller_service_tick(&service, 19000U);
+    f.car.line.barcode_active = false;
+    f.car.line.path_mm = 380U;
+    f.read_failed = true;
+    controller_service_tick(&service, 21000U);
+    assert(f.goal_count == 2 && service.status.barcode_retries == 2U);
+    f.car.line.barcode_white_ready = false;
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 22000U);
+    assert(service.reread_waiting_white);
+    controller_service_tick(&service, 22300U);
+    assert(!service.rereading && !service.reread_slow && f.goal_count == 2);
+}
+#endif
+
 int main(void)
 {
+    test_backtrack_uses_encoders_and_stops_on_line();
+#if CONTROLLER_BARCODE_RETRY
+    test_retry_episode_and_reverse_routes();
+#endif
     test_line_lost_pivots_until_a_sensor_sees_it();
     test_line_search_sweeps_both_ways_then_stops();
     test_line_search_off_by_default();
     test_bind_junction_needs_every_output();
     test_barcode_left_turn();
+    test_map_change_drops_only_pending_route();
     test_straight_and_right_and_uturn();
     test_route_published_between_takes();
     test_junction_without_route_stops();

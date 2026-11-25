@@ -40,21 +40,24 @@ ER tk_dly_tsk(unsigned delay){
 int main(int argc,char **argv){
  if(argc>2){live_fixture=fopen(argv[2],"w");assert(live_fixture);}
  if(argc>1){fixture=fopen(argv[1],"w");assert(fixture);}
- assert(!b1_car_start_allowed(STOP_REASON_PHYSICAL,0,0,0));
- assert(!b1_car_start_allowed(STOP_REASON_MOTION_FAULT,0,0,0));
- assert(!b1_car_start_allowed(0,1,0,0));
- assert(!b1_car_start_allowed(0,0,1,0));
- assert(!b1_car_start_allowed(0,0,0,1));
- assert(b1_car_start_allowed(STOP_REASON_REMOTE,0,0,0));
- assert(b1_car_start_allowed(0,0,0,0));
+ assert(!b1_car_start_allowed(STOP_REASON_PHYSICAL,0,0,0,0));
+ assert(b1_car_start_allowed(STOP_REASON_PHYSICAL,0,0,0,1));
+ assert(!b1_car_start_allowed(STOP_REASON_PHYSICAL,1,0,0,1));
+ assert(!b1_car_start_allowed(STOP_REASON_MOTION_FAULT,0,0,0,1));
+ assert(!b1_car_start_allowed(0,1,0,0,0));
+ assert(!b1_car_start_allowed(0,0,1,0,0));
+ assert(!b1_car_start_allowed(0,0,0,1,0));
+ assert(b1_car_start_allowed(STOP_REASON_REMOTE,0,0,0,0));
+ assert(b1_car_start_allowed(0,0,0,0,0));
  assert(b1_car_command_choice(B1_START,B1_STOP)==B1_STOP);
  assert(b1_car_command_choice(B1_STOP,B1_START)==B1_STOP);
- assert(b1_car_start_progress(SYSTEM_MODE_STARTUP,0,100,105)==0);
- assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,100,105)==0);
- assert(b1_car_start_progress(SYSTEM_MODE_AUTO,0,100,110)==1);
- assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,100,1100)==-1);
- assert(b1_car_start_progress(SYSTEM_MODE_STOPPED,STOP_REASON_PHYSICAL,100,105)==-1);
- assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,0xfffffff0U,0x10U)==0);
+ assert(b1_car_start_progress(SYSTEM_MODE_STARTUP,0,0,100,105)==0);
+ assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,0,100,105)==0);
+ assert(b1_car_start_progress(SYSTEM_MODE_AUTO,0,0,100,110)==1);
+ assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,0,100,1100)==-1);
+ assert(b1_car_start_progress(SYSTEM_MODE_STOPPED,STOP_REASON_PHYSICAL,0,100,105)==-1);
+ assert(b1_car_start_progress(SYSTEM_MODE_STOPPED,STOP_REASON_PHYSICAL,STOP_REASON_PHYSICAL,100,105)==0);
+ assert(b1_car_start_progress(SYSTEM_MODE_IDLE,0,0,0xfffffff0U,0x10U)==0);
  assert(b1_init()==E_OK);
  expected.present=B1_SECTION_2|B1_SECTION_3|B1_SECTION_5;
  expected.s2_at_ms=11;expected.s2.left_speed_mm_s=-12;expected.s2.left_speed_valid=1;

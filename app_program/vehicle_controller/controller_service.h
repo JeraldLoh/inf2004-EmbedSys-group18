@@ -62,6 +62,9 @@ typedef struct
     bool barcode_active;   /* a barcode is being read: hold a steady speed */
     bool on_line;          /* either sensor sees black (line search) */
     bool analogue_steering;
+    bool path_valid;
+    uint32_t path_mm;      /* mean wheel travel */
+    bool barcode_white_ready; /* fresh white ADC samples for the quiet zone */
 } controller_line_input_t;
 
 typedef struct
@@ -93,6 +96,13 @@ typedef struct
     bool (*goal)(void *context, const motion_goal_request_t *goal);
     bool (*goal_result)(void *context, goal_id_t goal_id,
         motion_goal_result_t *result);
+    /* Optional, may be NULL: Buddy 3's "barcode read failed" event. True once
+     * per event, with the ms since the capture started. Used only when the
+     * build has BARCODE_RETRY=1. */
+    bool (*take_barcode_failure)(void *context, uint32_t *elapsed_ms);
+    /* Optional, may be NULL: drop Buddy 3's half-finished barcode capture.
+     * Called with the car stopped, before the slow re-read pass. */
+    void (*barcode_reset)(void *context);
 } controller_junction_outputs_t;
 
 /* Junction numbers. Placeholders until measured on the car. */
@@ -133,9 +143,26 @@ typedef struct
      * search_max_mdeg, then the other way. Needs junction outputs (goals).
      * 0 = off: keep driving on the last steering. */
     uint32_t lost_ms;
+    /* Before the pivot search (track-line mission only) reverse the distance
+     * driven since the line was last seen, at most this many mm.
+     * 0 = off. */
+    uint32_t backtrack_mm;
     int32_t search_step_mdeg;
     int32_t search_max_mdeg;
 } controller_line_config_t;
+
+typedef enum
+{
+    BARCODE_RETRY_NO_DECISION = 0,
+    BARCODE_RETRY_MOTION_BUSY,
+    BARCODE_RETRY_INTERLOCK,
+    BARCODE_RETRY_CAPTURE_PATH,
+    BARCODE_RETRY_CAPTURE_TIMING,
+    BARCODE_RETRY_CURRENT_PATH,
+    BARCODE_RETRY_DISTANCE,
+    BARCODE_RETRY_GOAL_REJECTED,
+    BARCODE_RETRY_STARTED
+} controller_barcode_retry_decision_t;
 
 typedef struct
 {
@@ -163,6 +190,15 @@ typedef struct
     uint32_t line_searches;     /* line lost and searched for */
     uint32_t line_search_fails;
     bool line_searching;
+    uint32_t obstacle_moves_accepted;   /* Buddy 5 moves forwarded to Buddy 2 */
+    uint32_t obstacle_moves_rejected;   /* refused here or by Buddy 2 */
+    uint32_t barcode_retries;           /* re-reads started */
+    uint32_t barcode_rereads_ok;        /* a route was taken after one */
+    uint32_t barcode_retry_decision_seq;
+    controller_barcode_retry_decision_t barcode_retry_decision;
+    uint32_t barcode_retry_capture_ms;
+    uint32_t barcode_retry_observed_ms;
+    uint32_t barcode_retry_travel_mm;
 } controller_status_t;
 
 typedef struct
@@ -177,6 +213,8 @@ typedef struct
     controller_junction_outputs_t junction_out;
     controller_junction_config_t junction;
     bool junction_bound;
+    uint32_t (*read_route_map_revision)(void);
+    uint32_t route_map_revision;
     controller_junction_phase_t junction_phase;
     system_time_ms_t phase_since_ms;
     route_command_t junction_route;
@@ -187,8 +225,24 @@ typedef struct
     system_time_ms_t holdoff_until_ms;
 
     system_time_ms_t line_seen_ms;
+    uint32_t line_seen_path_mm;
+    bool line_seen_path_valid;
     bool searching;
     bool search_seen;      /* a sensor saw black during this step */
+    bool search_backtrack; /* the first search step is a reverse */
+    bool rereading;        /* barcode re-read: retrace goal running */
+    bool reread_waiting_white;
+    system_time_ms_t reread_stopped_at_ms;
+    bool reread_capture_seen;
+    bool reread_capture_path_valid;
+    uint32_t reread_capture_path_mm;
+    system_time_ms_t reread_capture_started_ms;
+    bool reread_slow;      /* slow constant-speed pass after the retrace */
+    system_time_ms_t reread_slow_until_ms;
+    system_time_ms_t retry_holdoff_until_ms;
+    bool retry_holdoff;    /* retry_holdoff_until_ms is set */
+    bool retry_episode;    /* re-arm only after a completed junction or new run */
+    int32_t reread_mm;     /* the retrace distance, for the slow pass time */
     int8_t search_dir;     /* +1 right, -1 left: the side tried first */
     int8_t search_pass;    /* 0 toward search_dir, 1 the other way */
     int32_t search_mdeg;   /* heading vs where the line was lost, + = search_dir */
@@ -235,7 +289,7 @@ bool controller_service_authority(
  * Rejects a request superseded by any STOP, or while safety stops remain. */
 bool controller_service_remote_start(controller_service_t *service,
     uint32_t requested_stop_sequence, uint32_t current_stop_sequence,
-    bool urgent_stop_pending);
+    bool urgent_stop_pending, stop_reason_mask_t expected_stops);
 
 void controller_service_motion_result(controller_service_t *service,
     const motion_goal_result_t *result);

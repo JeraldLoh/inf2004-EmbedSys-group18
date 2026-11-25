@@ -1,5 +1,14 @@
 # Buddy 1 Communications test record
 
+## November demo cases and bench follow-up
+
+Use the [shared setup, tolerances and recording rules](../DEMO_TRACEABILITY.md) and [evidence ledger](../DEMO_EVIDENCE.md). These procedures govern the normal combined image. Earlier plans and results below apply to their recorded profiles.
+
+| ID | Priority, owner and requirement | Setup and steps | Pass criteria and evidence | Status |
+|---|---|---|---|---|
+| S1-U10 | P1 · B1 · IF-01, IF-09 command validation | On host, use the B1 ingress/map fixtures under testing/host and the current dashboard Node tests. Submit supported START/STOP/map operations, bad field types, duplicate direction letters, malformed payloads and duplicate/out-of-order IDs under one session. | Exact reply/apply behavior for each input, invalid input leaves authority and map unchanged, STOP wins a simultaneous valid START/STOP. Save fixture version and per-input result. | Earlier software evidence in ledger. Normal Pico command round-trip in INT-31. |
+| S1-U11 | P1 · B1 · IF-08, IF-09 bounded ingress and logging | With host queues or a secured normal-car stand, feed numbered telemetry and console bursts while slowing consumption. Keep an independent local timing reference and cycle broker connectivity in INT-12. | Queues remain bounded, loss/coalescing is observable, fresh traffic resumes, no stale START replay. Save sequences, queue limits, Pico bytes dropped, browser batches discarded and timing. | Wireless export observed in E2–E4. Deliberate saturation Not run. |
+
 This is a proposed plan, not test evidence. No hardware test was run during
 folder migration. Define exact preconditions, thresholds, procedures and evidence
 before execution. Electrical work requires G1; active motion needs explicit
@@ -111,3 +120,9 @@ Still open: real sensors/motors, combined-task timing, long-duration reliability
 queue flooding, protocol robustness beyond existing cases, fault integration,
 and binary/200 ms requirement change. These results do not close A1 for a full
 robot. User screenshots are reference evidence, not automated assertions.
+
+## November evidence review
+
+| Date | Test ID | Commit/profile | Tester | Result | Evidence | Notes |
+|---|---|---|---|---|---|---|
+| 2026-11-25 | S1-U11 | E2–E4 combined working-tree profiles on da4e9d9 | Operator (name unrecorded) | Partial | [Evidence E2–E4](../DEMO_EVIDENCE.md) | Downloaded real firmware console batches with loss counters. Deliberate ingress and reconnect test remains open. |

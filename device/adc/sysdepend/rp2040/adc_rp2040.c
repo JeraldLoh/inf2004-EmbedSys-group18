@@ -48,6 +48,17 @@ LOCAL T_SPLOCK ll_lock;
 #define ADC_UNLOCK(sts)    EI(sts)
 #endif
 
+/* On-chip timer remains available while polling the ADC ready bit. */
+LOCAL BOOL adc_ready(void)
+{
+	const UW timer_raw_low = 0x40054028U;
+	const UW started = in_w(timer_raw_low);
+	do {
+		if ((in_w(ADC_CS) & ADC_CS_READY) != 0U) return TRUE;
+	} while ((UW)(in_w(timer_raw_low) - started) < 1000U);
+	return FALSE;
+}
+
 /*----------------------------------------------------------------------
  * Interrupt handler
  */
@@ -57,13 +68,14 @@ void adc_inthdr( UINT intno)
 	BOOL	done = FALSE;
 
 	ADC_LOCK(intsts);
-	if(ll_devcb.active && ll_devcb.buf != NULL) {
+	if (ll_devcb.active && ll_devcb.buf != NULL &&
+	    (in_w(ADC_FCS) & ADC_FCS_LEVEL) != 0U) {
 		*ll_devcb.buf = in_w(ADC_FIFO) & 0x0FFF;
 		ll_devcb.asz = 1;
 		ll_devcb.active = FALSE;
 		done = TRUE;
 	}
-	out_w(ADC_INTE, 0);
+	if (done || !ll_devcb.active) out_w(ADC_INTE, 0);
 	if(done) (void)tk_set_flg(ll_devcb.done_flgid, 1);
 	ADC_UNLOCK(intsts);
 
@@ -82,10 +94,13 @@ LOCAL UW adc_convert( INT ch, INT size, UW *buf )
 	if(ch<0 || ch>(ADC_CH_NUM-1)) return E_PAR;
 	if(size != 1) return E_PAR;
 
-	while((in_w(ADC_CS)&ADC_CS_READY)==0);
+	if (!adc_ready()) return E_TMOUT;
 
 	ADC_LOCK(intsts);
 	(void)tk_clr_flg(ll_devcb.done_flgid, 0);
+	/* An IRQ timeout can leave a previous conversion in the four-entry FIFO. */
+	for (unsigned i=0U; i<4U && (in_w(ADC_FCS) & ADC_FCS_LEVEL) != 0U; ++i)
+		(void)in_w(ADC_FIFO);
 	ll_devcb.buf = buf;
 	ll_devcb.asz = 0;
 	ll_devcb.active = TRUE;
@@ -212,7 +227,10 @@ EXPORT ER dev_adc_llinit( T_ADC_DCB *p_dcb)
 
 	/* Enable A/DC */
 	set_w(ADC_CS, ADC_CS_EN);
-	while(!(in_w(ADC_CS)&ADC_CS_READY));
+	if (!adc_ready()) {
+		(void)tk_del_flg(ll_devcb.done_flgid);
+		return E_TMOUT;
+	}
 
 	err = tk_def_int( INTNO_ADC, &dint);
 	if(err == E_OK) {

@@ -20,6 +20,38 @@ else()
 endif()
 
 enable_testing()
+add_executable(demo_recovery_host_tests test_demo_recovery.c)
+add_test(NAME demo_recovery_host_tests COMMAND demo_recovery_host_tests)
+add_executable(controller_recovery_host_tests
+    test_controller_service.c
+    ../../app_program/contracts/hardware_faults.c
+    ../../app_program/vehicle_controller/safety.c
+    ../../app_program/vehicle_controller/vehicle_controller.c
+    ../../app_program/vehicle_controller/controller_service.c)
+target_compile_definitions(controller_recovery_host_tests PRIVATE CONTROLLER_BARCODE_RETRY=1)
+foreach(demo_target demo_recovery_host_tests controller_recovery_host_tests)
+    if(MSVC)
+        target_compile_options(${demo_target} PRIVATE /W4 /WX /UNDEBUG)
+    else()
+        target_compile_options(${demo_target} PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+    endif()
+endforeach()
+add_test(NAME controller_recovery_host_tests COMMAND controller_recovery_host_tests)
+foreach(terrain_target terrain_demo_baseline_tests terrain_demo_jolt_pause_tests)
+    add_executable(${terrain_target} test_terrain_estimator.c
+        ../../app_program/subsystem4/imu_math.c
+        ../../app_program/subsystem4/terrain_estimator.c
+        ../../app_program/subsystem4/s4_shared.c)
+    target_include_directories(${terrain_target} PRIVATE ../../app_program/subsystem4)
+    if(MSVC)
+        target_compile_options(${terrain_target} PRIVATE /W4 /WX /UNDEBUG)
+    else()
+        target_compile_options(${terrain_target} PRIVATE -Wall -Wextra -Werror -Wpedantic -UNDEBUG)
+        target_link_libraries(${terrain_target} PRIVATE m)
+    endif()
+    add_test(NAME ${terrain_target} COMMAND ${terrain_target})
+endforeach()
+target_compile_definitions(terrain_demo_jolt_pause_tests PRIVATE S4_LIFT_JOLT_PAUSE=1)
 add_test(NAME vehicle_controller_host_tests
          COMMAND vehicle_controller_host_tests)
 

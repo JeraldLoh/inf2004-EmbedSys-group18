@@ -1,5 +1,9 @@
 import {liveGroup} from './live-status.mjs?v=barcode-digital-4';
 const routes=['No action assigned','Left','Right','Straight','U-turn'];
+function readerAge(uptime,sampled){
+ const age=(uptime-sampled)|0;
+ return age>=-100?Math.max(0,age):Infinity;
+}
 function result(line){
  const letter=line.barcode_character?String.fromCharCode(line.barcode_character):'?';
  switch(line.barcode_state){
@@ -16,7 +20,7 @@ function result(line){
 function readerGroup(packet){
  const s=packet?.live_status;
  if(!s||s.demo!==packet.demo||!(s.present&2))return null;
- const g=s.line,age=((s.uptime_ms-g.at_ms)>>>0)+Math.max(0,packet.live_status_elapsed_ms??0);
+ const g=s.line,age=readerAge(s.uptime_ms,g.at_ms)+Math.max(0,packet.live_status_elapsed_ms??0);
  return age<5000?{group:g,late:age>=1500}:null;
 }
 // Say WHICH side went quiet, so "Waiting" is not a guess.
@@ -26,22 +30,26 @@ function whyWaiting(packet){
  if(!s)return 'No live_status packet received from the Pico (Wi-Fi/MQTT silent or Pico rebooting).';
  if(s.demo!==packet.demo)return 'Packet is from the simulator, not the real Pico.';
  if(!(s.present&2))return 'The Pico is sending status, but Buddy 3 (line/barcode) has not published yet.';
- const pico=(s.uptime_ms-s.line.at_ms)>>>0,link=Math.max(0,packet.live_status_elapsed_ms??0);
+ const pico=readerAge(s.uptime_ms,s.line.at_ms),link=Math.max(0,packet.live_status_elapsed_ms??0);
+ if(!Number.isFinite(pico))return 'Waiting for a reader sample with a current timestamp.';
  if(pico>=5000)return `Pico is online but Buddy 3's reader data is ${(pico/1000).toFixed(1)} s old: its task stopped publishing.`;
  return `Reader data is fresh on the Pico, but the last packet arrived ${(link/1000).toFixed(1)} s ago: the Wi-Fi/MQTT link is stalling.`;
 }
-export function barcodeView(packet,{stale=false}={}){
+export function barcodeView(packet,{stale=false,mapRevision=undefined}={}){
  const found=readerGroup(packet),line=found?found.group:null;
  if(stale)return {state:'stale',headline:'Barcode reader · readings stale',detail:'Waiting for fresh Pico data. Previous results do not describe the current scan.'};
  if(!line)return {state:'waiting',headline:'Waiting for barcode reader',detail:whyWaiting(packet)};
+ if(line.map_revision!==undefined&&mapRevision!==undefined&&line.map_revision!==mapRevision)
+  return {state:'waiting',headline:'Ready for a fresh scan',detail:'Waiting for reader data from the current rover map.'};
  if(line.barcode_state===null||line.barcode_state===undefined)return {state:'waiting',headline:'Reader status update needed',detail:'Flash the firmware supplied with this dashboard to report scanning, decoded letters and failed reads.'};
  if(line.calibration_state===1)return {state:'waiting',headline:'Calibrating barcode reader',detail:'Sweep the sensor across black and white as prompted before scanning.'};
  if(line.calibration_state===3)return {state:'failed',headline:'Barcode reader not ready',detail:'Calibration failed. Recalibrate before scanning barcodes.'};
- const view=result(line),age=((packet.live_status.uptime_ms-line.barcode_event_ms)>>>0)+Math.max(0,packet.live_status_elapsed_ms??0);
+ const view=result(line),age=readerAge(packet.live_status.uptime_ms,line.barcode_event_ms)+Math.max(0,packet.live_status_elapsed_ms??0);
  if([2,3,4].includes(line.barcode_state))view.detail+=` Last result ${(age/1000).toFixed(1)} s ago · ${line.barcode_failures} unreadable attempts this boot.`;
- // The firmware keeps the last result until the next capture. After 10 s show "ready" again
- // (keeping the old result visible) so the panel does not look stuck on a stale failure.
- if([2,3,4].includes(line.barcode_state)&&age>(line.barcode_state===3?3000:10000)){const last=view.headline;view.state='waiting';view.headline='Ready · waiting for the next barcode';view.detail=`Last result: ${last} (${(age/1000).toFixed(0)} s ago) · ${line.barcode_failures} unreadable attempts this boot. Move a barcode across the sensor.`;}
+ if([2,3,4].includes(line.barcode_state)&&age>(line.barcode_state===3?3000:10000)){
+  view.state='waiting';view.headline='Ready · waiting for the next barcode';
+  view.detail='Move a barcode across the sensor.';
+ }
  const sensor=packet?.buddies?.[3];
  if(line.barcode_digital&&sensor)view.detail+=` Digital D0 on GP26: ${sensor.black?'black':'white'} detected.`;
  if(sensor?.adc_valid)view.detail+=` Sensor: ${sensor.black?'black':'white'} · ADC ${sensor.adc}.`;
@@ -59,10 +67,10 @@ export function barcodeEvents(previous,current){
  return [{text:`Barcode: ${result(line).headline}${!before&&completed?' (last reported result)':''}`,type:line.barcode_state>=3?'warning':'system'}];
 }
 
-export function renderBarcodeStatus(packet,{stale=false}={}){
+export function renderBarcodeStatus(packet,options={}){
  const root=document.getElementById('barcode-status');
  if(!root)return;
- const view=barcodeView(packet,{stale});
+ const view=barcodeView(packet,options);
  document.getElementById('barcode-headline').textContent=view.headline;
  document.getElementById('barcode-detail').textContent=view.detail;
  root.dataset.state=view.state;

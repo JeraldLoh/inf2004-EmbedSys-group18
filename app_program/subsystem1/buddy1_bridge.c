@@ -83,18 +83,19 @@ static unsigned int snapshot_at;
 typedef struct { unsigned int length, epoch, at; char data[128]; } incoming_msg;
 typedef struct { unsigned int epoch, at; b1_command command; } vehicle_msg;
 static unsigned int now_ms(void) { SYSTIM t; tk_get_otm(&t); return t.lo; }
-/* Barcode route map: apply a MAP_SET (if any), then read back what the car
- * actually holds as 28 hex characters for the reply. Each entry is a single
- * byte in barcode_map.c, so the S3 task sees either the old or the new
- * command for a letter, never a torn value. Runs on the comms task. */
-static void apply_map(const b1_map_command *m,char hex[2*B1_MAP_BYTES+1]) {
+/* This comms task is the sole map writer. */
+static bool apply_map(const b1_map_command *m,char hex[2*B1_MAP_BYTES+1]) {
  static const char digits[]="0123456789abcdef";
  uint8_t held[B1_MAP_BYTES]={0};
- if(m->kind==B1_MAP_SET)
-  for(unsigned int i=0;i<B1_MAP_ENTRIES;i++)(void)barcode_map_set(b1_map_character(i),(route_command_t)b1_map_entry(m->packed,i));
+ if(m->kind==B1_MAP_SET) {
+  uint8_t replacement[BARCODE_MAP_SIZE];
+  for(unsigned int i=0;i<B1_MAP_ENTRIES;i++)replacement[i]=b1_map_entry(m->packed,i);
+  if(!barcode_map_replace(replacement))return false;
+ }
  for(unsigned int i=0;i<B1_MAP_ENTRIES;i++)b1_map_put(held,i,(unsigned int)barcode_map_get(b1_map_character(i)));
  for(unsigned int i=0;i<B1_MAP_BYTES;i++){hex[2*i]=digits[held[i]>>4];hex[2*i+1]=digits[held[i]&15u];}
  hex[2*B1_MAP_BYTES]='\0';
+ return true;
 }
 static int lock(void) { return atomic_load_explicit(&ready,memory_order_acquire) && tk_loc_mtx(guard,TMO_POL)==E_OK; }
 static ID buffer(unsigned int size) {
@@ -216,7 +217,7 @@ void b1_telemetry_task(int stacd,void *exinf) {
    b1_command c={0}; b1_map_command mc; char map_hex[2*B1_MAP_BYTES+1]; const char *status;
    now=now_ms(); map_hex[0]='\0';
    if(!atomic_load(&online) || m.epoch!=atomic_load(&epoch) || (unsigned int)(now-m.at)>1000) continue;
-   if(b1_parse_map(m.data,m.length,&mc)) { apply_map(&mc,map_hex); c.command_id=mc.command_id; status="applied"; }
+   if(b1_parse_map(m.data,m.length,&mc)) { c.command_id=mc.command_id; status=apply_map(&mc,map_hex)?"applied":"rejected"; }
    else if(!b1_parse(m.data,m.length,&c)) status="rejected";
    else if(B1_DEMO) {
     if(c.kind==B1_START) running=1;
@@ -226,7 +227,7 @@ void b1_telemetry_task(int stacd,void *exinf) {
     vehicle_msg v={m.epoch,m.at,c};
     status=tk_snd_mbf(vehicle,&v,sizeof(v),TMO_POL)==E_OK?"queued":"queue_full";
    }
-   if(map_hex[0]) tm_sprintf((UB*)text,(const UB*)"{\"schema\":1,\"demo\":%s,\"status\":\"%s\",\"command_id\":%u,\"map\":\"%s\"}",B1_DEMO?"true":"false",status,c.command_id,map_hex);
+   if(map_hex[0]) tm_sprintf((UB*)text,(const UB*)"{\"schema\":1,\"demo\":%s,\"status\":\"%s\",\"command_id\":%u,\"map\":\"%s\",\"map_revision\":%lu}",B1_DEMO?"true":"false",status,c.command_id,map_hex,(unsigned long)barcode_map_revision());
    else tm_sprintf((UB*)text,(const UB*)"{\"schema\":1,\"demo\":%s,\"status\":\"%s\",\"command_id\":%u}",B1_DEMO?"true":"false",status,c.command_id);
    put(B1_RESULT,text,now);
   }
@@ -258,7 +259,7 @@ void b1_telemetry_task(int stacd,void *exinf) {
     b1_live_line l;
     if(s3_line_read(&l)){s3_line_clamp(&l);s.line=l;s.present|=2;}
    }
-   if(locked && s.present){s.uptime_ms=now;
+   if(locked && s.present){s.uptime_ms=now_ms();
     unsigned n=b1_encode_live_status((unsigned char*)text,sizeof(text),&s,B1_DEMO);
     if(n && put_bytes(B1_LIVE_STATUS,text,n,now))live_at=now;
    }

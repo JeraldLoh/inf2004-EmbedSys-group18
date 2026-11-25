@@ -6,12 +6,14 @@ test('missing data and failed avoidance never claim a clear path',()=>{
  assert.equal(obstacleOutputs({state:11}).detection,'Unknown · avoidance failed');
  assert.equal(obstacleOutputs({state:0,front_status:1}).detection,'No active encounter');
 });
-test('reported profile and decision keep units, lower-bound and encounter context',()=>{
+test('an incomplete profile has no width and keeps the side decision',()=>{
  const s={state:9,profile_valid:1,width_mm:125,left_found:0,right_found:1,decision_valid:1,side:2};
- assert.equal(obstacleOutputs(s).width,'At least 12.5 cm');
+ assert.equal(obstacleOutputs(s).width,'Unavailable · incomplete scan');
  assert.equal(obstacleOutputs(s).direction,'Right');
  s.state=0;
- assert.equal(obstacleOutputs(s).width,'At least 12.5 cm · last encounter');
+ assert.equal(obstacleOutputs(s).width,'Unavailable · incomplete scan');
+ s.left_found=1;
+ assert.equal(obstacleOutputs(s).width,'12.5 cm · last encounter');
  assert.equal(obstacleOutputs(s).direction,'Right · last encounter');
 });
 test('rejoin is a reported state, not an invented command or success',()=>{

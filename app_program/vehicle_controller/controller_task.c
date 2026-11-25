@@ -13,7 +13,7 @@ typedef struct
     uint32_t restart_stop_sequence;
     union
     {
-        uint32_t remote_start_sequence;
+        stop_reason_mask_t remote_start_expected_stops;
         controller_event_t event;
         controller_motion_request_t motion;
         motion_goal_result_t result;
@@ -30,9 +30,13 @@ static T_SPLOCK ingress_lock;
 #endif
 static stop_reason_mask_t urgent_reasons;
 static uint32_t urgent_sequence;
+static uint32_t obstacle_unavailable; /* protected by ingress_lock */
 static controller_motion_request_t latest_continuous;
 static bool continuous_pending;
 static bool (*terrain_reader)(terrain_report_t *report); /* set before start */
+static bool (*obstacle_goal_fn)(const motion_goal_request_t *goal);
+static bool (*obstacle_continuous_fn)(
+    const motion_continuous_request_t *request);
 
 static UINT ingress_enter(void)
 {
@@ -137,7 +141,8 @@ static void controller_task_main(INT code, void *exinf)
                     sequence=urgent_sequence;pending=urgent_reasons!=STOP_REASON_NONE;
                     ingress_leave(saved);
                     (void)controller_service_remote_start(&service,
-                        mail.value.remote_start_sequence,sequence,pending);
+                        mail.restart_stop_sequence,sequence,pending,
+                        mail.value.remote_start_expected_stops);
                     controller_motion_sync(&motion);
                     /* A STOP racing with the conditional transition is applied
                      * before this task can issue any new line request. */
@@ -223,11 +228,29 @@ ER controller_task_bind_motion(const controller_motion_outputs_t *outputs,
     return controller_motion_init(&motion, &service, outputs, session, caution, cruise)
         ? E_OK : E_PAR;
 }
+ER controller_task_bind_route_map(uint32_t (*read_revision)(void))
+{
+    if (!initialized || started) return E_OBJ;
+    if (read_revision == NULL) return E_PAR;
+    service.read_route_map_revision = read_revision;
+    return E_OK;
+}
+
 ER controller_task_bind_terrain(bool (*read_terrain)(terrain_report_t *report))
 {
     if (!initialized || started) { return E_OBJ; }
     if (read_terrain == NULL) { return E_PAR; }
     terrain_reader = read_terrain;
+    return E_OK;
+}
+ER controller_task_bind_obstacle_motion(
+    bool (*goal)(const motion_goal_request_t *goal),
+    bool (*continuous)(const motion_continuous_request_t *request))
+{
+    if (!initialized || started) { return E_OBJ; }
+    if ((goal == NULL) || (continuous == NULL)) { return E_PAR; }
+    obstacle_goal_fn = goal;
+    obstacle_continuous_fn = continuous;
     return E_OK;
 }
 ER controller_task_start(void)
@@ -242,16 +265,26 @@ static bool post(controller_mail_t *mail)
 {
     return started && tk_snd_mbf(queue, mail, (INT)sizeof(*mail), TMO_POL) == E_OK;
 }
-bool controller_post_remote_start(void)
+uint32_t controller_remote_start_ticket(void)
+{
+    UINT saved=ingress_enter();
+    uint32_t ticket=urgent_reasons==STOP_REASON_NONE ? urgent_sequence : UINT32_MAX;
+    ingress_leave(saved);
+    return ticket;
+}
+
+bool controller_post_remote_start(uint32_t ticket, stop_reason_mask_t expected_stops)
 {
     controller_mail_t mail={0};
     UINT saved;
     if(!started) return false;
     saved=ingress_enter();
-    if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX){
+    if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence!=ticket || ticket==UINT32_MAX){
         ingress_leave(saved);return false;
     }
-    mail.kind=MAIL_REMOTE_START;mail.value.remote_start_sequence=urgent_sequence;
+    mail.kind=MAIL_REMOTE_START;
+    mail.restart_stop_sequence=ticket;
+    mail.value.remote_start_expected_stops=expected_stops;
     ingress_leave(saved);
     return post(&mail);
 }
@@ -325,6 +358,13 @@ bool controller_get_status(controller_status_t *status)
     if (!initialized || status == NULL || tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK)
     { return false; }
     controller_service_status(&service, status);
+    {
+        UINT saved = ingress_enter();
+        uint32_t missed = obstacle_unavailable;
+        ingress_leave(saved);
+        status->obstacle_moves_rejected = missed > UINT32_MAX - status->obstacle_moves_rejected ?
+            UINT32_MAX : status->obstacle_moves_rejected + missed;
+    }
     (void)tk_unl_mtx(guard); return true;
 }
 bool controller_get_motion_status(controller_motion_status_t *status)
@@ -334,6 +374,77 @@ bool controller_get_motion_status(controller_motion_status_t *status)
     *status = motion.status;
     status->authority_generation = service.controller.authority_generation;
     (void)tk_unl_mtx(guard); return true;
+}
+
+/* Caller holds the guard. Lock order is controller guard, then the Buddy 2
+ * mutex, the same as the line tick. */
+static bool obstacle_approved(
+    motion_source_t source,
+    authority_generation_t generation)
+{
+    authority_generation_t current = 0U;
+
+    return (source == MOTION_SOURCE_OBSTACLE) &&
+        controller_service_authority(&service, MOTION_SOURCE_OBSTACLE,
+            &current) &&
+        (generation == current);
+}
+
+static bool obstacle_unavailable_reject(void)
+{
+    if (initialized)
+    {
+        UINT saved = ingress_enter();
+        if (obstacle_unavailable != UINT32_MAX) { obstacle_unavailable++; }
+        ingress_leave(saved);
+    }
+    return false;
+}
+
+bool controller_obstacle_goal(const motion_goal_request_t *goal)
+{
+    bool ok;
+
+    if (!initialized || (goal == NULL) || (obstacle_goal_fn == NULL) ||
+        (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return obstacle_unavailable_reject();
+    }
+    ok = obstacle_approved(goal->source, goal->authority_generation) &&
+        obstacle_goal_fn(goal);
+    if (ok)
+    {
+        service.status.obstacle_moves_accepted++;
+    }
+    else
+    {
+        service.status.obstacle_moves_rejected++;
+    }
+    (void)tk_unl_mtx(guard);
+    return ok;
+}
+
+bool controller_obstacle_continuous(const motion_continuous_request_t *request)
+{
+    bool ok;
+
+    if (!initialized || (request == NULL) || (obstacle_continuous_fn == NULL) ||
+        (tk_loc_mtx(guard, CONTROLLER_STATUS_WAIT_MS) != E_OK))
+    {
+        return obstacle_unavailable_reject();
+    }
+    ok = obstacle_approved(request->source, request->authority_generation) &&
+        obstacle_continuous_fn(request);
+    if (ok)
+    {
+        service.status.obstacle_moves_accepted++;
+    }
+    else
+    {
+        service.status.obstacle_moves_rejected++;
+    }
+    (void)tk_unl_mtx(guard);
+    return ok;
 }
 
 bool controller_authority(motion_source_t source, authority_generation_t *generation)

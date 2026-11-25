@@ -2,6 +2,7 @@ import {encodeCommand} from './commands.mjs';
 /* MQTT 3.1.1 over WebSocket: clean sessions, QoS 0, no offline command queue. */
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 const join=(...arrays)=>new Uint8Array(arrays.flatMap(a=>Array.from(a)));
+const telemetryTopics=['heartbeat','telemetry','command_result','diagnostics','live_status','log'];
 export function mqttString(value){const b=encoder.encode(value);if(b.length>65535)throw Error('String too long');return join([b.length>>8,b.length&255],b);}
 export function packet(header,body=new Uint8Array()){
  if(body.length>65536)throw Error('Packet too large');
@@ -75,11 +76,11 @@ export class MqttConnection {
   const type=frame.header>>4,b=frame.body;
   if(type===2){
    if(b.length!==2||b[0]!==0||b[1]!==0)throw Error('Broker rejected clean-session connection');
-   const topics=['heartbeat','telemetry','command_result','diagnostics','live_status'].map(s=>join(mqttString(this.prefix+'/'+s),[0]));
+   const topics=telemetryTopics.map(s=>join(mqttString(this.prefix+'/'+s),[0]));
    ws.send(packet(0x82,join([0,1],...topics)));
   }else if(type===9){
    if(this.ready)throw Error('Unexpected duplicate subscription acknowledgement');
-   if(b.length!==7||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
+   if(b.length!==2+telemetryTopics.length||b[0]!==0||b[1]!==1||!Array.from(b.slice(2)).every(v=>v===0))throw Error('Subscription rejected');
    clearTimeout(this.deadline);this.ready=true;this.retry=1000;this.onState('connected');
    this.pinger=setInterval(()=>{
     if(this.pingAt){this.onLog('Broker heartbeat timed out','warning');ws.close();return;}

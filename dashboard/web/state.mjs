@@ -1,4 +1,4 @@
-import {decodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
+import {decodeLiveStatus} from './live-status.mjs?v=route-slots-1';
 import {decodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
 import {mapFromHex} from './route-map.mjs?v=barcode-digital-4';
@@ -8,10 +8,10 @@ export function validateCommand(command) {
 }
 export class RobotState {
  constructor(){this.disconnect();}
- disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.liveStatus=null;this.liveStatusAt=null;this.demo=null;this.result=null;this.routeMap=null;this.routeMapAt=null;this.received=0;this.diagnostics=newDiagnostics();}
+ disconnect(){this.connected=false;this.lastHeartbeat=null;this.telemetry=null;this.telemetryAt=null;this.liveStatus=null;this.liveStatusAt=null;this.demo=null;this.result=null;this.routeMap=null;this.routeMapAt=null;this.routeMapRevision=null;this.received=0;this.diagnostics=newDiagnostics();}
  status(now){return !this.connected?'disconnected':this.lastHeartbeat===null?'waiting':now-this.lastHeartbeat<15?'online':'offline';}
  connectionLost(){this.connected=false;this.result=null;}
- connectionRestored(){this.connected=true;this.lastHeartbeat=null;this.result=null;}
+ connectionRestored(){this.connected=true;this.lastHeartbeat=null;this.result=null;this.liveStatus=null;this.liveStatusAt=null;this.routeMap=null;this.routeMapAt=null;this.routeMapRevision=null;}
  telemetryView(now){
   const age=this.telemetryAt===null?null:Math.max(0,now-this.telemetryAt);
   return {values:this.telemetry,age,fresh:age!==null&&age<3&&this.status(now)==='online'};
@@ -25,7 +25,13 @@ export class RobotState {
  }
  receiveValidated(topic,payload,now){
   if(payload.length>1024)throw new Error('Message too large');
-  if(topic==='live_status'){const s=decodeLiveStatus(payload);this.liveStatus=s;this.liveStatusAt=now;this.received++;return true;}
+  if(topic==='live_status'){
+   const s=decodeLiveStatus(payload);
+   if(this.liveStatus&&((s.uptime_ms-this.liveStatus.uptime_ms)>>>0)>=0x80000000){
+    this.routeMap=null;this.routeMapAt=null;this.routeMapRevision=null;
+   }
+   this.liveStatus=s;this.liveStatusAt=now;this.received++;return true;
+  }
   if(topic==='diagnostics'){
    const d=decodeDiagnostics(payload);this.diagnostics.device=d;this.diagnostics.deviceAt=now;this.received++;return true;
   }
@@ -42,7 +48,10 @@ export class RobotState {
    this.diagnostics.packetBytes=typeof payload==='string'?new TextEncoder().encode(payload).length:payload.byteLength;
   }else if(topic==='command_result'){
    if(!['simulated','queued','rejected','queue_full','applied'].includes(v.status))throw new Error('Invalid command result');
-   if(v.map!==undefined){this.routeMap=mapFromHex(v.map);this.routeMapAt=now;}
+   if(v.map!==undefined){
+    if(v.map_revision!==undefined&&(!Number.isInteger(v.map_revision)||v.map_revision<1||v.map_revision>0xffffffff))throw Error('Invalid map revision');
+    this.routeMap=mapFromHex(v.map);this.routeMapAt=now;this.routeMapRevision=v.map_revision??null;
+   }
    this.result=v;
   }else throw new Error('Unexpected topic');
   this.demo=v.demo;this.received++;return true;

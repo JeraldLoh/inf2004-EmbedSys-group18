@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "../../app_program/subsystem3/barcode_decoder.h"
+#include "../../app_program/subsystem3/barcode_map.h"
 #include "../../app_program/subsystem4/imu_math.h"
 
 /* Feeds *A* as 29 timed runs. blur_us shortens every bar and lengthens every
@@ -204,6 +205,74 @@ static void test_barcode_a_maps_to_left(void)
     assert(!barcode_decoder_take(&decoder, &command, &character));
 }
 
+static void test_mirrored_partial_retry_signature(void)
+{
+    const uint32_t recorded[][27] = {
+        {32097,36894,106195,36832,106178,38825,33985,117088,33157,
+         41789,34014,42953,34024,112355,108665,44097,103984,50912,
+         20959,53988,23046,53068,95029,50911,98956,54161,17017},
+        {34154,36855,111999,38025,112152,37856,34925,114079,34445,
+         36522,36990,39956,36043,115267,107694,40067,106991,48972,
+         27025,51986,24996,42960,95988,48307,100772,53965,13046}
+    };
+    barcode_decoder_t decoder = {0};
+    for (unsigned sample = 0; sample < 2U; ++sample)
+    {
+        decoder.trace_count = 27U;
+        for (unsigned run = 0; run < decoder.trace_count; ++run)
+            decoder.trace_run_us[run] = recorded[sample][run];
+        assert(barcode_decoder_retry_signature(&decoder));
+        decoder.trace_count = 13U; /* mirrored '*' alone can be a forward 'P' */
+        assert(!barcode_decoder_retry_signature(&decoder));
+        decoder.trace_count = 27U;
+        decoder.trace_run_us[22] = 23046U; /* remove a wide element in the stop prefix */
+        assert(!barcode_decoder_retry_signature(&decoder));
+    }
+
+    const uint32_t early_end[] = {
+        40019,33939,119042,28294,115710,28440,44329,108732,41499,
+        35011,38059,38940,37268,128702,86995,53015,93062,203716,
+        89291,59896,78043
+    };
+    decoder.trace_count = sizeof early_end / sizeof early_end[0];
+    for (unsigned run = 0; run < decoder.trace_count; ++run)
+        decoder.trace_run_us[run] = early_end[run];
+    assert(barcode_decoder_retry_signature(&decoder));
+    decoder.trace_count = 20U; /* no part of the closing marker */
+    assert(!barcode_decoder_retry_signature(&decoder));
+    decoder.trace_count = 21U;
+    decoder.trace_run_us[20] = 120000U; /* wrong closing marker */
+    assert(!barcode_decoder_retry_signature(&decoder));
+    decoder.trace_run_us[20] = early_end[20];
+    decoder.trace_run_us[19] = 110000U; /* missing second narrow gap */
+    assert(!barcode_decoder_retry_signature(&decoder));
+
+    /* The later field log retained the full trace at millisecond resolution.
+     * Its first five closing runs match, then a narrow space reads wide. */
+    const uint32_t merged_space_ms[] = {
+        23,54,92,63,85,58,11,129,22,47,99,52,21,128,20,58,18,60,95,
+        62,10,60,83,59,83,221,8
+    };
+    decoder.trace_count = sizeof merged_space_ms / sizeof merged_space_ms[0];
+    for (unsigned run = 0; run < decoder.trace_count; ++run)
+        decoder.trace_run_us[run] = merged_space_ms[run] * 1000U;
+    assert(barcode_decoder_retry_signature(&decoder));
+    decoder.trace_run_us[24] = 23000U; /* missing second wide closing bar */
+    assert(!barcode_decoder_retry_signature(&decoder));
+
+    const uint32_t too_short[][12] = {
+        {20881,52582,109588,40813,101003,42949,29098,426023,71861,80013,66052,852062},
+        {32025,48976,113998,42129,108877,45988,31087,458921,75019,66399,38629,917961}
+    };
+    for (unsigned sample = 0; sample < 2U; ++sample)
+    {
+        decoder.trace_count = 12U;
+        for (unsigned run = 0; run < decoder.trace_count; ++run)
+            decoder.trace_run_us[run] = too_short[sample][run];
+        assert(!barcode_decoder_retry_signature(&decoder));
+    }
+}
+
 static void test_lsm303_signed_decode(void)
 {
     /* +1000 mg, -1000 mg, 0 mg after the sensor's 4-bit right shift. */
@@ -221,11 +290,14 @@ static void test_lsm303_signed_decode(void)
 
 int main(void)
 {
+    assert(barcode_map_get('A') == ROUTE_COMMAND_NONE);
+    barcode_map_defaults();
     test_barcode_a_maps_to_left();
     test_barcode_blurred_reverse_read();
     test_barcode_partial_read_then_real();
     test_barcode_measured_car_widths();
     test_barcode_after_long_black();
+    test_mirrored_partial_retry_signature();
     test_lsm303_signed_decode();
     (void)puts("perception math host tests passed");
     return 0;

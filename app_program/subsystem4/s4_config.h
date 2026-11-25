@@ -131,8 +131,15 @@
  * The latch clears once the car rests upright and still for S4_REST_MS
  * (back on the floor); the controller keeps its own stop until START.
  */
+#ifndef S4_LIFT_HEIGHT_MM
 #define S4_LIFT_HEIGHT_MM 200U
+#endif
+#ifndef S4_LIFT_WINDOW_MS
 #define S4_LIFT_WINDOW_MS 1200U     /* a lift must reach the height this fast */
+#endif
+#ifndef S4_LIFT_JOLT_PAUSE
+#define S4_LIFT_JOLT_PAUSE 0
+#endif
 #define S4_LIFT_START_MG 40U        /* upward |a| - g that starts a lift */
 #define S4_LIFT_LPF_SHIFT 3U        /* |a| EMA 1/8 (~140 ms): removes vibration */
 #define S4_OVERTURN_DDEG 600U       /* 60 deg from upright */

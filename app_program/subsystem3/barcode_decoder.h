@@ -62,5 +62,7 @@ bool barcode_decoder_busy(const barcode_decoder_t *decoder);
 /* True if the last decoded barcode was read backwards. Valid until the
  * next barcode_decoder_take() reset; read it before taking. */
 bool barcode_decoder_was_reversed(const barcode_decoder_t *decoder);
+/* Conservative candidate signature for logging only. */
+bool barcode_decoder_retry_signature(const barcode_decoder_t *decoder);
 
 #endif
