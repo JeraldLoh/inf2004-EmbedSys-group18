@@ -1,0 +1,862 @@
+# Extract of a serial console log captured by the Buddy 5 operator. Log lines are unedited; trailing spaces removed.
+# 2026-11-19, host times 15:01 to 15:03 SGT, COM5, two boots. CAR_RUN offline build, tag b2-straight80-right95-digital, exact commit not recorded. Some lines are truncated or missing in the capture.
+---- Opened the serial port COM5 ----
+15:01:16:874 ->
+15:01:16:874 ->
+15:01:16:874 -> microT-Kernel Version 3.00
+15:01:16:874 ->
+15:01:16:874 -> [S3] Barcode ready: fixed thresholds 350/450 (no calibration)
+15:01:16:874 -> [B4] IMU task started; keep the car still and level
+15:01:16:874 -> [B2 CONFIG] fw=b2-straight80-right95-digital base=80mm/s curve_scale=140000 inner=85% extra_inner=76.5% min_line_wheel=0mm/s QUALIFIED (Buddy 2 sign-off 2026-11-03); this configuration supersedes older CAR banner speed text.
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=0 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=0 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B4] terrain UNKNOWN, cap 100 mm/s
+15:01:16:874 -> [B4] level calibration FAILED
+15:01:16:874 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:01:16:874 -> [B4]   window mean right=116 fwd=-11 up=938 mg, largest axis spread 88 mg (limit 40)
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=1001 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=2004 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [B4] level calibration FAILED
+15:01:16:874 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:01:16:874 -> [B4]   window mean right=-854 fwd=-290 up=534 mg, largest axis spread 88 mg (limit 40)
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=3005 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=4007 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [B4] level calibration FAILED
+15:01:16:874 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:01:16:874 -> [B4]   window mean right=-624 fwd=-449 up=600 mg, largest axis spread 56 mg (limit 40)
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=5008 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [CAR B2] v6 wheel PID, QUALIFIED (Buddy 2 sign-off 2026-11-03). Manual START,no run limit,30% effort (pivots 40%),100ms watchdog.
+15:01:16:874 -> [CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.
+15:01:16:874 -> [CAR] B4 IMU running: terrain cap -> controller, B2 odometry -> hump height. Keep the car STILL and LEVEL until the [B4] line shows cal=level.
+15:01:16:874 -> [CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.
+15:01:16:874 -> [CAR] Junctions: barcode route; otherwise STRAIGHT THROUGH, no stop/probe (including T).
+15:01:16:874 -> [CAR] No-black timeout=0 ms; whole-run limit=0 s (0=disabled for each).
+15:01:16:874 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=6009 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:16:874 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:16:874 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=1 R=1 state=3 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:16:874 -> [B4] valid=0 cal=none terrain=UNKNOWN cap=100 pitch=0.0 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x8 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2359 us/sample
+15:01:16:874 -> [B4 TASK] loops=312 (+312) samples=312 (+312) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:16:875 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:16:875 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=7010 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=[B2 TRACK] fw=b2-straight80-right95-digital t_ms=96128 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:17:614 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:17:794 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:17:794 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.5 roll=0.5 deg vib=8 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 4467 us/sample
+15:01:17:794 -> [B4 TASK] loops=4827 (+50) samples=4827 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:17:794 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:18:377 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=97129 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:01:18:619 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:01:18:800 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:18:800 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2732 us/sample
+15:01:18:800 -> [B4 TASK] loops=4877 (+50) samples=4877 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:18:800 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:18:954 -> [CAR] release GP20 to start; GP21 cancels.
+15:01:19:141 -> [CAR] RUN: following the line (no time limit)
+15:01:19:374 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98130 steering=digital curve=0 target=26/24 measured=7/17 mm/s speed_valid=1 effort=86/76 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:429 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98184 steering=digital curve=0 target=34/33 measured=7/14 mm/s speed_valid=1 effort=119/116 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:485 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98237 steering=digital curve=0 target=48/45 measured=7/14 mm/s speed_valid=1 effort=172/173 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:485 -> [B4] turned right 1 deg
+15:01:19:530 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98289 steering=digital curve=0 target=56/54 measured=5/0 mm/s speed_valid=1 effort=209/300 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:587 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98340 steering=digital curve=0 target=65/62 measured=5/0 mm/s speed_valid=1 effort=245/300 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:633 -> [B5] state=MONITOR servo=90 dist=none | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:01:19:633 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98392 steering=digital curve=2 target=87/55 measured=36/63 mm/s speed_valid=1 effort=285/151 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:689 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98444 steering=digital curve=4 target=105/45 measured=36/63 mm/s speed_valid=1 effort=353/110 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:746 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98496 steering=digital curve=6 target=120/41 measured=36/63 mm/s speed_valid=1 effort=400/92 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:796 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98548 steering=digital curve=2 target=116/42 measured=94/80 mm/s speed_valid=1 effort=312/66 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:796 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=312 R=66 speed L=94 R=80 mm/s | drive=59 rej=0 exec_rej=0 drv_err=0 | target L=116 R=42 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:19:796 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 5323 us/sample
+15:01:19:796 -> [B4 TASK] loops=4927 (+50) samples=4927 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:19:796 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:19:852 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98611 steering=digital curve=0 target=102/54 measured=120/51 mm/s speed_valid=1 effort=225/155 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:908 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98664 steering=digital curve=0 target=94/62 measured=120/51 mm/s speed_valid=1 effort=191/191 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:19:964 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98716 steering=digital curve=0 target=85/70 measured=120/51 mm/s speed_valid=1 effort=157/226 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:009 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98769 steering=digital curve=0 target=80/76 measured=87/79 mm/s speed_valid=1 effort=187/207 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:065 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98821 steering=digital curve=0 target=80/76 measured=87/79 mm/s speed_valid=1 effort=186/207 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:122 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98876 steering=digital curve=0 target=80/76 measured=69/94 mm/s speed_valid=1 effort=215/182 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:167 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98928 steering=digital curve=0 target=80/76 measured=69/94 mm/s speed_valid=1 effort=215/181 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:225 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=98981 steering=digital curve=0 target=80/76 measured=69/87 mm/s speed_valid=1 effort=216/191 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:225 -> [B4] turned right 5 deg
+15:01:20:282 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99040 steering=digital curve=0 target=80/76 measured=69/87 mm/s speed_valid=1 effort=217/190 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:339 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99097 steering=digital curve=0 target=80/76 measured=71/82 mm/s speed_valid=1 effort=214/197 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:396 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99150 steering=digital curve=0 target=80/76 measured=71/82 mm/s speed_valid=1 effort=214/196 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:442 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99201 steering=digital curve=0 target=80/76 measured=72/80 mm/s speed_valid=1 effort=213/199 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:499 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99259 steering=digital curve=0 target=80/76 measured=72/80 mm/s speed_valid=1 effort=214/199 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:556 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99316 steering=digital curve=0 target=80/76 measured=74/83 mm/s speed_valid=1 effort=212/193 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:612 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99370 steering=digital curve=0 target=80/76 measured=74/83 mm/s speed_valid=1 effort=213/193 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:668 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99424 steering=digital curve=0 target=80/76 measured=77/83 mm/s speed_valid=1 effort=209/193 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:690 -> [B5] state=MONITOR servo=90 dist=151cm | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:01:20:724 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99478 steering=digital curve=1 target=80/76 measured=77/83 mm/s speed_valid=1 effort=209/192 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:769 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99530 steering=digital curve=3 target=96/53 measured=77/88 mm/s speed_valid=1 effort=269/88 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:808 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=44 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=337 R=52 speed L=77 R=88 mm/s | drive=150 rej=0 exec_rej=0 drv_err=0 | target L=114 R=45 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:20:808 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.5 deg vib=16 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3691 us/sample
+15:01:20:808 -> [B4 TASK] loops=4977 (+50) samples=4977 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:20:808 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:20:842 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99585 steering=digital curve=0 target=110/49 measured=77/88 mm/s speed_valid=1 effort=300/67 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:876 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99637 steering=digital curve=0 target=101/56 measured=86/60 mm/s speed_valid=1 effort=278/142 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:932 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99691 steering=digital curve=0 target=88/68 measured=86/60 mm/s speed_valid=1 effort=230/189 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:20:988 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99744 steering=digital curve=0 target=80/76 measured=96/58 mm/s speed_valid=1 effort=185/223 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:045 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99796 steering=digital curve=0 target=80/76 measured=96/58 mm/s speed_valid=1 effort=183/225 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:089 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99849 steering=digital curve=0 target=80/76 measured=77/83 mm/s speed_valid=1 effort=212/188 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:145 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99901 steering=digital curve=0 target=80/76 measured=77/83 mm/s speed_valid=1 effort=212/188 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:203 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=99956 steering=digital curve=0 target=80/76 measured=73/88 mm/s speed_valid=1 effort=217/179 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:249 -> [B4] turned right 6 deg
+15:01:21:249 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100008 steering=digital curve=2 target=97/53 measured=73/88 mm/s speed_valid=1 effort=282/82 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:305 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100059 steering=digital curve=4 target=115/45 measured=73/73 mm/s speed_valid=1 effort=352/70 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:350 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100111 steering=digital curve=0 target=111/49 measured=73/73 mm/s speed_valid=1 effort=300/83 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:407 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100165 steering=digital curve=0 target=102/57 measured=109/43 mm/s speed_valid=1 effort=251/159 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:462 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100217 steering=digital curve=0 target=88/68 measured=109/43 mm/s speed_valid=1 effort=200/209 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:518 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100269 steering=digital curve=0 target=80/75 measured=105/73 mm/s speed_valid=1 effort=174/197 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:564 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100321 steering=digital curve=0 target=80/76 measured=105/73 mm/s speed_valid=1 effort=172/197 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:622 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100379 steering=digital curve=0 target=80/76 measured=79/84 mm/s speed_valid=1 effort=208/182 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:680 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100431 steering=digital curve=2 target=88/58 measured=79/84 mm/s speed_valid=1 effort=239/107 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:713 -> [B4] turned right 2 deg
+15:01:21:725 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100485 steering=digital curve=4 target=109/49 measured=82/66 mm/s speed_valid=1 effort=315/93 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:783 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100537 steering=digital curve=5 target=120/41 measured=82/66 mm/s speed_valid=1 effort=355/61 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:812 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=356 R=60 speed L=82 R=66 mm/s | drive=242 rej=0 exec_rej=0 drv_err=0 | target L=120 R=41 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:21:812 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.0 deg vib=8 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3779 us/sample
+15:01:21:812 -> [B4 TASK] loops=5028 (+51) samples=5028 (+51) stage=estimate state=READY wait=- wid=0 (own flag 6) pri=12
+15:01:21:812 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:21:824 -> [B5] state=MONITOR servo=90 dist=84cm | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:01:21:836 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100589 steering=digital curve=1 target=114/45 measured=82/66 mm/s speed_valid=1 effort=338/76 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:884 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100641 steering=digital curve=0 target=105/53 measured=117/40 mm/s speed_valid=1 effort=251/149 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:941 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100698 steering=digital curve=0 target=91/66 measured=117/40 mm/s speed_valid=1 effort=197/203 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:21:998 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100750 steering=digital curve=0 target=82/73 measured=112/61 mm/s speed_valid=1 effort=171/204 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:044 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100801 steering=digital curve=0 target=80/76 measured=112/61 mm/s speed_valid=1 effort=160/214 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:101 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100858 steering=digital curve=2 target=97/53 measured=79/85 mm/s speed_valid=1 effort=271/80 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:157 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100911 steering=digital curve=4 target=115/45 measured=79/85 mm/s speed_valid=1 effort=340/44 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:190 -> [B4] turned right 7 deg
+15:01:22:213 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=100965 steering=digital curve=6 target=120/41 measured=91/55 mm/s speed_valid=1 effort=342/74 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:259 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101016 steering=digital curve=7 target=120/34 measured=91/55 mm/s speed_valid=1 effort=344/42 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:314 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101068 steering=digital curve=3 target=120/26 measured=128/34 mm/s speed_valid=1 effort=288/38 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:371 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101120 steering=digital curve=0 target=114/35 measured=128/34 mm/s speed_valid=1 effort=267/76 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:417 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101176 steering=digital curve=0 target=106/44 measured=123/27 mm/s speed_valid=1 effort=245/124 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:484 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101236 steering=digital curve=0 target=82/62 measured=123/27 mm/s speed_valid=1 effort=153/204 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:531 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101288 steering=digital curve=0 target=80/71 measured=94/58 mm/s speed_valid=1 effort=190/197 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:585 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101340 steering=digital curve=0 target=80/76 measured=94/58 mm/s speed_valid=1 effort=186/216 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:642 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101396 steering=digital curve=2 target=97/53 measured=75/76 mm/s speed_valid=1 effort=276/95 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:698 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101449 steering=digital curve=4 target=115/45 measured=75/76 mm/s speed_valid=1 effort=346/59 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:744 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101501 steering=digital curve=6 target=120/38 measured=102/44 mm/s speed_valid=1 effort=325/75 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:801 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101558 steering=digital curve=8 target=120/31 measured=102/44 mm/s speed_valid=1 effort=327/45 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:818 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=67 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=327 R=45 speed L=102 R=44 mm/s | drive=333 rej=0 exec_rej=0 drv_err=0 | target L=120 R=31 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:22:818 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=8 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3686 us/sample
+15:01:22:818 -> [B4 TASK] loops=5078 (+50) samples=5078 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:22:818 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:22:852 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101610 steering=digital curve=9 target=120/26 measured=133/28 mm/s speed_valid=1 effort=282/49 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:896 -> [B5] state=MONITOR servo=90 dist=38cm | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:01:22:909 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101665 steering=digital curve=11 target=120/22 measured=133/28 mm/s speed_valid=1 effort=281/32 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:22:965 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101717 steering=digital curve=0 target=114/27 measured=123/23 mm/s speed_valid=1 effort=274/60 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:011 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101769 steering=digital curve=0 target=108/36 measured=123/23 mm/s speed_valid=1 effort=251/97 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:067 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101824 steering=digital curve=0 target=101/45 measured=123/23 mm/s speed_valid=1 effort=226/135 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:125 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101876 steering=digital curve=0 target=91/59 measured=105/40 mm/s speed_valid=1 effort=215/170 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:169 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101928 steering=digital curve=0 target=85/68 measured=105/40 mm/s speed_valid=1 effort=192/209 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:227 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=101980 steering=digital curve=1 target=91/57 measured=86/67 mm/s speed_valid=1 effort=240/121 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:284 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102032 steering=digital curve=3 target=109/49 measured=86/67 mm/s speed_valid=1 effort=308/88 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:330 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102084 steering=digital curve=5 target=115/45 measured=94/64 mm/s speed_valid=1 effort=320/76 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:392 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102136 steering=digital curve=6 target=120/38 measured=94/64 mm/s speed_valid=1 effort=337/44 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:431 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102189 steering=digital curve=3 target=120/31 measured=116/41 mm/s speed_valid=1 effort=305/46 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:487 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102240 steering=digital curve=0 target=112/40 measured=116/41 mm/s speed_valid=1 effort=278/84 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:544 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102292 steering=digital curve=0 target=104/49 measured=113/40 mm/s speed_valid=1 effort=253/124 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:590 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102345 steering=digital curve=0 target=92/62 measured=113/40 mm/s speed_valid=1 effort=207/180 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:647 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102397 steering=digital curve=0 target=84/71 measured=99/70 mm/s speed_valid=1 effort=198/173 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:693 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102449 steering=digital curve=0 target=80/76 measured=99/70 mm/s speed_valid=1 effort=181/194 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:750 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102501 steering=digital curve=2 target=88/58 measured=66/75 mm/s speed_valid=1 effort=260/113 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:750 -> [B4] turned right 44 deg
+15:01:23:794 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102553 steering=digital curve=3 target=105/49 measured=66/75 mm/s speed_valid=1 effort=324/73 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:810 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=45 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=342 R=72 speed L=66 R=75 mm/s | drive=424 rej=0 exec_rej=0 drv_err=0 | target L=109 R=49 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:23:810 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.5 deg vib=32 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 4388 us/sample
+15:01:23:823 -> [B4 TASK] loops=5128 (+50) samples=5128 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:23:823 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:23:857 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102608 steering=digital curve=5 target=120/41 measured=99/55 mm/s speed_valid=1 effort=332/70 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:907 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102660 steering=digital curve=1 target=110/48 measured=99/55 mm/s speed_valid=1 effort=300/95 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:23:961 -> [B5] state=MONITOR servo=90 dist=24cm | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:01:23:961 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102717 steering=digital curve=0 target=97/60 measured=136/45 mm/s speed_valid=1 effort=196/160 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:017 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102772 steering=digital curve=0 target=88/67 measured=136/45 mm/s speed_valid=1 effort=161/195 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:073 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102826 steering=digital curve=0 target=63/83 measured=96/63 mm/s speed_valid=1 effort=122/237 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:129 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102878 steering=digital curve=0 target=72/79 measured=96/63 mm/s speed_valid=1 effort=152/220 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:175 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102930 steering=digital curve=0 target=80/76 measured=96/63 mm/s speed_valid=1 effort=179/206 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:185 -> [B4] turned right 7 deg
+15:01:24:230 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=102981 steering=digital curve=0 target=80/76 measured=56/84 mm/s speed_valid=1 effort=240/175 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:287 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103036 steering=digital curve=0 target=80/76 measured=56/84 mm/s speed_valid=1 effort=241/174 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:333 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103088 steering=digital curve=1 target=80/76 measured=88/78 mm/s speed_valid=1 effort=195/183 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:389 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103139 steering=digital curve=3 target=106/49 measured=88/78 mm/s speed_valid=1 effort=291/69 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:434 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103191 steering=digital curve=0 target=97/58 measured=99/73 mm/s speed_valid=1 effort=243/113 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:490 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103243 steering=digital curve=0 target=89/66 measured=99/73 mm/s speed_valid=1 effort=211/149 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:546 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103295 steering=digital curve=0 target=80/76 measured=99/52 mm/s speed_valid=1 effort=177/218 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:591 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103346 steering=digital curve=0 target=80/76 measured=99/52 mm/s speed_valid=1 effort=176/219 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:647 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103397 steering=digital curve=0 target=80/76 measured=78/82 mm/s speed_valid=1 effort=205/176 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:692 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103449 steering=digital curve=1 target=88/58 measured=78/82 mm/s speed_valid=1 effort=237/99 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:01:24:736 -> [B5] obstacle ahead: 16 cm (status 0)
+15:01:24:748 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=103501 steering=idle curve=0 target=0/0 measured=88/80 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=2 rejected=0
+15:01:24:818 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=88 R=80 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:24:818 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-6.5 roll=0.0 deg vib=8 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2804 us/sample
+15:01:24:818 -> [B4 TASK] loops=5178 (+50) samples=5178 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:24:818 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:24:906 -> [B4] turned right 4 deg
+15:01:24:950 -> [B5] state=COARSE_SCAN servo=30 dist=16cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:25:754 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=104504 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:25:827 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:25:827 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.5 deg vib=0 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2784 us/sample
+15:01:25:827 -> [B4 TASK] loops=5228 (+50) samples=5228 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:25:827 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:25:983 -> [B5] state=COARSE_SCAN servo=150 dist=54cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:26:752 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=105506 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:26:822 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:26:822 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.5 roll=0.5 deg vib=8 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2202 us/sample
+15:01:26:822 -> [B4 TASK] loops=5278 (+50) samples=5278 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:26:822 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:26:966 -> [B5] state=FINE_SCAN_RIGHT servo=50 dist=16cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:27:758 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=106507 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:27:815 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:27:829 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=8 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3138 us/sample
+15:01:27:829 -> [B4 TASK] loops=5328 (+50) samples=5328 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:27:829 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:28:050 -> [B5] state=FINE_SCAN_LEFT servo=110 dist=36cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:28:250 -> [B5] LEFT blocked: 54 cm at servo 120 is inside the bypass strip
+15:01:28:250 -> [B5 PROFILE] n=1 scan=1 ahead_mm=176 L=found dir=3 x_mm=-12 y_mm=236 clear_mm=0 R=missing width_mm=- centre_x_mm=- side=NONE backoffs=0
+15:01:28:250 -> [B5] decision: side 0 (0 none, 1 left, 2 right)
+15:01:28:758 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=107508 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:28:828 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:28:828 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2778 us/sample
+15:01:28:828 -> [B4 TASK] loops=5378 (+50) samples=5378 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:28:828 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:29:049 -> [B5] state=COARSE_SCAN servo=30 dist=73cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:29:753 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=108510 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:29:826 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:29:826 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=0 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2806 us/sample
+15:01:29:826 -> [B4 TASK] loops=5428 (+50) samples=5428 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:29:826 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:30:057 -> [B5] state=COARSE_SCAN servo=150 dist=73cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:30:762 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=109512 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:30:819 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:30:832 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2683 us/sample
+15:01:30:832 -> [B4 TASK] loops=5478 (+50) samples=5478 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:30:832 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:31:065 -> [B5] state=FINE_SCAN_RIGHT servo=50 dist=16cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:31:758 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=110514 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:01:31:830 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:31:830 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=8 mg motion=0 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3511 us/sample
+15:01:31:830 -> [B4 TASK] loops=5528 (+50) samples=5528 (+50) stage=wait-tick state=READY wait=- wid=0 (own flag 6) pri=12
+15:01:31:830 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=0 SCL=0 func=5/5 (5=SIO)
+15:01:32:060 -> [B5] state=FINE_SCAN_LEFT servo=110 dist=23cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:01:32:380 -> [B5 PROFILE] n=1 scan=2 ahead_mm=175 L=found dir=3 x_mm=-12 y_mm=235 clear_mm=365 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+15:01:32:380 -> [B5] decision: side 1 (0 none, 1 left, 2 right)
+15:01:32:767 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=111515 steering=idle curve=0 target=6/52 measured=0/8 mm/s speed_valid=1 effort=300/213 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:01:32:838 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=300 R=275 speed L=0 R=8 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=6 R=66 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:32:838 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=3.5 roll=0.5 deg vib=16 mg motion=2 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3292 us/sample
+15:01:32:838 -> [B4 TASK] loops=5579 (+51) samples=5579 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:32:838 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:33:059 -> [B5] state=BYPASS servo=120 dist=73cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=4 refused=0 dropped=0
+15:01:33:766 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=112516 steering=idle curve=0 target=0/0 measured=0/126 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=8 rejected=0
+15:01:33:847 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=126 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:33:847 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-4.5 roll=2.0 deg vib=16 mg motion=4 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 2270 us/sample
+15:01:33:847 -> [B4 TASK] loops=5629 (+50) samples=5629 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:33:847 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:34:101 -> [B5] state=BYPASS servo=90 dist=59cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:34:145 -> [B4] turned left 64 deg
+15:01:34:453 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:01:34:651 -> [B4] terrain CREST, cap 100 mm/s
+15:01:34:728 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:01:34:763 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=113517 steering=idle curve=0 target=120/113 measured=132/142 mm/s speed_valid=1 effort=248/256 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:34:796 -> [B4] terrain SETTLING, cap 100 mm/s
+15:01:34:807 -> [B4] turned left 0 deg
+15:01:34:848 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=247 R=249 speed L=132 R=142 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=120 R=113 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:34:848 -> [B4] valid=1 cal=level terrain=SETTLING cap=100 pitch=3.0 roll=1.5 deg vib=40 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-3 peak 1 deg 0 cm invalid/none #6 | 3651 us/sample
+15:01:34:848 -> [B4 TASK] loops=5679 (+50) samples=5679 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:34:848 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:34:936 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:01:34:991 -> [B4] terrain CREST, cap 100 mm/s
+15:01:35:134 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:01:35:156 -> [B5] state=BYPASS servo=90 dist=50cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:35:212 -> [B4] terrain SETTLING, cap 100 mm/s
+15:01:35:510 -> [B4] hump 3 mm +/-4, peak 2 deg, 15 cm, INVALID
+15:01:35:510 -> [B4]   one wheel (height from roll): roll peak 1.6 deg -> track x sin = 3.12 mm, pitch term 4.31 mm | width 150 mm (profile 25/75% fit), path 116 mm
+15:01:35:510 -> [B4] terrain LEVEL, cap 0 mm/s
+15:01:35:765 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=114519 steering=idle curve=0 target=60/55 measured=44/45 mm/s speed_valid=1 effort=162/143 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:35:848 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=1 R=0 state=1 last_side=1 | effort L=168 R=168 speed L=41 R=32 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=56 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:35:848 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.0 roll=0.5 deg vib=8 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 3 mm +/-4 peak 2 deg 15 cm invalid/none #7 | 2991 us/sample
+15:01:35:848 -> [B4 TASK] loops=5729 (+50) samples=5729 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:35:848 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:36:190 -> [B5] state=BYPASS servo=90 dist=46cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:36:765 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=115521 steering=idle curve=0 target=52/-52 measured=35/37 mm/s speed_valid=1 effort=138/-161 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:36:849 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=1 R=0 state=1 last_side=1 | effort L=256 R=-249 speed L=4 R=30 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=70 R=-70 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:36:849 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=1.0 deg vib=24 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 3 mm +/-4 peak 2 deg 15 cm invalid/none #7 | 2858 us/sample
+15:01:36:849 -> [B4 TASK] loops=5779 (+50) samples=5779 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:36:849 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:37:190 -> [B5] state=BYPASS servo=90 dist=46cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:37:774 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=116529 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:37:846 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:37:846 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=8 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 3 mm +/-4 peak 2 deg 15 cm invalid/none #7 | 2829 us/sample
+15:01:37:846 -> [B4 TASK] loops=5829 (+50) samples=5829 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:37:846 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:37:890 -> [B4] turned right 57 deg
+15:01:38:188 -> [B5] state=BYPASS servo=25 dist=46cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:38:485 -> [B4] turned right 3 deg
+15:01:38:495 -> [B5] side servo=25 dist=130 cm (status 0)
+15:01:38:606 -> [B5] side servo=25 dist=131 cm (status 0)
+15:01:38:705 -> [B5] side servo=25 dist=118 cm (status 0)
+15:01:38:773 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=117531 steering=idle curve=0 target=60/55 measured=62/66 mm/s speed_valid=1 effort=135/140 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:38:806 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:01:38:816 -> [B5] side servo=25 dist=129 cm (status 0)
+15:01:38:847 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=135 R=137 speed L=62 R=66 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=55 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:38:847 -> [B4] valid=1 cal=level terrain=ASCENDING cap=100 pitch=0.5 roll=0.0 deg vib=8 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 3 mm +/-4 peak 2 deg 15 cm invalid/none #7 | 2608 us/sample
+15:01:38:847 -> [B4 TASK] loops=5879 (+50) samples=5879 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:38:847 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:38:913 -> [B5] side servo=25 dist=131 cm (status 0)
+15:01:39:023 -> [B5] side servo=25 dist=129 cm (status 0)
+15:01:39:202 -> [B5] state=BYPASS servo=90 dist=129cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:39:783 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=118532 steering=idle curve=0 target=60/56 measured=56/56 mm/s speed_valid=1 effort=154/160 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:39:805 -> [B4] terrain CREST, cap 100 mm/s
+15:01:39:844 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=154 R=160 speed L=56 R=56 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=56 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:39:844 -> [B4] valid=1 cal=level terrain=CREST cap=100 pitch=1.5 roll=-1.0 deg vib=16 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=1 mm | last hump 3 mm +/-4 peak 2 deg 15 cm invalid/none #7 | 4532 us/sample
+15:01:39:844 -> [B4 TASK] loops=5929 (+50) samples=5929 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:39:856 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:39:856 -> [B5] side servo=25 dist=110 cm (status 0)
+15:01:39:956 -> [B5] side servo=25 dist=125 cm (status 0)
+15:01:40:066 -> [B5] side servo=25 dist=109 cm (status 0)
+15:01:40:088 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:01:40:164 -> [B5] side servo=25 dist=109 cm (status 0)
+15:01:40:266 -> [B5] side servo=25 dist=112 cm (status 0)
+15:01:40:266 -> [B5] state=BYPASS servo=25 dist=112cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:40:331 -> [B4] terrain SETTLING, cap 100 mm/s
+15:01:40:376 -> [B5] side servo=25 dist=122 cm (status 0)
+15:01:40:630 -> [B4] hump 5 mm +/-6, peak 2 deg, 10 cm, valid
+15:01:40:630 -> [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 102 mm
+15:01:40:630 -> [B4] terrain LEVEL, cap 0 mm/s
+15:01:40:785 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=119534 steering=idle curve=0 target=60/57 measured=53/45 mm/s speed_valid=1 effort=164/182 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:40:857 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=159 R=171 speed L=56 R=54 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=57 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:40:857 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 3298 us/sample
+15:01:40:857 -> [B4 TASK] loops=5980 (+51) samples=5980 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:40:857 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:41:188 -> [B5] side servo=25 dist=120 cm (status 0)
+15:01:41:286 -> [B5] side servo=25 dist=107 cm (status 0)
+15:01:41:286 -> [B5] state=BYPASS servo=25 dist=107cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:41:386 -> [B5] side servo=25 dist=106 cm (status 0)
+15:01:41:496 -> [B5] side servo=25 dist=104 cm (status 0)
+15:01:41:595 -> [B5] side servo=25 dist=105 cm (status 0)
+15:01:41:708 -> [B5] side servo=25 dist=107 cm (status 0)
+15:01:41:783 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=120535 steering=idle curve=0 target=60/57 measured=58/59 mm/s speed_valid=1 effort=157/162 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:41:856 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=159 R=170 speed L=57 R=54 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=58 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:41:856 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=8 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 3614 us/sample
+15:01:41:856 -> [B4 TASK] loops=6030 (+50) samples=6030 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:41:856 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:42:296 -> [B5] state=BYPASS servo=25 dist=50cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:42:517 -> [B5] side servo=25 dist=102 cm (status 0)
+15:01:42:627 -> [B5] side servo=25 dist=100 cm (status 0)
+15:01:42:737 -> [B5] side servo=25 dist=100 cm (status 0)
+15:01:42:782 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=121537 steering=idle curve=0 target=60/56 measured=59/58 mm/s speed_valid=1 effort=160/157 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:42:837 -> [B5] side servo=25 dist=101 cm (status 0)
+15:01:42:853 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=164 R=159 speed L=56 R=57 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=56 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:42:853 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.5 roll=0.5 deg vib=8 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 3253 us/sample
+15:01:42:853 -> [B4 TASK] loops=6080 (+50) samples=6080 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:42:853 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:42:942 -> [B5] side servo=25 dist=104 cm (status 0)
+15:01:43:051 -> [B5] side servo=25 dist=101 cm (status 0)
+15:01:43:294 -> [B5] state=BYPASS servo=90 dist=101cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:43:790 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=122538 steering=idle curve=0 target=60/58 measured=58/57 mm/s speed_valid=1 effort=165/163 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:43:861 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=167 R=170 speed L=57 R=53 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=58 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:43:861 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=24 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 2603 us/sample
+15:01:43:861 -> [B4 TASK] loops=6130 (+50) samples=6130 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:43:861 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:43:872 -> [B5] side servo=25 dist=98 cm (status 0)
+15:01:43:971 -> [B5] side servo=25 dist=94 cm (status 0)
+15:01:44:070 -> [B5] side servo=25 dist=96 cm (status 0)
+15:01:44:169 -> [B5] side servo=25 dist=95 cm (status 0)
+15:01:44:291 -> [B5] side servo=25 dist=98 cm (status 0)
+15:01:44:367 -> [B5] side servo=25 dist=89 cm (status 0)
+15:01:44:367 -> [B5] state=BYPASS servo=25 dist=89cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:44:788 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=123540 steering=idle curve=0 target=60/59 measured=59/57 mm/s speed_valid=1 effort=165/170 output_valid=1 floor_mask=0x0 state=3 gen=8 rejected=0
+15:01:44:858 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=40 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=165 R=167 speed L=59 R=58 mm/s | drive=508 rej=0 exec_rej=0 drv_err=0 | target L=60 R=59 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:44:858 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=16 mg motion=1 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 3581 us/sample
+15:01:44:858 -> [B4 TASK] loops=6180 (+50) samples=6180 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:44:858 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:45:166 -> [B5] side servo=25 dist=82 cm (status 0)
+15:01:45:177 -> [B5] pass ended: box never seen beside, planned length driven (36 side readings)
+15:01:45:376 -> [B5] state=BYPASS servo=25 dist=82cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:01:45:719 -> [B5 RESULT] n=1 outcome=REJOINED ms=21051 scan_ms=7707 ahead_mm=175 width_mm=- edges=left_only centre_x_mm=- side=LEFT lclear_mm=365 rclear_mm=0 aligned=0 backoffs=0 reverses=0 reacq=0 pass=unseen side_mm=- depth_mm=- reason=""
+15:01:45:719 -> [B5 TOTALS] detections=1 rejoined=1 cleared=0 failed=0 aborted=0 left=1 right=0 estops=0
+15:01:45:787 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124541 steering=digital curve=3 target=0/0 measured=13/32 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:45:843 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124594 steering=digital curve=4 target=0/0 measured=10/17 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:45:858 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=51 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=0 R=0 speed L=10 R=17 mm/s | drive=520 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:45:858 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=8 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-6 peak 2 deg 10 cm valid #0 | 2640 us/sample
+15:01:45:858 -> [B4 TASK] loops=6230 (+50) samples=6230 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:45:858 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:45:892 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124646 steering=digital curve=6 target=0/0 measured=10/17 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:45:949 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124698 steering=digital curve=8 target=17/4 measured=0/0 mm/s speed_valid=1 effort=300/300 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:45:971 -> [B4] turned right 20 deg
+15:01:45:995 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124750 steering=digital curve=9 target=36/9 measured=0/0 mm/s speed_valid=1 effort=300/300 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:027 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:01:46:050 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124804 steering=digital curve=11 target=63/13 measured=56/75 mm/s speed_valid=1 effort=151/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:107 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124856 steering=digital curve=13 target=80/13 measured=56/75 mm/s speed_valid=1 effort=216/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:118 -> [B4] terrain CREST, cap 100 mm/s
+15:01:46:153 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124907 steering=digital curve=14 target=99/10 measured=79/36 mm/s speed_valid=1 effort=250/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:179 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:01:46:208 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=124958 steering=digital curve=14 target=120/9 measured=79/36 mm/s speed_valid=1 effort=330/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:253 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125010 steering=digital curve=4 target=120/13 measured=93/0 mm/s speed_valid=1 effort=311/300 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:310 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125065 steering=digital curve=0 target=116/22 measured=93/0 mm/s speed_valid=1 effort=299/300 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:367 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125117 steering=digital curve=-2 target=87/45 measured=128/75 mm/s speed_valid=1 effort=142/79 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:401 -> [B5] state=MONITOR servo=90 dist=46cm | ctrl mode=AUTO mission=TRACK_LINE stops=2 | move=0 refused=0 dropped=0
+15:01:46:414 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125169 steering=digital curve=-4 target=68/62 measured=128/75 mm/s speed_valid=1 effort=69/152 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:471 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125226 steering=digital curve=-5 target=48/89 measured=83/82 mm/s speed_valid=1 effort=58/252 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:528 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125280 steering=digital curve=-7 target=35/107 measured=83/82 mm/s speed_valid=1 effort=9/331 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:528 -> [B4] terrain SETTLING, cap 100 mm/s
+15:01:46:585 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125332 steering=digital curve=-1 target=38/113 measured=83/82 mm/s speed_valid=1 effort=18/356 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:632 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125385 steering=digital curve=0 target=51/101 measured=13/100 mm/s speed_valid=1 effort=172/282 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:689 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125437 steering=digital curve=2 target=69/71 measured=13/100 mm/s speed_valid=1 effort=240/155 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:735 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125489 steering=digital curve=4 target=89/52 measured=52/128 mm/s speed_valid=1 effort=254/28 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:791 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125541 steering=digital curve=6 target=116/38 measured=52/128 mm/s speed_valid=1 effort=360/0 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:836 -> [B4] hump 6 mm +/-3, peak 4 deg, 5 cm, INVALID
+15:01:46:836 -> [B4]   full width (height from pitch): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 7.93 mm | width 54 mm (profile 25/75% fit), path 60 mm
+15:01:46:836 -> [B4] terrain LEVEL, cap 0 mm/s
+15:01:46:848 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125595 steering=digital curve=2 target=115/42 measured=104/52 mm/s speed_valid=1 effort=280/99 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:865 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=264 R=114 speed L=104 R=52 mm/s | drive=611 rej=0 exec_rej=0 drv_err=0 | target L=111 R=46 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:01:46:865 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=1.0 deg vib=32 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 4 deg 5 cm invalid/none #1 | 3154 us/sample
+15:01:46:865 -> [B4 TASK] loops=6280 (+50) samples=6280 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:46:865 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:46:901 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125646 steering=digital curve=0 target=106/50 measured=104/52 mm/s speed_valid=1 effort=248/131 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:46:944 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125698 steering=digital curve=-2 target=71/72 measured=119/46 mm/s speed_valid=1 effort=93/230 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:000 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125750 steering=digital curve=-4 target=53/89 measured=119/46 mm/s speed_valid=1 effort=27/306 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:047 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125802 steering=digital curve=-5 target=43/107 measured=64/86 mm/s speed_valid=1 effort=67/321 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:103 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125859 steering=digital curve=0 target=42/115 measured=64/86 mm/s speed_valid=1 effort=61/300 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:160 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125911 steering=digital curve=0 target=50/106 measured=22/134 mm/s speed_valid=1 effort=153/250 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:218 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=125964 steering=digital curve=0 target=63/93 measured=22/134 mm/s speed_valid=1 effort=204/189 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:262 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126017 steering=digital curve=2 target=76/70 measured=63/121 mm/s speed_valid=1 effort=194/109 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:319 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126069 steering=digital curve=4 target=94/52 measured=63/121 mm/s speed_valid=1 effort=260/30 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:376 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126124 steering=digital curve=5 target=120/41 measured=97/55 mm/s speed_valid=1 effort=306/83 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:429 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126176 steering=digital curve=7 target=120/38 measured=97/55 mm/s speed_valid=1 effort=307/65 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:479 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126229 steering=digital curve=2 target=112/43 measured=128/27 mm/s speed_valid=1 effort=237/128 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:479 -> [B5] state=MONITOR servo=90 dist=71cm | ctrl mode=AUTO mission=TRACK_LINE stops=2 | move=0 refused=0 dropped=0
+15:01:47:535 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126285 steering=digital curve=-1 target=104/51 measured=128/27 mm/s speed_valid=1 effort=204/164 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:591 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126338 steering=digital curve=-2 target=62/78 measured=110/57 mm/s speed_valid=1 effort=73/235 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:635 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126390 steering=digital curve=-4 target=49/96 measured=110/57 mm/s speed_valid=1 effort=20/312 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:692 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126444 steering=digital curve=-2 target=50/104 measured=110/57 mm/s speed_valid=1 effort=21/349 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:748 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126496 steering=digital curve=0 target=63/91 measured=32/103 mm/s speed_valid=1 effort=187/226 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:794 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126548 steering=digital curve=2 target=81/62 measured=32/103 mm/s speed_valid=1 effort=254/102 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:868 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126607 steering=digital curve=4 target=107/45 measured=54/119 mm/s speed_valid=1 effort=324/1 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:868 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=45 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=324 R=1 speed L=54 R=119 mm/s | drive=702 rej=0 exec_rej=0 drv_err=0 | target L=107 R=45 mm/s valid=1 qualified=1 | junc phase=0 seen=1 done=1 ign=0 route=3 | search=0 n=0 fail=0
+15:01:47:868 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=-1.0 deg vib=32 mg motion=5 odom=1 faults=0x40 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 4 deg 5 cm invalid/none #1 | 5000 us/sample
+15:01:47:868 -> [B4 TASK] loops=6330 (+50) samples=6330 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:01:47:868 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:01:47:914 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126659 steering=digital curve=0 target=99/54 measured=54/119 mm/s speed_valid=1 effort=294/34 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:47:958 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126711 steering=digital curve=0 target=91/63 measured=111/37 mm/s speed_valid=1 effort=179/195 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:48:014 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126765 steering=digital curve=0 target=80/76 measured=111/37 mm/s speed_valid=1 effort=135/250 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:48:071 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126817 steering=digital curve=0 target=80/76 measured=83/67 mm/s speed_valid=1 effort=178/206 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:48:115 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126868 steering=digital curve=0 target=80/76 measured=83/67 mm/s speed_valid=1 effort=178/207 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:48:171 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126920 steering=digital curve=0 target=80/76 measured=60/69 mm/s speed_valid=1 effort=212/204 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+15:01:48:193 -> [B4] turned right 7 deg
+15:01:48:229 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=126976 steering=digital curve=-1 target=62/84 measured=60/69 mm/s speed_valid=1 effort=147/241 output_valid=1 floor_mask=0x0 state=2 gen=9 rejected=0
+---- Closed serial port COM5 due to disconnection from the machine ----
+---- Opened the serial port COM5 ----
+15:02:56:613 ->
+15:02:56:613 ->
+15:02:56:613 -> microT-Kernel Version 3.00
+15:02:56:613 ->
+15:02:56:613 -> [S3] Barcode ready: fixed thresholds 350/450 (no calibration)
+15:02:56:613 -> [B4] IMU task started; keep the car still and level
+15:02:56:613 -> [B2 CONFIG] fw=b2-straight80-right95-digital base=80mm/s curve_scale=140000 inner=85% extra_inner=76.5% min_line_wheel=0mm/s QUALIFIED (Buddy 2 sign-off 2026-11-03); this configuration supersedes older CAR banner speed text.
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=0 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=0 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B4] terrain UNKNOWN, cap 100 mm/s
+15:02:56:613 -> [B4] level calibration FAILED
+15:02:56:613 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:02:56:613 -> [B4]   window mean right=-37 fwd=134 up=968 mg, largest axis spread 190 mg (limit 40)
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=1001 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=2003 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B4] level calibration FAILED
+15:02:56:613 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:02:56:613 -> [B4]   window mean right=-150 fwd=43 up=918 mg, largest axis spread 76 mg (limit 40)
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=3005 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=4006 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [B4] level calibration FAILED
+15:02:56:613 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:02:56:613 -> [B4]   window mean right=-26 fwd=37 up=933 mg, largest axis spread 42 mg (limit 40)
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=5007 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [CAR B2] v6 wheel PID, QUALIFIED (Buddy 2 sign-off 2026-11-03). Manual START,no run limit,30% effort (pivots 40%),100ms watchdog.
+15:02:56:613 -> [CAR] measured B2 PID executor, controller, B3 junction/line, B5 obstacle.
+15:02:56:613 -> [CAR] B4 IMU running: terrain cap -> controller, B2 odometry -> hump height. Keep the car STILL and LEVEL until the [B4] line shows cal=level.
+15:02:56:613 -> [CAR] WHEELS RAISED FIRST. GP21 = STOP. Hold GP20 >= 1 s then RELEASE to start.
+15:02:56:613 -> [CAR] Junctions: barcode route; otherwise STRAIGHT THROUGH, no stop/probe (including T).
+15:02:56:613 -> [CAR] No-black timeout=0 ms; whole-run limit=0 s (0=disabled for each).
+15:02:56:613 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=6008 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:56:613 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:56:613 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=7 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:02:56:613 -> [B4] valid=0 cal=none terrain=UNKNOWN cap=100 pitch=0.0 roll=0.0 deg vib=56 mg motion=1 odom=1 faults=0x8 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2397 us/sample
+15:02:56:613 -> [B4 TASK] loops=312 (+312) samples=312 (+312) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:02:56:614 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:02:56:614 -> [B4] level calibration FAILED
+15:02:56:614 -> [B4]   reason: car moving or vibrating: keep it still, motors and servo idle
+15:02:56:614 -> [B4]   windo[B2 TRACK] fw=b2-straight80-right95-digital t_ms=15018 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:57:188 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:57:403 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:02:57:403 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2213 us/sample
+15:02:57:403 -> [B4 TASK] loops=764 (+50) samples=764 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:02:57:403 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:02:58:120 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=16019 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:58:187 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:58:399 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:02:58:399 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3189 us/sample
+15:02:58:411 -> [B4 TASK] loops=815 (+51) samples=814 (+50) stage=i2c-accel state=RUN wait=- wid=0 (own flag 6) pri=12
+15:02:58:411 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=0 SCL=1 func=5/5 (5=SIO)
+15:02:59:127 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=17020 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:02:59:193 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:02:59:406 -> [CAR] run=0 mode=0 mission=0 stops=0x0 steer=0 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=0 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:02:59:406 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3366 us/sample
+15:02:59:406 -> [B4 TASK] loops=865 (+50) samples=865 (+51) stage=estimate state=READY wait=- wid=0 (own flag 6) pri=12
+15:02:59:417 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:02:59:439 -> [CAR] release GP20 to start; GP21 cancels.
+15:03:00:122 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=18021 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=0 rejected=0
+15:03:00:188 -> [B5] state=MONITOR servo=0 dist=none | ctrl mode=STARTUP mission=IDLE stops=0 | move=0 refused=0 dropped=0
+15:03:00:343 -> [CAR] RUN: following the line (no time limit)
+15:03:00:413 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=-20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=5 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:00:413 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.0 deg vib=8 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 4172 us/sample
+15:03:00:413 -> [B4 TASK] loops=915 (+50) samples=915 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:00:413 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:00:732 -> [B4] turned right 2 deg
+15:03:01:129 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19023 steering=digital curve=0 target=80/76 measured=84/85 mm/s speed_valid=1 effort=175/192 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:186 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19077 steering=digital curve=0 target=80/76 measured=84/85 mm/s speed_valid=1 effort=175/191 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:197 -> [B5] state=MONITOR servo=90 dist=26cm | ctrl mode=AUTO mission=TRACK_LINE stops=1 | move=0 refused=0 dropped=0
+15:03:01:231 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19129 steering=digital curve=0 target=80/76 measured=67/73 mm/s speed_valid=1 effort=200/209 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:290 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19181 steering=digital curve=0 target=80/76 measured=67/73 mm/s speed_valid=1 effort=202/209 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:344 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19235 steering=digital curve=1 target=80/76 measured=68/72 mm/s speed_valid=1 effort=200/209 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:389 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19287 steering=digital curve=3 target=98/53 measured=68/72 mm/s speed_valid=1 effort=270/114 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:415 -> [CAR] run=1 mode=2 mission=1 stops=0x0 steer=41 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=306 R=97 speed L=68 R=72 mm/s | drive=96 rej=0 exec_rej=0 drv_err=0 | target L=107 R=49 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:01:415 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=8 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3422 us/sample
+15:03:01:415 -> [B4 TASK] loops=965 (+50) samples=965 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:01:415 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:01:440 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19339 steering=digital curve=0 target=102/54 measured=68/72 mm/s speed_valid=1 effort=287/118 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:496 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19396 steering=digital curve=0 target=88/67 measured=95/73 mm/s speed_valid=1 effort=197/171 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:552 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19450 steering=digital curve=0 target=80/76 measured=95/73 mm/s speed_valid=1 effort=165/206 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:607 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19504 steering=digital curve=0 target=80/76 measured=100/70 mm/s speed_valid=1 effort=155/210 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:664 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19556 steering=digital curve=0 target=80/76 measured=100/70 mm/s speed_valid=1 effort=154/210 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:711 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19607 steering=digital curve=0 target=80/76 measured=74/88 mm/s speed_valid=1 effort=191/184 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:766 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19658 steering=digital curve=0 target=80/76 measured=74/88 mm/s speed_valid=1 effort=191/183 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:812 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19710 steering=digital curve=0 target=80/76 measured=74/83 mm/s speed_valid=1 effort=192/190 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:870 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19764 steering=digital curve=0 target=80/76 measured=74/83 mm/s speed_valid=1 effort=192/189 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:925 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19816 steering=digital curve=0 target=80/76 measured=78/81 mm/s speed_valid=1 effort=187/191 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:01:971 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19867 steering=digital curve=0 target=80/76 measured=78/81 mm/s speed_valid=1 effort=187/191 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:02:026 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19919 steering=digital curve=2 target=103/53 measured=75/82 mm/s speed_valid=1 effort=280/93 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:02:071 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=19971 steering=digital curve=0 target=105/53 measured=75/82 mm/s speed_valid=1 effort=288/91 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:02:127 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=20025 steering=digital curve=0 target=96/61 measured=100/60 mm/s speed_valid=1 effort=220/154 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:02:184 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=20077 steering=digital curve=0 target=82/73 measured=100/60 mm/s speed_valid=1 effort=168/207 output_valid=1 floor_mask=0x0 state=2 gen=2 rejected=0
+15:03:02:184 -> [B5] obstacle ahead: 19 cm (status 0)
+15:03:02:207 -> [B5] state=COARSE_SCAN servo=30 dist=19cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:03:02:228 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=20129 steering=idle curve=0 target=0/0 measured=81/47 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:03:02:372 -> [B4] turned right 3 deg
+15:03:02:421 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=4 R=3 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:02:421 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.0 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2772 us/sample
+15:03:02:421 -> [B4 TASK] loops=1015 (+50) samples=1015 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:02:421 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:03:213 -> [B5] state=COARSE_SCAN servo=120 dist=18cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:03:03:236 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=21130 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:03:03:415 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:03:417 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.0 deg vib=8 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2724 us/sample
+15:03:03:429 -> [B4 TASK] loops=1065 (+50) samples=1065 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:03:429 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:04:234 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=22131 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:03:04:267 -> [B5] state=FINE_SCAN_RIGHT servo=70 dist=18cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:03:04:427 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:04:427 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2678 us/sample
+15:03:04:427 -> [B4 TASK] loops=1115 (+50) samples=1115 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:04:427 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:05:243 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=23132 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=2 rejected=0
+15:03:05:309 -> [B5] state=FINE_SCAN_LEFT servo=120 dist=27cm | ctrl mode=AUTO mission=SCAN stops=2 | move=0 refused=0 dropped=0
+15:03:05:421 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:05:435 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.5 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 2796 us/sample
+15:03:05:435 -> [B4 TASK] loops=1166 (+51) samples=1166 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:05:435 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:05:690 -> [B5] RIGHT blocked: 39 cm at servo 60 is inside the bypass strip
+15:03:05:690 -> [B5 PROFILE] n=1 scan=1 ahead_mm=182 L=found dir=23 x_mm=-106 y_mm=250 clear_mm=653 R=found dir=-13 x_mm=42 y_mm=181 clear_mm=0 width_mm=163 centre_x_mm=-32 side=LEFT backoffs=0
+15:03:05:690 -> [B5] decision: side 1 (0 none, 1 left, 2 right)
+15:03:06:242 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=24134 steering=idle curve=0 target=6/83 measured=73/62 mm/s speed_valid=1 effort=0/264 output_valid=1 floor_mask=0x0 state=2 gen=6 rejected=0
+15:03:06:264 -> [B4] turned left 1 deg
+15:03:06:308 -> [B5] state=BYPASS servo=140 dist=64cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=4 refused=0 dropped=0
+15:03:06:436 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=289 speed L=36 R=128 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=6 R=113 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:06:436 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=1.0 deg vib=24 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3238 us/sample
+15:03:06:436 -> [B4 TASK] loops=1216 (+50) samples=1216 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:06:436 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:07:240 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=25136 steering=idle curve=0 target=0/0 measured=1/3 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:07:328 -> [B5] state=BYPASS servo=90 dist=64cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:07:431 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=300 R=300 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=21 R=21 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:07:431 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=6.0 roll=3.5 deg vib=24 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3271 us/sample
+15:03:07:431 -> [B4 TASK] loops=1266 (+50) samples=1266 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:07:444 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:07:444 -> [B4] turned left 62 deg
+15:03:07:466 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:07:555 -> [B4] terrain CREST, cap 100 mm/s
+15:03:07:609 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:07:664 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:07:785 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:07:973 -> [B4] terrain CREST, cap 100 mm/s
+15:03:08:028 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:08:238 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=26137 steering=idle curve=0 target=120/111 measured=125/127 mm/s speed_valid=1 effort=256/268 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:08:327 -> [B5] state=BYPASS servo=90 dist=46cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:08:429 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=256 R=248 speed L=124 R=132 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=120 R=109 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:08:445 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=3.0 roll=-1.0 deg vib=40 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=2 mm | last hump 0 mm +/-0 peak 0 deg 0 cm invalid/none #0 | 3689 us/sample
+15:03:08:445 -> [B4 TASK] loops=1316 (+50) samples=1316 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:08:445 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:08:973 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:09:250 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=27142 steering=idle curve=0 target=75/67 measured=73/54 mm/s speed_valid=1 effort=166/164 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:09:273 -> [B4] hump 6 mm +/-7, peak 3 deg, 40 cm, valid
+15:03:09:273 -> [B4]   full width (height from pitch): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 6.57 mm | width 399 mm (profile 25/75% fit), path 196 mm
+15:03:09:273 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:09:351 -> [B5] state=BYPASS servo=90 dist=35cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:09:448 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=140 R=138 speed L=52 R=46 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=60 R=57 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:09:448 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=0.5 deg vib=8 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-7 peak 3 deg 40 cm valid #1 | 2384 us/sample
+15:03:09:448 -> [B4 TASK] loops=1366 (+50) samples=1366 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:09:448 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:10:152 -> [B4] turned left 1 deg
+15:03:10:252 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=28145 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:10:351 -> [B5] state=BYPASS servo=90 dist=36cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:10:446 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=400 R=-400 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=4 R=-4 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:10:446 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-7 peak 3 deg 40 cm valid #1 | 2332 us/sample
+15:03:10:446 -> [B4 TASK] loops=1416 (+50) samples=1416 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:10:446 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:11:251 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=29147 steering=idle curve=0 target=60/-60 measured=19/42 mm/s speed_valid=1 effort=207/-192 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:11:361 -> [B5] state=BYPASS servo=90 dist=36cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:11:446 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=44 R=53 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:11:446 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.5 roll=0.5 deg vib=8 mg motion=5 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-7 peak 3 deg 40 cm valid #1 | 2782 us/sample
+15:03:11:446 -> [B4 TASK] loops=1466 (+50) samples=1466 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:11:446 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:11:733 -> [B4] turned right 60 deg
+15:03:12:251 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=30148 steering=idle curve=0 target=43/43 measured=63/73 mm/s speed_valid=1 effort=63/70 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:12:317 -> [B5] side servo=25 dist=56 cm (status 0)
+15:03:12:406 -> [B5] side servo=25 dist=46 cm (status 0)
+15:03:12:406 -> [B5] state=BYPASS servo=25 dist=46cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:12:441 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=209 R=238 speed L=10 R=7 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=60 R=58 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:12:456 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=2.0 roll=0.0 deg vib=32 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-7 peak 3 deg 40 cm valid #1 | 3308 us/sample
+15:03:12:456 -> [B4 TASK] loops=1517 (+51) samples=1517 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:12:456 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:12:501 -> [B5] side servo=25 dist=8 cm (status 0)
+15:03:12:590 -> [B5] side servo=25 dist=9 cm (status 0)
+15:03:12:612 -> [B4] turned right 1 deg
+15:03:12:612 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:12:677 -> [B5] side servo=25 dist=10 cm (status 0)
+15:03:12:744 -> [B4] terrain CREST, cap 100 mm/s
+15:03:12:766 -> [B5] side servo=25 dist=10 cm (status 0)
+15:03:13:152 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:13:206 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:13:252 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=31149 steering=idle curve=0 target=60/57 measured=53/51 mm/s speed_valid=1 effort=156/178 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:13:417 -> [B5] state=BYPASS servo=25 dist=57cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:13:456 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=157 R=174 speed L=54 R=55 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=60 R=58 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:13:456 -> [B4] valid=1 cal=level terrain=SETTLING cap=100 pitch=1.5 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-7 peak 3 deg 40 cm valid #1 | 5024 us/sample
+15:03:13:456 -> [B4 TASK] loops=1567 (+50) samples=1567 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:13:456 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:13:512 -> [B4] hump 5 mm +/-3, peak 2 deg, 5 cm, INVALID
+15:03:13:512 -> [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 50 mm
+15:03:13:512 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:13:567 -> [B5] side servo=25 dist=7 cm (status 0)
+15:03:13:657 -> [B5] side servo=25 dist=10 cm (status 0)
+15:03:13:744 -> [B5] side servo=25 dist=8 cm (status 0)
+15:03:13:832 -> [B5] side servo=25 dist=8 cm (status 0)
+15:03:13:920 -> [B5] side servo=25 dist=8 cm (status 0)
+15:03:14:008 -> [B5] side servo=25 dist=8 cm (status 0)
+15:03:14:262 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=32150 steering=idle curve=0 target=58/60 measured=57/51 mm/s speed_valid=1 effort=151/194 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:14:416 -> [B5] state=BYPASS servo=25 dist=65cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:14:468 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=144 R=195 speed L=56 R=52 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=56 R=60 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:14:468 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.0 roll=0.0 deg vib=8 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-3 peak 2 deg 5 cm invalid/none #2 | 3372 us/sample
+15:03:14:468 -> [B4 TASK] loops=1617 (+50) samples=1617 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:14:468 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:14:820 -> [B5] side servo=25 dist=144 cm (status 0)
+15:03:14:820 -> [B5] passed the back corner: side 80 mm, depth 126 mm (-10 = unknown)
+15:03:14:973 -> [B4] turned right 1 deg
+15:03:15:261 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=33152 steering=idle curve=0 target=52/52 measured=42/32 mm/s speed_valid=1 effort=127/171 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:15:315 -> [B4] turned right 1 deg
+15:03:15:427 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:15:470 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=238 R=294 speed L=70 R=63 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=91 R=91 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:15:470 -> [B4] valid=1 cal=level terrain=ASCENDING cap=100 pitch=5.5 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-3 peak 2 deg 5 cm invalid/none #2 | 3384 us/sample
+15:03:15:470 -> [B4 TASK] loops=1667 (+50) samples=1667 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:15:470 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:15:510 -> [B5] state=BYPASS servo=90 dist=62cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:15:807 -> [B4] terrain CREST, cap 100 mm/s
+15:03:15:872 -> [B4] turned right 3 deg
+15:03:15:927 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:16:259 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=34153 steering=idle curve=0 target=105/109 measured=129/134 mm/s speed_valid=1 effort=192/249 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:16:463 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=153 R=172 speed L=68 R=70 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=72 R=70 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:16:463 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=-1.5 roll=0.5 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=3 mm | last hump 5 mm +/-3 peak 2 deg 5 cm invalid/none #2 | 2538 us/sample
+15:03:16:463 -> [B4 TASK] loops=1717 (+50) samples=1717 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:16:463 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:16:473 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:16:595 -> [B5] state=BYPASS servo=90 dist=56cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:16:773 -> [B4] hump 7 mm +/-7, peak 3 deg, 40 cm, valid
+15:03:16:773 -> [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 7.03 mm | width 399 mm (profile 25/75% fit), path 140 mm
+15:03:16:773 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:16:992 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:17:268 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=35155 steering=idle curve=0 target=0/0 measured=38/37 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:17:268 -> [B4] terrain CREST, cap 100 mm/s
+15:03:17:333 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:17:458 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:17:458 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=2.0 roll=0.0 deg vib=8 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-7 peak 3 deg 40 cm valid #3 | 2161 us/sample
+15:03:17:470 -> [B4 TASK] loops=1767 (+50) samples=1767 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:17:470 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:17:592 -> [B5] state=BYPASS servo=90 dist=85cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=1 refused=0 dropped=0
+15:03:18:086 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:18:252 -> [B4] terrain CREST, cap 100 mm/s
+15:03:18:264 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=36157 steering=idle curve=0 target=68/-66 measured=98/96 mm/s speed_valid=1 effort=118/-153 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:18:308 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:18:469 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=173 R=-178 speed L=40 R=55 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=60 R=-60 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:18:469 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=1.5 roll=0.5 deg vib=16 mg motion=5 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 7 mm +/-7 peak 3 deg 40 cm valid #3 | 4158 us/sample
+15:03:18:469 -> [B4 TASK] loops=1817 (+50) samples=1817 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:18:469 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:18:601 -> [B5] state=BYPASS servo=90 dist=85cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:18:810 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:19:029 -> [B4] turned right 53 deg
+15:03:19:108 -> [B4] hump 4 mm +/-3, peak 3 deg, 2 cm, INVALID
+15:03:19:108 -> [B4]   one wheel (height from roll): roll peak 1.9 deg -> track x sin = 3.71 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 24 mm
+15:03:19:108 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:19:263 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=37158 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:19:469 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=300 R=300 speed L=0 R=0 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=21 R=21 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:19:469 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=8.0 roll=5.0 deg vib=24 mg motion=2 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-3 peak 3 deg 2 cm invalid/none #4 | 2440 us/sample
+15:03:19:469 -> [B4 TASK] loops=1867 (+50) samples=1867 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:19:480 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:19:657 -> [B5] state=BYPASS servo=90 dist=107cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:19:689 -> [B4] turned left 1 deg
+15:03:19:954 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:20:052 -> [B4] terrain CREST, cap 100 mm/s
+15:03:20:107 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:20:263 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=38160 steering=idle curve=0 target=70/63 measured=59/58 mm/s speed_valid=1 effort=184/187 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:20:478 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=175 R=182 speed L=67 R=63 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=70 R=64 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:20:478 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=0.5 roll=1.5 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-3 peak 3 deg 2 cm invalid/none #4 | 3408 us/sample
+15:03:20:478 -> [B4 TASK] loops=1918 (+51) samples=1918 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:20:478 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:20:666 -> [B5] state=BYPASS servo=90 dist=115cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:21:151 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:21:273 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=39164 steering=idle curve=0 target=70/66 measured=69/71 mm/s speed_valid=1 effort=173/176 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:21:450 -> [B4] hump 4 mm +/-4, peak 3 deg, 10 cm, INVALID
+15:03:21:450 -> [B4]   one wheel (height from roll): roll peak 1.9 deg -> track x sin = 3.71 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 107 mm
+15:03:21:450 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:21:476 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=172 R=182 speed L=70 R=69 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=70 R=66 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:21:476 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=1.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-4 peak 3 deg 10 cm invalid/none #5 | 3413 us/sample
+15:03:21:476 -> [B4 TASK] loops=1968 (+50) samples=1968 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:21:476 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:21:587 -> [B5] line crossed at -60 deg: centring, then turning along it
+15:03:21:686 -> [B5] state=BYPASS servo=90 dist=106cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:21:929 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:22:016 -> [B4] terrain CREST, cap 100 mm/s
+15:03:22:027 -> [B4] turned right 1 deg
+15:03:22:071 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:22:271 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=40166 steering=idle curve=0 target=68/70 measured=57/71 mm/s speed_valid=1 effort=167/193 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:22:487 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=148 R=203 speed L=69 R=62 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=67 R=70 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:22:487 -> [B4] valid=1 cal=level terrain=DESCENDING cap=100 pitch=0.0 roll=1.0 deg vib=8 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-4 peak 3 deg 10 cm invalid/none #5 | 3191 us/sample
+15:03:22:487 -> [B4 TASK] loops=2018 (+50) samples=2018 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:22:487 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:22:508 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:22:552 -> [B4] turned left 1 deg
+15:03:22:703 -> [B5] state=BYPASS servo=90 dist=88cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:22:808 -> [B4] hump 6 mm +/-3, peak 3 deg, 5 cm, INVALID
+15:03:22:808 -> [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 56 mm
+15:03:22:809 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:23:272 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=41168 steering=idle curve=0 target=70/66 measured=67/69 mm/s speed_valid=1 effort=162/181 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:23:488 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=144 R=162 speed L=54 R=52 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=60 R=57 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:23:488 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 3 deg 5 cm invalid/none #6 | 2296 us/sample
+15:03:23:488 -> [B4 TASK] loops=2068 (+50) samples=2068 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:23:488 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:23:696 -> [B5] state=BYPASS servo=90 dist=81cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:24:280 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=42169 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:24:484 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=-41 R=58 speed L=56 R=56 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=-34 R=34 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:24:484 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.0 roll=2.5 deg vib=24 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 3 deg 5 cm invalid/none #6 | 2919 us/sample
+15:03:24:484 -> [B4 TASK] loops=2118 (+50) samples=2118 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:24:484 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:24:694 -> [B5] state=BYPASS servo=90 dist=81cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:24:715 -> [B4] turned left 9 deg
+15:03:25:277 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=43170 steering=idle curve=0 target=-60/60 measured=27/26 mm/s speed_valid=1 effort=-208/237 output_valid=1 floor_mask=0x0 state=3 gen=6 rejected=0
+15:03:25:492 -> [CAR] run=1 mode=2 mission=8 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=1 | effort L=-197 R=189 speed L=39 R=58 mm/s | drive=167 rej=0 exec_rej=0 drv_err=0 | target L=-60 R=60 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:25:492 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.0 roll=-1.5 deg vib=16 mg motion=4 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 3 deg 5 cm invalid/none #6 | 3430 us/sample
+15:03:25:492 -> [B4 TASK] loops=2168 (+50) samples=2168 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:25:492 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:25:701 -> [B5] state=BYPASS servo=90 dist=81cm | ctrl mode=AUTO mission=BYPASS stops=2 | move=2 refused=0 dropped=0
+15:03:25:812 -> [B4] turned left 52 deg
+15:03:26:264 -> [B5 RESULT] n=1 outcome=REJOINED ms=24153 scan_ms=3588 ahead_mm=182 width_mm=163 edges=both centre_x_mm=-32 side=LEFT lclear_mm=653 rclear_mm=0 aligned=1 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=80 depth_mm=126 reason=""
+15:03:26:264 -> [B5 TOTALS] detections=1 rejoined=1 cleared=0 failed=0 aborted=0 left=1 right=0 estops=0
+15:03:26:276 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44172 steering=digital curve=-1 target=0/0 measured=58/65 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:332 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44224 steering=digital curve=-3 target=0/0 measured=58/65 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:388 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44276 steering=digital curve=-5 target=0/0 measured=8/32 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:433 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44327 steering=digital curve=-6 target=0/0 measured=8/32 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:495 -> [CAR] run=1 mode=2 mission=4 stops=0x0 steer=-66 source=digital | line_black L=1 R=0 state=1 last_side=1 | effort L=300 R=300 speed L=0 R=0 mm/s | drive=187 rej=0 exec_rej=0 drv_err=0 | target L=2 R=8 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:26:495 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.0 deg vib=16 mg motion=5 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 6 mm +/-3 peak 3 deg 5 cm invalid/none #6 | 2813 us/sample
+15:03:26:495 -> [B4 TASK] loops=2218 (+50) samples=2218 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:26:495 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:26:495 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44380 steering=digital curve=-8 target=2/8 measured=0/0 mm/s speed_valid=1 effort=300/300 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:540 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44432 steering=digital curve=-9 target=7/29 measured=0/0 mm/s speed_valid=1 effort=300/300 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:596 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44486 steering=digital curve=-11 target=11/56 measured=75/76 mm/s speed_valid=1 effort=0/126 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:629 -> [B4] turned right 9 deg
+15:03:26:641 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44538 steering=digital curve=-13 target=12/74 measured=75/76 mm/s speed_valid=1 effort=0/200 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:697 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44591 steering=digital curve=-14 target=10/91 measured=75/76 mm/s speed_valid=1 effort=0/273 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:753 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44644 steering=digital curve=-14 target=9/119 measured=37/93 mm/s speed_valid=1 effort=0/364 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:766 -> [B5] state=MONITOR servo=90 dist=72cm | ctrl mode=AUTO mission=VERIFY_LINE stops=2 | move=0 refused=0 dropped=0
+15:03:26:777 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:26:801 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44697 steering=digital curve=-2 target=18/116 measured=37/93 mm/s speed_valid=1 effort=13/357 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:858 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44749 steering=digital curve=1 target=27/111 measured=0/109 mm/s speed_valid=1 effort=300/300 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:914 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44802 steering=digital curve=3 target=54/75 measured=0/109 mm/s speed_valid=1 effort=300/156 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:26:960 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44854 steering=digital curve=4 target=72/59 measured=80/129 mm/s speed_valid=1 effort=152/55 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:015 -> [B4] terrain CREST, cap 100 mm/s
+15:03:27:015 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44906 steering=digital curve=6 target=90/47 measured=80/129 mm/s speed_valid=1 effort=215/3 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:071 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=44958 steering=digital curve=7 target=116/34 measured=93/60 mm/s speed_valid=1 effort=293/50 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:071 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:27:093 -> [B4] turned left 11 deg
+15:03:27:116 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45010 steering=digital curve=2 target=117/35 measured=93/60 mm/s speed_valid=1 effort=299/51 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:129 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:27:173 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45064 steering=digital curve=0 target=105/48 measured=100/16 mm/s speed_valid=1 effort=247/172 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:230 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45117 steering=digital curve=-1 target=84/61 measured=100/16 mm/s speed_valid=1 effort=171/229 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:275 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45169 steering=digital curve=-3 target=61/79 measured=100/66 mm/s speed_valid=1 effort=83/230 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:331 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45221 steering=digital curve=-5 target=43/105 measured=100/66 mm/s speed_valid=1 effort=12/344 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:388 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45273 steering=digital curve=0 target=52/98 measured=44/109 mm/s speed_valid=1 effort=125/251 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:435 -> [B4] hump 5 mm +/-3, peak 2 deg, 5 cm, INVALID
+15:03:27:435 -> [B4]   one wheel (height from roll): roll peak 2.5 deg -> track x sin = 4.88 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 53 mm
+15:03:27:435 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45326 steering=digital curve=0 target=61/91 measured=44/109 mm/s speed_valid=1 effort=160/217 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:435 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:27:482 -> [CAR] run=1 mode=2 mission=4 stops=0x0 steer=33 source=digital | line_black L=0 R=1 state=2 last_side=2 | effort L=196 R=183 speed L=44 R=109 mm/s | drive=278 rej=0 exec_rej=0 drv_err=0 | target L=71 R=83 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:27:497 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=1.0 roll=1.0 deg vib=24 mg motion=5 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-3 peak 2 deg 5 cm invalid/none #7 | 3583 us/sample
+15:03:27:497 -> [B4 TASK] loops=2269 (+51) samples=2268 (+50) stage=i2c-accel state=READY wait=- wid=0 (own flag 6) pri=12
+15:03:27:497 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=0 SCL=1 func=5/5 (5=SIO)
+15:03:27:497 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45387 steering=digital curve=2 target=80/64 measured=54/115 mm/s speed_valid=1 effort=220/92 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:543 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45438 steering=digital curve=4 target=99/49 measured=54/115 mm/s speed_valid=1 effort=289/29 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:598 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45492 steering=digital curve=0 target=112/45 measured=96/49 mm/s speed_valid=1 effort=277/109 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:654 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45544 steering=digital curve=0 target=103/54 measured=96/49 mm/s speed_valid=1 effort=245/143 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:710 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45597 steering=digital curve=0 target=94/62 measured=96/49 mm/s speed_valid=1 effort=214/178 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:755 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45649 steering=digital curve=0 target=81/74 measured=119/42 mm/s speed_valid=1 effort=128/242 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:811 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45701 steering=digital curve=0 target=80/76 measured=119/42 mm/s speed_valid=1 effort=121/250 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:833 -> [B4] terrain ASCENDING, cap 100 mm/s
+15:03:27:844 -> [B5] state=MONITOR servo=90 dist=6cm | ctrl mode=AUTO mission=VERIFY_LINE stops=2 | move=0 refused=0 dropped=0
+15:03:27:866 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45753 steering=digital curve=0 target=80/76 measured=78/80 mm/s speed_valid=1 effort=181/193 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:914 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45804 steering=digital curve=0 target=80/76 measured=78/80 mm/s speed_valid=1 effort=181/193 output_valid=1 floor_mask=0x0 state=2 gen=8 rejected=0
+15:03:27:925 -> [B5] obstacle ahead: 4 cm (status 0)
+15:03:27:937 -> [B4] turned right 8 deg
+15:03:27:960 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=45856 steering=idle curve=0 target=0/0 measured=71/85 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=8 rejected=0
+15:03:28:114 -> [B4] turned left 0 deg
+15:03:28:147 -> [B4] terrain CREST, cap 100 mm/s
+15:03:28:235 -> [B4] terrain DESCENDING, cap 100 mm/s
+15:03:28:334 -> [B4] terrain SETTLING, cap 100 mm/s
+15:03:28:493 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=319 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:28:493 -> [B4] valid=1 cal=level terrain=SETTLING cap=100 pitch=0.5 roll=1.0 deg vib=16 mg motion=1 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 5 mm +/-3 peak 2 deg 5 cm invalid/none #7 | 2758 us/sample
+15:03:28:493 -> [B4 TASK] loops=2318 (+49) samples=2318 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:28:493 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:28:636 -> [B4] hump 4 mm +/-3, peak 2 deg, 2 cm, INVALID
+15:03:28:636 -> [B4]   one wheel (height from roll): roll peak 2.0 deg -> track x sin = 3.91 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 22 mm
+15:03:28:636 -> [B4] terrain LEVEL, cap 0 mm/s
+15:03:28:847 -> [B5] state=COARSE_SCAN servo=120 dist=57cm | ctrl mode=AUTO mission=SCAN stops=3 | move=0 refused=0 dropped=0
+15:03:28:969 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=46857 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=8 rejected=0
+15:03:29:491 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=319 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:29:491 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=-1.0 roll=0.5 deg vib=8 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-3 peak 2 deg 2 cm invalid/none #0 | 3213 us/sample
+15:03:29:492 -> [B4 TASK] loops=2369 (+51) samples=2369 (+51) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:29:493 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:29:857 -> [B5] state=COARSE_SCAN servo=90 dist=46cm | ctrl mode=AUTO mission=SCAN stops=3 | move=0 refused=0 dropped=0
+15:03:29:969 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=47858 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=8 rejected=0
+15:03:30:501 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=319 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:30:501 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=1.0 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-3 peak 2 deg 2 cm invalid/none #0 | 2909 us/sample
+15:03:30:501 -> [B4 TASK] loops=2419 (+50) samples=2419 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:30:501 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:30:864 -> [B5] state=COARSE_SCAN servo=240 dist=46cm | ctrl mode=AUTO mission=SCAN stops=3 | move=0 refused=0 dropped=0
+15:03:30:975 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=48860 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=8 rejected=0
+15:03:31:495 -> [CAR] run=1 mode=2 mission=6 stops=0x0 steer=20 source=digital | line_black L=0 R=0 state=0 last_side=2 | effort L=0 R=0 speed L=0 R=0 mm/s | drive=319 rej=0 exec_rej=0 drv_err=0 | target L=0 R=0 mm/s valid=1 qualified=1 | junc phase=0 seen=0 done=0 ign=0 route=0 | search=0 n=0 fail=0
+15:03:31:510 -> [B4] valid=1 cal=level terrain=LEVEL cap=0 pitch=0.5 roll=0.5 deg vib=0 mg motion=0 odom=1 faults=0x0 fail=0x0 i2c_err=0 live_h=0 mm | last hump 4 mm +/-3 peak 2 deg 2 cm invalid/none #0 | 2669 us/sample
+15:03:31:510 -> [B4 TASK] loops=2469 (+50) samples=2469 (+50) stage=wait-tick state=WAIT wait=event-flag wid=6 (own flag 6) pri=12
+15:03:31:510 -> [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA=1 SCL=1 func=5/5 (5=SIO)
+15:03:31:862 -> [B5] state=COARSE_SCAN servo=270 dist=45cm | ctrl mode=AUTO mission=SCAN stops=3 | move=0 refused=0 dropped=0
+15:03:31:974 -> [B2 TRACK] fw=b2-straight80-right95-digital t_ms=49861 steering=idle curve=0 target=0/0 measured=0/0 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=0 gen=8 rejected=0
+---- Closed the serial port COM5 ----

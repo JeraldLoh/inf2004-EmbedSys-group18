@@ -1,0 +1,50 @@
+# Extract of a serial console log captured by the Buddy 5 operator. Log lines are unedited; trailing spaces removed.
+# Only Buddy 5 profile and result lines. The log of 2026-11-10 11:58 UTC repeats the encounter in the one before it.
+
+# 2026-11-10, log supplied 04:45 UTC
+[B5 RESULT] n=1 outcome=REJOINED ms=15128 scan_ms=3406 ahead_mm=133 width_mm=160 edges=both centre_x_mm=-3 side=LEFT lclear_mm=1507 rclear_mm=893 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason=""
+
+# 2026-11-10, log supplied 04:48 UTC
+[B5 RESULT] n=1 outcome=ABORTED ms=15797 scan_ms=6212 ahead_mm=174 width_mm=127 edges=right_only centre_x_mm=-30 side=RIGHT lclear_mm=0 rclear_mm=579 aligned=0 backoffs=1 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 04:56 UTC
+[B5 RESULT] n=1 outcome=REJOINED ms=22066 scan_ms=3372 ahead_mm=133 width_mm=164 edges=both centre_x_mm=-16 side=RIGHT lclear_mm=303 rclear_mm=677 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason=""
+[B5 RESULT] n=2 outcome=CLEARED ms=6003 scan_ms=0 ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=- aligned=0 backoffs=1 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="obstacle no longer ahead"
+[B5 RESULT] n=3 outcome=ABORTED ms=4356 scan_ms=2692 ahead_mm=115 width_mm=69 edges=both centre_x_mm=0[CAR] controller left AUTO: mission=10 stops=0x8
+
+# 2026-11-10, log supplied 05:04 UTC
+[B5 RESULT] n=1 outcome=ABORTED ms=12536 scan_ms=3010 ahead_mm=170 width_mm=196 edges=both centre_x_mm=-28 side=RIGHT lclear_mm=370 rclear_mm=386 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 05:21 UTC
+[B5 RESULT] n=1 outcome=ABORTED ms=23604 scan_ms=4526 ahead_mm=132 width_mm=251 edges=right_only centre_x_mm=-147 side=RIGHT lclear_mm=0 rclear_mm=502 aligned=0 backoffs=1 reverses=0 reacq=1 pass=clear side_mm=89 depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 05:27 UTC
+[B5 RESULT] n=1 outcome=CLEARED ms=11295 scan_ms=6532 ahead_mm=109 width_mm=140 edges=right_only centre_x_mm=-78 side=NONE lclear_mm=0 rclear_mm=199 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="obstacle no longer ahead"
+[B5 RESULT] n=2 outcome=CLEARED ms=10938 scan_ms=6325 ahead_mm=103 width_mm=101 edges=right_only centre_x_mm=-83 side=NONE lclear_mm=0 rclear_mm=303 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="obstacle no longer ahead"
+[B5 RESULT] n=3 outcome=ABORTED ms=18614 scan_ms=3024 ahead_mm=127 width_mm=124 edges=both centre_x_mm=-28 side=RIGHT lclear_mm=358 rclear_mm=1114 aligned=0 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=105 depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 11:55 UTC
+[B5 PROFILE] n=1 scan=1 ahead_mm=185 L=found dir=15 x_mm=-48 y_mm=179 clear_mm=597 R=found dir=-35 x_mm=134 y_mm=191 clear_mm=653 width_mm=182 centre_x_mm=43 side=LEFT backoffs=0
+[B5 RESULT] n=1 outcome=ABORTED ms=4842 scan_ms=3109 ahead_mm=185 width_mm=182 edges=both centre_x_mm=43 side=LEFT lclear_mm=597 rclear_mm=653 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 11:58 UTC
+[B5 PROFILE] n=1 scan=1 ahead_mm=185 L=found dir=15 x_mm=-48 y_mm=179 clear_mm=597 R=found dir=-35 x_mm=134 y_mm=191 clear_mm=653 width_mm=182 centre_x_mm=43 side=LEFT backoffs=0
+[B5 RESULT] n=1 outcome=ABORTED ms=4842 scan_ms=3109 ahead_mm=185 width_mm=182 edges=both centre_x_mm=43 side=LEFT lclear_mm=597 rclear_mm=653 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+[B5 PROFILE] n=1 scan=1 ahead_mm=195 L=found dir=15 x_mm=-51 y_mm=189 clear_mm=297 R=found dir=-55 x_mm=160 y_mm=112 clear_mm=687 width_mm=224 centre_x_mm=55 side=LEFT backoffs=0
+[B5 RESULT] n=1 outcome=ABORTED ms=5199 scan_ms=3539 ahead_mm=195 width_mm=224 edges=both centre_x_mm=55 side=LEFT lclear_mm=297 rclear_mm=687 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# 2026-11-10, log supplied 12:00 UTC
+[B5 PROFILE] n=1 scan=1 ahead_mm=136 L=found dir=-30 x_mm=83 y_mm=144 clear_mm=242 R=found dir=-40 x_mm=107 y_mm=128 clear_mm=678 width_mm=29 centre_x_mm=95 side=RIGHT backoffs=0
+
+# 2026-11-11, log supplied 06:52 UTC
+[B5 PROFILE] n=1 scan=1 ahead_mm=173 L=found dir=3 x_mm=-10 y_mm=194 clear_mm=2008 R=found dir=-23 x_mm=88 y_mm=207 clear_mm=1428 width_mm=99 centre_x_mm=39 side=LEFT backoffs=0
+[B5 RESULT] n=1 outcome=ABORTED ms=4871 scan_ms=3217 ahead_mm=173 width_mm=99 edges=both centre_x_mm=39 side=LEFT lclear_mm=2008 rclear_mm=1428 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# 2026-11-11, log supplied 07:26 UTC
+[B5 PROFILE] n=1 scan=1 ahead_mm=173 L=found dir=13 x_mm=-44 y_mm=190 clear_mm=2306 R=found dir=-13 x_mm=43 y_mm=184 clear_mm=0 width_mm=87 centre_x_mm=-1 side=LEFT backoffs=0
+[B5 RESULT] n=1 outcome=REJOINED ms=24717 scan_ms=3029 ahead_mm=173 width_mm=87 edges=both centre_x_mm=-1 side=LEFT lclear_mm=2306 rclear_mm=0 aligned=1 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=109 depth_mm=6 reason=""
+
+# 2026-11-11, log supplied 08:12 UTC
+[B5 RESULT] n=1 outcome=CLEARED ms=1414 scan_ms=0 ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=- aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="obstacle no longer ahead"
+[B5 PROFILE] n=2 scan=1 ahead_mm=159 L=found dir=0 x_mm=0 y_mm=159 clear_mm=1132 R=found dir=-13 x_mm=24 y_mm=181 clear_mm=0 width_mm=32 centre_x_mm=12 side=LEFT backoffs=1
+[B5 RESULT] n=2 outcome=ABORTED ms=20168 scan_ms=4548 ahead_mm=159 width_mm=32 edges=both centre_x_mm=12 side=LEFT lclear_mm=1132 rclear_mm=0 aligned=1 backoffs=1 reverses=0 reacq=0 pass=clear side_mm=123 depth_mm=68 reason="AUTO ended"
