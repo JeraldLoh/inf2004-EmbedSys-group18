@@ -39,7 +39,8 @@ the smallest height that counts as valid.
 
 The team reports two nominal humps, **5 mm and 10 mm**, used alternately with
 the 10 mm one first. These are nominal heights. No ruler or caliper reading was
-recorded, and no saved log marks which hump the car was crossing.
+recorded, and no saved log marks which hump the car was crossing. The Buddy 4
+README describes the demo hump as 10 mm x 195 mm under one wheel.
 
 ## Logged results, 19 November 2026
 
@@ -64,20 +65,66 @@ All 11 hump results in the [15:01 log](../integration/logs/2026-11-19_car_run_15
 - The uncertainty of those three (±6 to ±7 mm) is about as large as the height.
 - They do not match a 10 mm hump followed by a 5 mm one, so **no reading is
   paired with a hump and no accuracy figure is given.**
-- Evidence [E4](../DEMO_EVIDENCE.md) records one valid 9 ±8 mm result on a later
-  build. Its hump height is also not recorded. The raw file was not available
-  for this report.
 
-In all, the validity checks rejected 8 of the 11 results, but 3 still passed
+The validity checks rejected 8 of the 11 results, but 3 still passed
 while the car was manoeuvring.
+
+## Logged results, 25 November 2026
+
+Buddy 2's wireless exports, 03:16 to 11:40 SGT ([events](../integration/logs/2026-11-25_wireless_events.txt), times there
+in UTC). They come from twelve builds whose firmware IDs run from `pivot90` to
+`encoder-grace`. The ID on `main`, `group18-combined-compact-data-2026-11-25`,
+is not among them, so none is the published image.
+
+| Group | Results |
+|---|---|
+| All complete hump result lines | 337 |
+| Valid, while driving | 57 |
+| Valid, while stopped (for example being carried) | 9 |
+| Invalid | 271 |
+
+The 57 valid results while driving:
+
+| Reported height | 5 | 6 | 7 | 8 | 9 | 10 | 30 |
+|---|---|---|---|---|---|---|---|
+| Count | 14 | 19 | 8 | 8 | 4 | 3 | 1 |
+
+- 38 were in line following, 7 just after a junction, 1 in a junction turn, 8 in
+  a bypass and 3 in an obstacle stop or scan.
+- 31 of the 57 have an uncertainty at least as large as the height.
+- The 30 mm one was logged as the car stopped on an encoder fault, so it is false.
+- The 9 valid results while stopped read 6 to 81 mm. Six were within a few
+  seconds of a pickup stop, so they are probably lift artefacts.
+- E4's 9 ±8 mm result is in this data: 04:38 SGT, 38 cm long, full width.
+
+### Sequences that fit the two humps
+
+A 10 mm x 195 mm hump under one wheel should give the one-wheel class, about 10
+mm, about 20 cm. Only two line-track results do, and each is followed 4 s later
+by a smaller one:
+
+| SGT, build | First | Second |
+|---|---|---|
+| 09:58, `retry80-uturn-plus5` | 8 ±8 mm, 19 cm, one wheel | 6 ±6 mm, 24 cm |
+| 10:00, `retry80-uturn-plus5` | 9 ±6 mm, 21 cm, one wheel | 5 ±5 mm, 20 cm, full width |
+
+This fits the team's account of 10 mm, then 5 mm. **The match is an inference:
+the logs do not mark the humps.** If it is right, the errors are -2 and -1 mm for
+the 10 mm hump and +1 and 0 mm for the 5 mm one, with length 19 and 21 cm against
+19.5. Each run also gave other valid results a few seconds earlier, around a
+junction turn (6 ±6 and 6 ±4 mm; 9 ±5 mm), that the two humps do not explain. Two
+selected sequences are not an accuracy measurement.
 
 ## Other observations
 
+- At least 71 pickup stops were logged on 25 November, all reported at 20 to 22 cm against
+  the 20 cm limit. At least 15 came while the car was driving. The others may be
+  lifts of a stopped car, as status is printed once a second.
 - Processing takes 2.2 to 5.3 ms per 20 ms sample, with no I2C errors in the
   status lines reviewed.
 - At start-up, level calibration rejected windows with more than 40 mg of
   movement and retried, as designed.
-- Pickup stops were logged (E2 to E4). Lift height was not compared with a ruler.
+- Lift height was not compared with a ruler.
 - Faults show 0x40 in the 15:01 log's first boot. That bit was the collision
   latch on that build and is reserved on `main`.
 

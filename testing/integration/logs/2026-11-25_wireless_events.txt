@@ -1,0 +1,1644 @@
+# Extract of Buddy 2 wireless console exports, 2026-11-24 19:16 to 2026-11-25 03:40 UTC (25 November, 03:16 to 11:40 SGT).
+# Lines are as received. <cut> marks missing batches. Overlapping exports were merged. Only event lines are kept.
+
+# session 0: group18-combined-pivot90-2026-11-25, 2026-11-24T19:16:05.342Z to 2026-11-24T19:22:07.354Z UTC, 4396 batches, 22 gaps
+
+# session 1: group18-combined-pivot90-2026-11-25, 2026-11-24T19:26:55.616Z to 2026-11-24T19:26:58.107Z UTC, 36 batches, 0 gaps
+
+# session 2: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:29:06.598Z to 2026-11-24T19:29:08.634Z UTC, 32 batches, 0 gaps
+
+# session 3: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:29:15.351Z to 2026-11-24T19:29:28.026Z UTC, 184 batches, 2 gaps
+19:29:20.996 [CAR] MQTT START requested at configured car speed
+19:29:25.219 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:29:25.383 [B4] hump 5 mm +/-3, peak 2 deg, 3 cm, INVALID
+19:29:25.383 [B4]   full width (height from pitch): roll peak 0.2 deg -> track x sin = 0.38 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 35 mm
+19:29:25.832 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+
+# session 4: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:29:34.593Z to 2026-11-24T19:29:56.781Z UTC, 317 batches, 8 gaps
+19:29:41.619 [CAR] MQTT START requested at configured car speed
+19:29:43.981 [B4] hump 3 mm +/-5, peak 2 deg, 10 cm, INVALID
+19:29:43.981 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 109 mm
+19:29:45.334 [CAR ROUTE] accepted=1 junction=0 phase=0 command=2 done=0
+19:29:46.455 [CAR ROUTE] accepted=1 junction=1 phase=7 command=2 done=0
+19:29:46.530 [B4] hump 5 mm +/-6, peak 2 deg, 10 cm, valid
+19:29:46.530 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 101 mm
+19:29:46.848 [CAR ROUTE] accepted=1 junction=1 phase=5 command=2 done=0
+19:29:47.460 [B4] hump 6 mm +/-3, peak 2 deg, 28 cm, INVALID
+19:29:47.460 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 5.44 mm | width 278 mm (profile 25/75% fit), path 53 mm
+19:29:48.432 [CAR ROUTE] accepted=1 junction=1 phase=6 command=2 done=0
+19:29:50.000 [B4] hump 5 mm +/-3, peak 2 deg, 0 cm, INVALID
+19:29:50.000 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 3 mm
+19:29:50.297 [CAR ROUTE] accepted=1 junction=1 phase=0 command=2 done=1
+19:29:52.111 [B4] hump 4 mm +/-3, peak 2 deg, 15 cm, INVALID
+19:29:52.111 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 3.85 mm | width 154 mm (profile 25/75% fit), path 71 mm
+
+# session 5: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:30:03.428Z to 2026-11-24T19:31:31.708Z UTC, 1072 batches, 32 gaps
+19:30:24.686 [CAR] MQTT START requested at configured car speed
+19:30:28.692 [B4] hump 2 mm +/-3, peak 2 deg, 4 cm, INVALID
+19:30:28.692 [B4]   one wheel (height from roll): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 3.40 mm | width 0 mm (no fit: cm = path), path 47 mm
+19:30:30.066 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:30:30.151 [B4] hump 5 mm +/-4, peak 2 deg, 6 cm, INVALID
+19:30:30.151 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 68 mm
+19:30:30.634 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:30:35.608 [B2 STOP DETAIL] seq=1 reason=NO_WHEEL_PROGRESS result=7 gen=3 command=659 [GROUND] L=0 R=0 adc=0 valid=0 seq=32065
+19:30:35.799 [CAR STOP] reasons=0xa mission=10
+19:30:37.218 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+19:30:37.218 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+19:30:37.294 [CAR STOP] reasons=0xb mission=10
+19:30:43.814 [B4] hump 60 mm +/-3, peak 22 deg, 0 cm, INVALID
+19:30:43.814 [B4]   one wheel (height from roll): roll peak 32.6 deg -> track x sin = 60.33 mm, pitch term 47.85 mm | width 0 mm (no fit: cm = path), path 9 mm
+19:30:48.444 [B4] hump 60 mm +/-3, peak 14 deg, 0 cm, INVALID
+19:30:48.444 [B4]   one wheel (height from roll): roll peak 32.2 deg -> track x sin = 59.67 mm, pitch term 31.66 mm | width 0 mm (no fit: cm = path), path 9 mm
+19:31:07.418 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:31:09.109 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:31:10.942 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:31:19.990 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:31:29.073 [B4] hump 5 mm +/-3, peak 3 deg, 0 cm, INVALID
+19:31:29.073 [B4]   one wheel (height from roll): roll peak 2.5 deg -> track x sin = 4.88 mm, pitch term 7.70 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 6: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:31:38.776Z to 2026-11-24T19:32:33.564Z UTC, 678 batches, 12 gaps
+19:31:46.117 [CAR] MQTT START requested at configured car speed
+19:31:51.910 [B4] hump 6 mm +/-7, peak 2 deg, 13 cm, valid
+19:31:51.910 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 133 mm
+19:31:53.798 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:31:54.027 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:31:56.328 [CAR STOP] reasons=0x8 mission=10
+19:31:56.404 [B2 STOP DETAIL] seq=1 reason=NO_WHEEL_PROGRESS result=7 gen=3 command=680 wheel_mask=0x2 before_target=80/76 before_spee[GROUND] L=0 R=0 adc=2790 valid=1 seq=21737
+19:32:05.762 [B4] hump 22 mm +/-3, peak 13 deg, 0 cm, INVALID
+19:32:05.762 [B4]   one wheel (height from roll): roll peak 11.1 deg -> track x sin = 21.56 mm, pitch term 29.90 mm | width 0 mm (no fit: cm = path), path 3 mm
+19:32:17.075 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 7: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:32:40.344Z to 2026-11-24T19:35:07.518Z UTC, 1816 batches, 16 gaps
+19:32:48.791 [CAR] MQTT START requested at configured car speed
+19:32:50.093 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:32:50.857 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:32:52.795 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+19:32:53.627 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+19:32:54.724 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+19:32:55.086 [B4] hump 10 mm +/-6, peak 4 deg, 10 cm, valid
+19:32:55.086 [B4]   full width (height from pitch): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 9.97 mm | width 0 mm (no fit: cm = path), path 106 mm
+19:32:55.248 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+19:32:57.937 [B4] hump 8 mm +/-5, peak 3 deg, 10 cm, valid
+19:32:57.937 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 107 mm
+19:32:59.214 [CAR] STOPPED: MQTT STOP
+19:32:59.214 [CAR STOP] reasons=0x2 mission=10
+19:35:04.273 [B4] hump 11 mm +/-3, peak 8 deg, 0 cm, INVALID
+19:35:04.273 [B4]   one wheel (height from roll): roll peak 5.6 deg -> track x sin = 10.92 mm, pitch term 18.53 mm | width 0 mm (no fit: cm = path), path 4 mm
+
+# session 8: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:35:14.212Z to 2026-11-24T19:35:42.794Z UTC, 385 batches, 4 gaps
+19:35:22.526 [CAR] MQTT START requested at configured car speed
+19:35:27.756 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:35:28.107 [B4] hump 7 mm +/-5, peak 3 deg, 8 cm, valid
+19:35:28.109 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 81 mm
+19:35:28.275 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:35:29.465 [B4] hump 5 mm +/-3, peak 2 deg, 5 cm, INVALID
+19:35:29.465 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 53 mm
+19:35:30.370 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+19:35:30.808 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+19:35:31.832 [CAR] STOPPED: MQTT STOP
+19:35:31.832 [CAR STOP] reasons=0x2 mission=10
+19:35:37.067 [B4] hump 39 mm +/-4, peak 17 deg, 3 cm, INVALID
+19:35:37.067 [B4]   full width (height from pitch): roll peak 7.3 deg -> track x sin = 14.22 mm, pitch term 36.91 mm | width 0 mm (no fit: cm = path), path 37 mm
+19:35:37.211 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:35:37.211 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:35:37.211 [CAR STOP] reasons=0x3 mission=10
+
+# session 9: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:35:48.566Z to 2026-11-24T19:35:59.623Z UTC, 148 batches, 1 gaps
+19:35:50.566 [B4] hump 7 mm +/-3, peak 2 deg, 0 cm, INVALID
+19:35:50.566 [B4]   one wheel (height from roll): roll peak 3.4 deg -> track x sin = 6.64 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:35:58.216 [CAR] MQTT START requested at configured car speed
+
+# session 10: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:36:15.357Z to 2026-11-24T19:37:46.330Z UTC, 1205 batches, 21 gaps
+19:36:24.650 [CAR] MQTT START requested at configured car speed
+19:36:30.213 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:36:30.525 [B4] hump 6 mm +/-7, peak 2 deg, 13 cm, valid
+19:36:30.525 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 135 mm
+19:36:30.757 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:36:32.683 [B4] hump 5 mm +/-3, peak 2 deg, 6 cm, INVALID
+19:36:32.683 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 65 mm
+19:36:33.905 [CAR] STOPPED: MQTT STOP
+19:36:33.960 [CAR STOP] reasons=0x2 mission=10
+19:36:33.960 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+19:36:33.960 [B4] hump 3 mm +/-3, peak 1 deg, 5 cm, INVALID
+19:36:33.960 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 3.17 mm | width 0 mm (no fit: cm = path), path 58 mm
+19:36:36.784 [B4] hump 31 mm +/-3, peak 13 deg, 0 cm, INVALID
+19:36:36.784 [B4]   full width (height from pitch): roll peak 4.7 deg -> track x sin = 9.17 mm, pitch term 29.68 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:36:42.500 [CAR] MQTT START requested at configured car speed
+19:36:42.500 [CAR STOP] reasons=0x0 mission=1
+19:36:47.670 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=1
+19:36:47.903 [B4] hump 6 mm +/-7, peak 2 deg, 13 cm, valid
+19:36:47.903 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 132 mm
+19:36:48.197 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+19:36:51.424 [CAR ROUTE] accepted=0 junction=4 phase=7 command=3 done=2
+19:36:51.496 [CAR] STOPPED: MQTT STOP
+19:36:51.496 [CAR STOP] reasons=0x2 mission=10
+19:36:51.496 [CAR ROUTE] accepted=0 junction=4 phase=0 command=3 done=2
+19:36:55.089 [B4] hump 43 mm +/-3, peak 19 deg, 0 cm, INVALID
+19:36:55.089 [B4]   full width (height from pitch): roll peak 5.6 deg -> track x sin = 10.92 mm, pitch term 41.24 mm | width 0 mm (no fit: cm = path), path 1 mm
+19:37:04.769 [CAR] MQTT START requested at configured car speed
+19:37:04.834 [CAR STOP] reasons=0x0 mission=1
+19:37:06.553 [B4] hump 3 mm +/-3, peak 2 deg, 7 cm, INVALID
+19:37:06.553 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 73 mm
+19:37:10.267 [CAR ROUTE] accepted=0 junction=5 phase=7 command=3 done=2
+19:37:10.512 [B4] hump 5 mm +/-6, peak 2 deg, 10 cm, valid
+19:37:10.512 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 102 mm
+19:37:10.717 [CAR ROUTE] accepted=0 junction=5 phase=0 command=3 done=3
+19:37:13.867 [CAR ROUTE] accepted=0 junction=6 phase=7 command=3 done=3
+19:37:14.300 [CAR] STOPPED: MQTT STOP
+19:37:14.300 [CAR STOP] reasons=0x2 mission=10
+19:37:14.300 [CAR ROUTE] accepted=0 junction=6 phase=0 command=3 done=3
+19:37:14.300 [B4] hump 3 mm +/-3, peak 2 deg, 2 cm, INVALID
+19:37:14.300 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 22 mm
+19:37:15.150 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:37:15.232 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:37:15.232 [CAR STOP] reasons=0x3 mission=10
+19:37:15.288 [B4] hump 32 mm +/-3, peak 14 deg, 0 cm, INVALID
+19:37:15.288 [B4]   full width (height from pitch): roll peak 2.7 deg -> track x sin = 5.27 mm, pitch term 31.00 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:37:18.858 [CAR] MQTT START requested at configured car speed
+19:37:18.858 [CAR STOP] reasons=0x0 mission=1
+19:37:24.502 [CAR ROUTE] accepted=0 junction=7 phase=7 command=3 done=3
+19:37:24.586 [B4] hump 6 mm +/-5, peak 3 deg, 9 cm, valid
+19:37:24.586 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 94 mm
+19:37:24.971 [CAR ROUTE] accepted=0 junction=7 phase=0 command=3 done=4
+19:37:25.330 [CAR] STOPPED: MQTT STOP
+19:37:25.330 [CAR STOP] reasons=0x2 mission=10
+19:37:33.099 [B4] hump 10 mm +/-3, peak 6 deg, 0 cm, INVALID
+19:37:33.099 [B4]   one wheel (height from roll): roll peak 5.3 deg -> track x sin = 10.34 mm, pitch term 13.81 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:37:33.865 [B4] hump 6 mm +/-3, peak 4 deg, 0 cm, INVALID
+19:37:33.865 [B4]   one wheel (height from roll): roll peak 3.2 deg -> track x sin = 6.25 mm, pitch term 7.93 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:37:41.802 [B4] hump 9 mm +/-3, peak 3 deg, 0 cm, INVALID
+19:37:41.802 [B4]   one wheel (height from roll): roll peak 4.5 deg -> track x sin = 8.78 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:37:42.921 [B4] hump 9 mm +/-3, peak 2 deg, 0 cm, INVALID
+19:37:42.921 [B4]   one wheel (height from roll): roll peak 4.8 deg -> track x sin = 9.37 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:37:45.119 [B4] hump 12 mm +/-3, peak 2 deg, 0 cm, INVALID
+19:37:45.119 [B4]   one wheel (height from roll): roll peak 5.9 deg -> track x sin = 11.51 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 11: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:37:51.318Z to 2026-11-24T19:38:30.153Z UTC, 474 batches, 11 gaps
+19:37:58.220 [CAR] MQTT START requested at configured car speed
+19:38:02.795 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:38:03.311 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:38:05.444 [B4] hump 3 mm +/-4, peak 2 deg, 9 cm, INVALID
+19:38:05.444 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 91 mm
+19:38:05.518 [CAR] STOPPED: MQTT STOP
+19:38:05.518 [CAR STOP] reasons=0x2 mission=10
+19:38:09.323 [B4] hump 11 mm +/-3, peak 9 deg, 0 cm, INVALID
+19:38:09.323 [B4]   one wheel (height from roll): roll peak 5.7 deg -> track x sin = 11.12 mm, pitch term 20.55 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:38:17.288 [B4] END OF RUN: car  <cut>
+19:38:17.354 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:38:17.354 [CAR STOP] reasons=0x3 mission=10
+19:38:21.450 [B4] hump 17 mm +/-3, peak 13 deg, 0 cm, INVALID
+19:38:21.450 [B4]   one wheel (height from roll): roll peak 8.9 deg -> track x sin = 17.32 mm, pitch term 28.58 mm | width 0 mm (no fit: cm = path), path 3 mm
+
+# session 12: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:38:36.723Z to 2026-11-24T19:38:42.194Z UTC, 74 batches, 2 gaps
+19:38:40.884 [CAR] MQTT START requested at configured car speed
+
+# session 13: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:38:59.383Z to 2026-11-24T19:39:22.078Z UTC, 319 batches, 5 gaps
+19:39:08.418 [CAR] MQTT START requested at configured car speed
+19:39:13.130 [B4] hump 2 mm +/-4, peak 2 deg, 6 cm, INVALID
+19:39:13.130 [B4]   one wheel (height from roll): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 69 mm
+19:39:15.274 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:39:16.227 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:39:20.256 [B4] hump 15 mm +/-21, peak 9 deg, 25 cm, INVALID
+19:39:20.256 [B4]   one wheel (height from roll): roll peak 8.6 deg -> track x sin = 16.74 mm, pitch term 20.55 mm | width 245 mm (profile 25/75% fit), path 393 mm
+19:39:21.941 [B4] hump 3 mm +/-3, peak 2 deg, 5 cm, INVALID
+19:39:21.941 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 57 mm
+
+# session 14: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:39:29.432Z to 2026-11-24T19:39:59.466Z UTC, 360 batches, 3 gaps
+19:39:34.083 [CAR] MQTT START requested at configured car speed
+19:39:34.690 [CAR STOP] reasons=0x8 mission=10
+19:39:34.757 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=2 command=30 wheel_mask=0x3 before_target=44/42 before_speed=0/0 mm/s speed_valid=0
+19:39:42.415 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:39:43.612 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+19:39:50.215 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 15: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:40:04.619Z to 2026-11-24T19:46:23.188Z UTC, 4481 batches, 43 gaps
+19:40:15.119 [CAR] MQTT START requested at configured car speed
+19:40:18.462 [B4] hump 4 mm +/-4, peak 2 deg, 10 cm, INVALID
+19:40:18.462 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 4.76 mm | width 104 mm (profile 25/75% fit), path 77 mm
+19:40:19.877 [CAR ROUTE] accepted=1 junction=0 phase=0 command=4 done=0
+19:40:23.598 [CAR ROUTE] accepted=1 junction=1 phase=7 command=4 done=0
+19:40:23.928 [B4] hump 6 mm +/-5, peak 3 deg, 8 cm, valid
+19:40:23.928 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 88 mm
+19:40:24.075 [CAR ROUTE] accepted=1 junction=1 phase=5 command=4 done=0
+19:40:25.044 [CAR ROUTE] accepted=1 junction=1 phase=6 command=4 done=0
+19:40:27.854 [CAR ROUTE] accepted=1 junction=1 phase=0 command=4 done=1
+19:40:34.404 [CAR] STOPPED: MQTT STOP
+19:40:34.404 [CAR STOP] reasons=0x2 mission=10
+19:46:04.890 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:46:04.890 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:46:04.896 [CAR STOP] reasons=0x3 mission=10
+19:46:04.896 [B4] hump 54 mm +/-3, peak 22 deg, 0 cm, INVALID
+19:46:04.896 [B4]   full width (height from pitch): roll peak 9.8 deg -> track x sin = 19.06 mm, pitch term 47.85 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:46:11.282 [B4] hump 4 mm +/-3, peak 2 deg, 0 cm, INVALID
+19:46:11.282 [B4]   one wheel (height from roll): roll peak 2.3 deg -> track x sin = 4.49 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 16: group18-combined-barcode-retry80-2026-11-25, 2026-11-24T19:46:33.273Z to 2026-11-24T19:47:44.749Z UTC, 796 batches, 16 gaps
+19:47:19.514 [B4] hump 21 mm +/-3, peak 6 deg, 0 cm, INVALID
+19:47:19.514 [B4]   one wheel (height from roll): roll peak 10.9 deg -> track x sin = 21.17 mm, pitch term 13.58 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 17: group18-combined-adcpoll-retry80-2026-11-25, 2026-11-24T19:48:09.792Z to 2026-11-24T19:50:16.287Z UTC, 1491 batches, 90 gaps
+19:48:25.488 [CAR] MQTT START requested at configured car speed
+19:48:36.170 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:48:36.493 [B4] hump 6 mm +/-6, peak 2 deg, 10 cm, valid
+19:48:36.756 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 100 mm
+19:48:36.968 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:48:45.606 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:48:45.606 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:48:45.606 [CAR STOP] reasons=0x3 mission=10
+19:48:48.165 [B4] hump 25 mm +/-3, peak 12 deg, 0 cm, INVALID
+19:48:48.165 [B4]   one wheel (height from roll): roll peak 12.8 deg -> track x sin = 24.81 mm, pitch term 26.80 mm | width 0 mm (no fit: cm = path), path 1 mm
+19:48:54.651 [CAR] MQTT START requested at configured car speed
+19:48:54.651 [CAR STOP] reasons=0x0 mission=1
+19:49:04.364 [B4] hump 6 mm +/-4, peak 3 deg, 7 cm, INVALID
+19:49:04.364 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 73 mm
+19:49:04.443 [CAR] STOPPED: MQTT STOP
+19:49:04.443 [CAR STOP] reasons=0x2 mission=10
+19:49:04.443 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+19:49:05.435 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:49:05.435 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:49:05.435 [CAR STOP] reasons=0x3 mission=10
+19:49:05.807 [B4] hump 38 mm +/-3, peak 14 deg, 0 cm, INVALID
+19:49:05.873 [B4]   full width (height from pitch): roll peak 5.9 deg -> track x sin = 11.51 mm, pitch term 32.10 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:49:10.691 [CAR] MQTT START requested at configured car speed
+19:49:10.691 [CAR STOP] reasons=0x0 mission=1
+19:49:20.316 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+19:49:20.391 [B4] hump 6 mm +/-7, peak 3 deg, 10 cm, valid
+19:49:20.391 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 104 mm
+19:49:21.906 [CAR] STOPPED: MQTT STOP
+19:49:21.967 [CAR STOP] reasons=0x2 mission=10
+19:49:24.235 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+19:49:24.235 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+19:49:24.238 [CAR STOP] reasons=0x3 mission=10
+19:49:29.632 [B4] hump 62 mm +/-3, peak 18 deg, 0 cm, INVALID
+19:49:29.632 [B4]   one wheel (height from roll): roll peak 33.4 deg -> track x sin = 61.64 mm, pitch term 40.38 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:49:31.629 [B4] hump 50 mm +/-3, peak 16 deg, 0 cm, INVALID
+19:49:31.629 [B4]   one wheel (height from roll): roll peak 26.3 deg -> track x sin = 49.62 mm, pitch term 36.48 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:49:35.345 [CAR] MQTT START requested at configured car speed
+19:49:35.345 [CAR STOP] reasons=0x0 mission=1
+19:49:45.015 [CAR] STOPPED: MQTT STOP
+19:49:45.015 [CAR STOP] reasons=0x2 mission=10
+19:49:45.906 [B4] hump 14 mm +/-3, peak 9 deg, 0 cm, INVALID
+19:49:45.906 [B4]   one wheel (height from roll): roll peak 7.2 deg -> track x sin = 14.03 mm, pitch term 21.00 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:49:55.668 [CAR] MQTT START requested at configured car speed
+19:49:55.668 [CAR STOP] reasons=0x0 mission=1
+19:50:00.837 [CAR ROUTE] accepted=1 junction=3 phase=0 command=4 done=2
+19:50:04.660 [CAR ROUTE] accepted=1 junction=4 phase=7 command=4 done=2
+19:50:04.812 [B4] hump 6 mm +/-5, peak 3 deg, 7 cm, INVALID
+19:50:04.812 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 74 mm
+19:50:04.930 [CAR ROUTE] accepted=1 junction=4 phase=5 command=4 done=2
+19:50:06.095 [CAR ROUTE] accepted=1 junction=4 phase=6 command=4 done=2
+19:50:08.952 [B4] hump 4 mm +/-3, peak 1 deg, 1 cm, INVALID
+19:50:08.952 [B4]   one wheel (height from roll): roll peak 2.1 deg -> track x sin = 4.10 mm, pitch term 3.17 mm | width 0 mm (no fit: cm = path), path 11 mm
+19:50:09.024 [CAR ROUTE] accepted=1 junction=4 phase=0 command=4 done=3
+
+# session 18: group18-combined-adcpoll-retry80-2026-11-25, 2026-11-24T19:50:22.384Z to 2026-11-24T19:51:39.865Z UTC, 845 batches, 6 gaps
+19:51:03.605 [B4] hump 11 mm +/-3, peak 1 deg, 0 cm, INVALID
+19:51:03.605 [B4]   one wheel (height from roll): roll peak 5.8 deg -> track x sin = 11.31 mm, pitch term 2.26 mm | width 0 mm (no fit: cm = path), path 0 mm
+19:51:08.680 [B4] hump 11 mm +/-3, peak 5 deg, 0 cm, INVALID
+19:51:08.680 [B4]   one wheel (height from roll): roll peak 5.8 deg -> track x sin = 11.31 mm, pitch term 10.65 mm | width 0 mm (no fit: cm = path), path 5 mm
+19:51:24.766 [CAR] MQTT START requested at configured car speed
+19:51:27.171 [B4] hump 4 mm +/-3, peak 2 deg, 4 cm, INVALID
+19:51:27.171 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 49 mm
+19:51:29.106 [B5 PROFILE] n=1 scan=1 ahead_mm=201 L=found dir=13 x_mm=-42 y_mm=181 clear_mm=0 R=found dir=-3 x_mm=13 y_mm=244 clear_mm=1479 width_mm=84 centre_x_mm=-14 side=RIGHT backoffs=0
+19:51:38.213 [CAR STOP] reasons=0x8 mission=10
+19:51:38.269 [B5 RESULT] n=1 outcome=ABORTED ms=9983 scan_ms=3294 ahead_mm=201 width_mm=84 edges=both centre_x_mm=-14 side=RIGHT lclear_mm=0 rclear_mm=1479 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+19:51:38.414 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=6 command=3 wheel_mask=0x3 before_target=60/40 before_speed=0/0 mm/s speed_valid=0
+19:51:38.491 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:51:38.491 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+19:51:38.491 [CAR STOP] reasons=0x9 mission=10
+19:51:39.602 [B4] hump 89 mm +/-24, peak 39 deg, 7 cm, INVALID
+19:51:39.602 [B4]   full width (height from pitch): roll peak 7.7 deg -> track x sin = 15.00 mm, pitch term 81.45 mm | width 0 mm (no fit: cm = path), path 70 mm
+
+# session 19: group18-combined-adcpoll-retry80-2026-11-25, 2026-11-24T19:51:46.101Z to 2026-11-24T19:52:12.737Z UTC, 347 batches, 5 gaps
+19:51:48.534 [B4] hump 23 mm +/-3, peak 7 deg, 0 cm, INVALID
+19:51:48.605 [B4]   one wheel (height from roll): roll peak 11.8 deg -> track x sin = 22.90 mm, pitch term 15.61 mm | width 0 mm (no fit: cm = path), path 2 mm
+19:51:51.781 [CAR] MQTT START requested at configured car speed
+19:51:55.714 [B4] hump 6 mm +/-3, peak 2 deg, 3 cm, INVALID
+19:51:55.714 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 34 mm
+19:51:58.255 [B5 PROFILE] n=1 scan=1 ahead_mm=198 L=missing R=found dir=-3 x_mm=12 y_mm=233 clear_mm=446 width_mm=- centre_x_mm=- side=RIGHT backoffs=0
+19:52:01.526 [B4] hump 8 mm +/-5, peak 4 deg, 23 cm, valid
+19:52:01.526 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 8.39 mm | width 230 mm (profile 25/75% fit), path 105 mm
+19:52:04.909 [B4] hump 4 mm +/-4, peak 5 deg, 11 cm, INVALID
+19:52:04.909 [B4]   one wheel (height from roll): roll peak 3.0 deg -> track x sin = 5.86 mm, pitch term 11.33 mm | width 110 mm (profile 25/75% fit), path 93 mm
+19:52:07.936 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:52:08.867 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:52:09.592 [B5 RESULT] n=1 outcome=REJOIN_UNVERIFIED ms=15696 scan_ms=4653 ahead_mm=198 width_mm=- edges=right_only centre_x_mm=- side=RIGHT lclear_mm=0 rclear_mm=446 aligned=0 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=119 depth_mm=101 reason="tracking and wheel progress not confirmed"
+19:52:12.265 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+19:52:12.401 [B4] hump 10 mm +/-13, peak 4 deg, 32 cm, valid
+19:52:12.401 [B4]   full width (height from pitch): roll peak 1.6 deg -> track x sin = 3.12 mm, pitch term 9.97 mm | width 324 mm (profile 25/75% fit), path 293 mm
+19:52:12.737 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+
+# session 20: group18-combined-adcpoll-retry80-2026-11-25, 2026-11-24T19:52:17.291Z to 2026-11-24T19:56:45.422Z UTC, 3183 batches, 25 gaps
+
+# session 21: group18-combined-adcpoll-retry80-2026-11-25, 2026-11-24T19:56:51.755Z to 2026-11-24T19:56:54.848Z UTC, 47 batches, 1 gaps
+
+# session 22: group18-combined-retry80-bidirectional-2026-11-25, 2026-11-24T19:57:17.158Z to 2026-11-24T19:57:46.694Z UTC, 390 batches, 13 gaps
+19:57:37.995 [CAR] MQTT START requested at configured car speed
+
+# session 23: group18-combined-retry80-bidirectional-2026-11-25, 2026-11-24T19:57:52.722Z to 2026-11-24T19:58:26.365Z UTC, 452 batches, 14 gaps
+19:57:58.872 [CAR] MQTT START requested at configured car speed
+19:58:05.921 [B4] hump 3 mm +/-3, peak 1 deg, 5 cm, INVALID
+19:58:05.921 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 2.95 mm | width 0 mm (no fit: cm = path), path 57 mm
+19:58:08.216 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:58:10.468 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 [GROUND] L=0 R=0 adc=174 valid=1 seq=21413
+19:58:10.618 [B4] hump 30 mm +/-7, peak 12 deg, 15 cm, valid
+19:58:10.618 [B4]   full width (height from pitch): roll peak 2.9 deg -> track x sin = 5.66 mm, pitch ter <cut>
+
+# session 24: group18-combined-retry80-bidirectional-2026-11-25, 2026-11-24T19:58:31.360Z to 2026-11-24T19:59:34.845Z UTC, 802 batches, 31 gaps
+19:58:34.556 [CAR] MQTT START requested at configured car speed
+19:58:42.037 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=12732 steering=digital[B4] hump 2 mm +/-4, peak 2 deg, 8 cm, INVALID
+19:58:42.097 [B4]   one wheel (height from roll): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 85 mm
+19:58:44.002 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:58:44.002 [B4] hump 3 mm +/-6, peak 2 deg, 11 cm, INVALID
+19:58:44.002 [B4]   one wheel (height from roll): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 5.21 mm | w[GROUND] L=1 R=1 adc=186 valid=1 seq=14955
+19:58:44.074 [CAR] STOPPED: MQTT STOP
+19:58:44.074 [CAR STOP] reasons=0x2 mission=10
+19:58:44.074 [CAR ROUTE] accepted=0 junction=1 phase=0 command=0 done=0
+
+# session 25: group18-combined-retry80-bidirectional-2026-11-25, 2026-11-24T19:59:41.116Z to 2026-11-24T20:10:40.778Z UTC, 8009 batches, 108 gaps
+19:59:43.073 [CAR] MQTT START requested at configured car speed
+19:59:45.816 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+19:59:46.281 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+19:59:52.967 [B4] hump 7 mm +/-26, peak 8 deg, 26 cm, INVALID
+19:59:53.047 [B4]   one wheel (height from roll): roll peak 7.9[B2 TRACK] fw=b2-straight80-right95-digital t_ms=15600 steering=digital curve=0 target=80/76 measured=63/64 mm/s speed_valid=1 effort=197/162 output_valid=1 floor_mask=0x0 state=2 gen=3 rejected=0 trim=9500
+19:59:53.509 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+19:59:54.009 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+19:59:56.611 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+19:59:56.682 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.[GROUND] L=0 R=0 adc=210 valid=1 seq=19243
+19:59:56.897 [CAR STOP] reasons=0x3 mission=10
+19:59:57.368 [B4] hump 10 mm +/-13, peak 7 deg, 11 cm, valid
+19:59:57.368 [B4]   one wheel (height from roll): roll peak 6.0 deg -> track x sin = 11.70 mm, pitch term 16.28 mm | width 110 mm (profile 25/75% fit), path 169 mm
+
+# session 26: group18-combined-retry80-partial-marker-2026-11-25, 2026-11-24T20:11:13.500Z to 2026-11-24T20:14:56.783Z UTC, 2673 batches, 174 gaps
+20:11:26.626 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)te=0 | search=0 n=0 fail=0 | b5 moves ok=0 rej=0 | wd cutoffs=0 | reread n=0 ok=0
+20:11:26.684 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+20:11:26.684 [CAR STOP] reasons=0x1 mission=10
+20:11:27.743 [B4] hump 21 mm +/-3, peak 9 deg, 0 cm, INVALID
+20:11:27.743 [B4]   full width (height from pitch): roll peak 2.2 deg -> track x sin = 4.29 mm, pitch term 20.78 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:11:34.303 [CAR] MQTT START requested at configured car speed
+20:11:34.374 [CAR STOP] reasons=0x0 mission=1
+20:11:38.459 [B4] hump 5 mm +/-5, peak 2 deg, 11 cm, valid
+20:11:38.459 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 114 mm
+20:11:40.936 [B4] hump 5 mm +/-4, peak 2 deg, 8 cm, valid
+20:11:40.936 [B4]   full width (height from pitch): roll <cut>
+20:11:44.737 [GROUND] L=0 R=0 adc=153 v[CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:11:45.098 [B4] hump 6 mm +/-4, peak 3 deg, 6 cm, INVALID
+20:11:45.098 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 65 mm
+20:11:46.306 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+20:11:46.734 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:11:46.734 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:11:46.734 [CAR STOP] reasons=0x1 mission=10
+20:11:46.734 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+20:11:48.119 [B4] hump 17 mm +/-3, peak 14 deg, 8 cm, valid
+20:11:48.119 [B4]   one wheel (height from roll): roll peak 8.7 deg -> track x sin = 16.93 mm, pitch term 31.66 mm | width 0 mm (no fit: cm = path), path 88 mm
+20:12:07.947 [CAR] MQTT START requested at configured car speed
+20:12:08.014 [CAR STOP] reasons=0x0 mission=1
+20:12:10.733 [B4] hump 4 mm +/-5, peak 2 deg, 42 cm, INVALID
+20:12:10.733 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.99 mm | width 420 mm (profile 25/75% fit), path 118 mm
+20:12:14.159 [B4] hump 5 mm +/-6, peak 2 deg, 12 cm, valid
+20:12:14.159 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 126 mm
+20:12:17.324 [B2 TRACK] fw=b2-straight80-right95-digital t_m[CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=1
+20:12:17.465 [B4] hump 5 mm +/-6, <cut>
+20:12:17.524 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 100 mm
+20:12:17.860 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+20:12:19.964 [CAR ROUTE][GROUND] L=1 R=1 adc=376 valid=1 seq=60107
+20:12:20.294 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:12:20.294 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:12:20.370 [CAR STOP] reasons=0x1 mission=10
+20:12:20.370 [CAR ROUTE] accepted=0 junction=4 phase=0 command=3 done=2
+20:12:21.216 [B4] hump 35 mm +/-3, peak 15 deg, 9 cm, valid
+20:12:21.216 [B4]   full width (height from pitch): roll peak 7.7 deg -> track x sin = 15.00 mm, pitch term 34.51 mm | width 0 mm (no fit: cm = path), path 91 mm
+20:12:24.259 [CAR] MQTT START requested at configured car speed
+20:12:24.259 [CAR STOP] reasons=0x0 mission=1
+20:12:30.194 [CAR ROUTE] accepted=1 junction=4 phase=0 command=4 done=2
+20:12:31.124 [B4] hump 6 mm +/-11, peak 2 deg, 30 cm, valid
+20:12:31.124 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch ter[B2 TRACK] fw=b2-straight80-right95-digital t_ms=71050 steering=digital curve=0 target=80/76 measured=78/78 mm/s speed_valid=1 effort=190/183 output_valid=1 floor_mask=0x0 state=2 gen=89 rejected=0 trim=9500
+20:12:32.184 [CAR ROUTE] accepted=1 junction=5 phase=5 command=4 done=2
+20:12:33.153 [CAR ROUTE] accepted=1 junction=5 phase=6 command=4 done=2
+20:12:34.947 [B4] hump 10 mm +/-18, peak 5 deg, 8 cm, valid
+20:12:34.947 [B4]   full width (height from pitch): roll peak 2.0 deg -> track x sin = 3.91 mm, pitch term 10.65 mm | width 80 mm (profile 25/75% fit), path 527 mm
+20:12:35.987 [CAR ROUTE] accepted=1 junction=5 phase=0 command=4 done=3
+20:12:37.718 [B4] hump 3 mm +/-3, peak 2 deg, 5 cm, INVALID
+20:12:37.718 [B4]   one wheel (height from roll): roll peak 1.4 deg -> track x sin = 2.73 mm, pit <cut>
+20:12:47.350 [CAR ROUTE] accepted=1 junction=6 phase=0 command=3 done=4
+20:12:48.493 [B4] hump 81 mm +/-10, peak 25 deg, 11 cm, valid
+20:12:48.557 [B4]   one wheel (height from roll): roll peak 46.2 deg -> track x sin = 80.83 mm, pitch term 55.34 mm | width 0 mm (no fit: cm = path), path 112 mm
+20:12:53.175 [CAR] MQTT START requested at configured car speed
+20:12:53.175 [CAR STOP] reasons=0x0 mission=1
+20:12:55.729 [B4] hump 5 mm +/-5, peak 2 deg, 9 cm, valid
+20:12:55.731 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 97 mm
+20:13:00.297 [B4] hump 4 mm +/-6, peak 2 deg, 24 cm, INVALID
+20:13:00.368 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.08 mm | width 239 mm (profile 25/75% fit), path 132 mm
+20:13:02.770 [CAR ROUTE] accepted=2 junction=7 phase=7 command=4 done=4
+20:13:02.956 [B4] hump 6 mm +/-4, peak 2 deg, 4 cm, INVALID
+20:13:02.956 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 49 mm
+20:13:03.226 [CAR ROUTE] accepted=2 junction=7 phase=5 command=4 done=4
+20:13:04.252 [CAR ROUTE] accepted=2 junction=7 phase=6 command=4 done=4
+20:13:06.216 [B4] hump 5 mm +/-3, peak 2 deg, 1 cm, INVALID
+20:13:06.216 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 14 mm
+20:13:06.557 [CAR ROUTE] accepted=2 junction=7 phase=0 command=4 done=5
+20:13:16.714 [CAR ROUTE] accepted=2 junction=8 phase=7 command=4 done=5
+20:13:16.795 [CAR] STOPPED: MQTT STOP
+20:13:16.795 [CAR STOP] reasons=0x2 mission=10
+20:13:16.795 [CAR ROUTE] accepted=2 junction=8 phase=0 command=4 done=5
+20:13:16.862 [B4] hump 13 mm +/-20, peak 3 deg, 57 cm, INVALID
+20:13:16.862 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 573 mm
+20:14:12.131 [B4] hump 41 mm +/-3, peak 15 deg, 0 cm, INVALID
+20:14:12.131 [B4]   one wheel (height from roll): roll peak 21.6 deg -> track x sin = 41.22 mm, pitch term 33.42 mm | width 0 mm (no fit: cm = path), path 2 mm
+20:14:25.967 [CAR] MQTT START requested at configured car speed
+20:14:25.967 [CAR STOP] reasons=0x0 mission=1
+20:14:29.746 [B4] hump 5 mm +/-4, peak 2 deg, 9 cm, valid
+20:14:29.746 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 91 mm
+20:14:32.546 [B4] hump 2 mm +/-4, peak 2 deg, 8 cm, INVALID
+20:14:32.624 [B4]   one wheel (height from roll): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 3.40 mm | width 0 mm (no fit: cm = path), path 86 mm
+20:14:32.972 [CAR ROUTE] accepted=3 junction=8 phase=0 comman[B2 TRACK] fw=b2-straight80-right95-digital t_ms=193043 steering=digital curve=0 target=80/76 measured=83/78 mm/s speed_valid=1 effort=192/180 output_valid=1 floor_mask=0x0 state=2 gen=127 rejected=0 trim=9500
+20:14:34.520 [CAR ROUTE] accepted=3 junction=9 phase=7 command=4 done=5
+20:14:34.868 [CAR ROUTE] accepted=3 junction=9 phase=5 command=4 done=5
+20:14:35.312 [CAR] STOPPED: MQTT STOP
+20:14:35.312 [CAR STOP] reasons=0x2 mission=10
+20:14:35.318 [CAR ROUTE] accepted=3 junction=9 phase=0 command=4 done=5
+20:14:35.644 [B4] hump 7 mm +/-4, peak 4 deg, 21 cm, valid
+20:14:35.644 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 7.93 mm | width 213 mm (profile 25/75% fit), path 98 mm
+20:14:38.199 [B4] hump 10 mm +/-3, peak 7 deg, 0 cm, INVALID
+20:14:38.199 [B4]   one wheel (height from roll): roll peak 5.0 deg -> track x sin = 9.76 mm, pitch term 14.71 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:14:40.506 [CAR] MQTT START requested at configured car speed
+20:14:40.506 [CAR STOP] reasons=0x0 mission=1
+20:14:44.229 [CAR ROUTE] accepted=3 junction=10 phase=7 command=4 done=5
+20:14:44.282 [B4] hump 6 mm +/-7, peak 3 deg, 15 cm, valid
+20:14:44.282 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 152 mm
+20:14:44.544 [CAR ROUTE] accepted=3 junction=10 phase=0 command=3 done=6
+20:14:46.897 [CAR ROUTE] accepted=3 junction=11 phase=7 command=3 done=6
+20:14:46.934 [CAR ROUTE] accepted=3 junction=11 phase=0 command=3 done=7
+20:14:52.346 [CAR] MQTT START requested at configured car speed
+20:14:52.346 [CAR STOP] reasons=0x0 mission=1
+20:14:56.566 [B4] hump 7 mm +/-9, peak 3 deg, 22 cm, valid
+20:14:56.566 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 6.57 mm | width 0 mm (no fit: cm = path), path 229 mm
+
+# session 27: group18-combined-retry80-partial-marker-2026-11-25, 2026-11-24T20:15:03.003Z to 2026-11-24T20:23:47.777Z UTC, 5841 batches, 148 gaps
+20:15:22.049 [CAR] MQTT START requested at configured car speed
+20:15:29.621 [B4] hump 2 mm +/-7, peak 2 deg, 18 cm, INVALID
+20:15:29.697 [B4]   one wheel (height from roll): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 189 mm
+20:15:31.102 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=31910 steering=d[CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:15:31.229 [B4] hump 6 mm +/-4, peak 3 deg, 7 cm, INVALID
+20:15:31.229 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 77 mm
+20:15:31.602 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:15:33.537 [B4 TASK] loops=1716 (+50) sa[B4] hump 2 mm +/-4, peak 2 deg, 5 cm, INVALID
+20:15:33.615 [B4]   one wheel (height from roll): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 59 mm
+20:15:34.715 [CAR ROUTE] accepted=0 junction=2 phase=7 comm[B2 TRACK] fw=b2-straight80-right95-digital t_ms=35526 steering=idle curve=0 target=0/0 measured=91/13 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=3 rejected=0 trim=9500
+20:15:35.247 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+20:15:35.247 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:15:35.256 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:15:35.256 [CAR STOP] reasons=0x1 mission=10
+20:15:37.625 [B4] hump 13 mm +/-3, peak 9 deg, 3 cm, INVALID
+20:15:37.625 [B4]   one wheel (height from roll): roll peak 6.7 deg -> track x sin = 13.06 mm, pitch term 20.11 mm | width 0 mm (no fit: cm = path), path 31 mm
+20:15:38.564 [CAR] MQTT START requested at configured car speed
+20:15:38.564 [CAR STOP] reasons=0x0 mission=1
+20:15:45.594 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+20:15:45.831 [B4] hump 5 mm +/-4, peak 2 deg, 7 cm, INVALID
+20:15:45.884 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 71 mm
+20:15:46.031 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+20:15:47.696 [CAR ROUTE] accepted=0 junction=4 phase=7 comma[B2 TRACK] fw=b2-straight80-right95-digital t_ms=48454 steering=idle curve=0 target=0/0 measured=91/64 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=26 rejected=0 trim=9500
+20:15:48.217 [CAR ROUTE] accepted=0 junction=4 phase=0 command=3 done=4
+20:15:48.287 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:15:48.287 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:15:48.287 [CAR STOP] reasons=0x1 mission=10
+20:15:51.142 [B4] hump 47 mm +/-3, peak 14 deg, 7 cm, INVALID
+20:15:51.142 [B4]   one wheel (height from roll): roll peak 25.0 deg -> track x sin = 47.33 mm, pitch term 31.66 mm | width 0 mm (no fit: cm = path), path 70 mm
+20:15:54.627 [CAR] RUN: following the line (no time limit)
+20:15:54.627 [CAR STOP] reasons=0x0 mission=1
+20:16:02.770 [CAR ROUTE] accepted=0 junction=5 phase=7 command=[B2 TRACK] fw=b2-straight80-right95-digital t_ms=63422 steering=idle curve=0 target=0/0 measured=82/82 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=79 rejected=0 trim=9500
+20:16:02.866 [B4] hump 5 mm +/-5, peak 2 deg, 9 cm, valid
+20:16:02.866 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 93 mm
+20:16:03.077 [CAR STOP] reasons=0x1 mission=10
+20:16:03.077 [CAR ROUTE] accepted=0 junction=5 phase=0 command=3 done=4
+20:16:09.077 [B4] hump 26 mm +/-3, peak 5 deg, 0 cm, INVALID
+20:16:09.077 [B4]   one wheel (heigh roll): roll peak 13.2 deg -> track x sin = 25.57 mm, pitch term 11.78 mm | width 0 mm (no fit: cm = path), path 1 mm
+20:16:18.630 [CAR] MQTT START requested at configured car speed
+20:16:18.630 [CAR STOP] reasons=0x0 mission=1
+20:16:26.405 [CAR ROUTE] accepted=0 junction=6 phase=0 command=3 done=5
+20:16:28.853 [CAR ROUTE] accepted=0 junction=7 phase=7 command=3 done=5
+20:16:30.334 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:16:30.334 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:16:30.334 [CAR STOP] reasons=0x1 mission=10
+20:16:30.334 [CAR ROUTE] accepted=0 junction=7 phase=0 command=3 done=5
+20:16:30.812 [B4] hump 15 mm +/-3, peak 11 deg, 9 cm, valid
+20:16:30.812 [B4]   one wheel (height from roll): roll peak 7.6 deg -> track x sin = 14.81 mm, pitch term 25.24 mm | width 0 mm (no fit: cm = path), path 94 mm
+20:16:32.537 [CAR] RUN: following the line (no time limit)
+20:16:32.537 [CAR STOP] reasons=0x0 mission=1
+20:16:36.380 [B4] hump 4 mm +/-5, peak 2 deg, 18 cm, INVALID
+20:16:36.380 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 3.85 mm | width 177 mm (profile 25/75% fit), path 107 mm
+20:16:39.116 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=9973[CAR ROUTE] accepted=0 junction=8 phase=7 command=3 done=5
+20:16:39.556 [CAR ROUTE] accepted=0 junction=8 phase=0 command=3 done=6
+20:16:42.393 [CAR ROUTE] accepted=0 junction=9 phase=7 command=3 don[GROUND] L=1 R=1 adc=154 valid=1 seq=37140
+20:16:42.471 [B4] hump 7 mm +/-6, peak 3 deg, 11 cm, valid
+20:16:42.471 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 118 mm
+20:16:42.897 [CAR ROUTE] accepted=0 junction=9 phase=0 command=3 done=7
+20:16:43.518 [CAR ROUTE] accepted=0 junction=10 phase=7 command=3 done=7
+20:16:44.119 [CAR ROUTE] accepted=0 junction=10 phase=0 command=3 done=8
+20:16:46.709 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:16:46.709 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:16:46.797 [CAR STOP] reasons=0x1 mission=10
+20:16:49.583 [B4] hump 49 mm +/-8, peak 21 deg, 5 cm, INVALID
+20:16:49.670 [B4]   full width (height from pitch): roll peak 6.2 deg -> track x sin = 12.09 mm, pitch term 47.43 mm | width 0 mm (no fit: cm = path), path 52 mm
+20:16:55.627 [CAR] MQTT START requested at configured car speed
+20:16:55.705 [CAR STOP] reasons=0x0 mission=1
+20:17:00.824 [B4] hump 4 mm +/-3, peak 2 deg, 8 cm, INVALID
+20:17:00.824 [B4]   one wheel (height from roll): roll peak 1.9 deg -> track x sin = 3.71 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 83 mm
+20:17:01.953 [CAR ROUTE] accepted=0 junction=11 phase=7 command=3 done=8
+20:17:02.411 [CAR ROUTE] accepted=0 junction=11 phase=0 command=3 done=9
+20:17:06.489 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+20:17:06.489 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+20:17:06.545 [CAR STOP] reasons=0x1 mission=10
+20:17:06.545 [CAR ROUTE] accepted=0 junction=12 phase=0 command=3 done=9
+20:17:08.103 [B4] hump 9 mm +/-11, peak 31 deg, 20 cm, INVALID
+20:17:08.103 [B4]   one wheel (height from roll): roll peak 20.2 deg -> track x sin = 38.67 mm, pitch term 65.97 mm | width 199 mm (profile 25/75% fit), path 218 mm
+20:17:17.515 [B4] hump 44 mm +/-12, peak 33 deg, 22 cm, INVALID
+20:17:17.515 [B4]   one wheel (height from roll): roll peak 23.1 deg -> track x sin = 43.94 mm, pitch term 70.60 mm | width 0 mm (no fit: cm = path), path 220 mm
+
+# session 28: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:24:13.305Z to 2026-11-24T20:24:55.879Z UTC, 483 batches, 25 gaps
+20:24:15.846 [CAR] MQTT START requested at configured car speed
+20:24:22.039 [B4] hump 2 mm +/-5, peak 2 deg, 10 cm, INVALID
+20:24:22.039 [B4]   one wheel (height from roll): roll peak 1.2
+20:24:24.100 [CAR ROUTE] accepted=0 junction=1 phase=7 command[B2 TRACK] fw=b2-straight80-right95-digital t_ms=14605 steering=idle curve=0 target=0/0 measured=74/70 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=2 rejected=0 trim=9500
+20:24:24.709 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:24:27.506 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+20:24:27.637 [CAR] STOPPED: MQTT STOP
+20:24:27.637 [CAR STOP] reasons=0x2 mission=10
+20:24:27.637 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+20:24:27.795 [B4] hump 6 mm +/-6, peak 3 deg, 10 cm, valid
+20:24:27.882 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 105 mm
+
+# session 29: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:25:01.993Z to 2026-11-24T20:26:18.465Z UTC, 873 batches, 31 gaps
+20:25:15.482 [CAR] MQTT START requested at configured car speed
+20:25:21.298 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:25:21.876 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+20:25:22.236 [B4] hump 13 mm +/-3, peak 5 deg, 1 cm, INVALID
+20:25:22.236 [B4]   full width (height from pitch): roll peak 2.0 deg -> track x sin = 3.91 mm, pitch term 11.78 mm | width 0 mm (no fit: cm = path), path 16 mm
+20:25:22.359 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+20:25:23.465 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+20:25:25.923 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+20:25:26.572 [CAR ROUTE] accepted=0 junction=4 phase=7 command=3 done=3
+20:25:26.996 [CAR ROUTE] accepted=0 junction=4 phase=0 command=3 done=4
+20:25:29.523 [CAR ROUTE] accepted=0 junction=5 phase=7 command=3 done=4
+20:25:29.832 [B4] hump 7 mm +/-4, peak 3 deg, 6 cm, INVALID
+20:25:29.832 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 61 mm
+20:25:29.962 [CAR ROUTE] accepted=0 junction=5 phase=0 command=3 done=5
+20:25:33.078 [CAR ROUTE] accepted=0 junction=6 phase=7 command=3 done=5
+20:25:33.207 [B4] hump 4 mm +/-5, peak 2 deg, 10 cm, INVALID
+20:25:33.207 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 106 mm
+20:25:33.520 [CAR ROUTE] accepted=0 junction=6 phase=0 command=3 done=6
+20:25:34.417 [CAR ROUTE] accepted=0 junction=7 phase=7 command=3 done=6
+20:25:34.486 [CAR] STOPPED: MQTT STOP
+20:25:34.486 [CAR STOP] reasons=0x2 mission=10
+20:25:34.486 [CAR ROUTE] accepted=0 junction=7 phase=0 command=3 done=6
+20:25:40.990 [B4] hump 13 mm +/-3, peak 6 deg, 0 cm, INVALID
+20:25:40.990 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 12.68 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:25:49.103 [B4] hump 13 mm +/-3, peak 6 deg, 0 cm, INVALID
+20:25:49.103 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 12.46 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:25:54.194 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:25:54.258 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:25:54.258 [CAR STOP] reasons=0x3 mission=10
+20:25:54.497 [B4] hump 39 mm +/-3, peak 14 deg, 0 cm, INVALID
+20:25:54.497 [B4]   full width (height from pitch): roll peak 6.9 deg -> track x sin = 13.45 mm, pitch term 32.10 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:26:02.358 [CAR] RUN: following the line (no time limit)
+20:26:02.358 [CAR STOP] reasons=0x0 mission=1
+20:26:09.592 [B5 PROFILE] n=1 scan=1 ahead_mm=208 L=missing R=found dir=-13 x_mm=44 y_mm=191 clear_mm=0 width_mm=- centre_x_mm=- side=NONE backoffs=0
+20:26:12.322 [B4] hump 5 mm +/-3, peak 2 deg, 3 cm, INVALID
+20:26:12.322 [B4]   full width (height from pitch): roll peak 0.2 deg -> track x sin = 0.38 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 33 mm
+20:26:12.624 [B4] hump 6 mm +/-3, peak 2 deg, 0 cm, INVALID
+20:26:12.624 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 2 mm
+
+# session 30: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:26:24.818Z to 2026-11-24T20:26:53.697Z UTC, 384 batches, 5 gaps
+20:26:31.899 [CAR] RUN: following the line (no time limit)
+20:26:38.884 [B5 PROFILE] n=1 scan=1 ahead_mm=211 L=missing R=found dir=-3 x_mm=13 y_mm=250 clear_mm=564 width_mm=- centre_x_mm=- side=RIGHT backoffs=0
+20:26:41.995 [B4] hump 7 mm +/-3, peak 3 deg, 22 cm, valid
+20:26:42.050 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 7.25 mm | width 223 mm (profile 25/75% fit), path 95 mm
+20:26:44.535 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+20:26:44.535 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+20:26:44.535 [B5 RESULT] n=1 outcome=ABORTED ms=10532 scan_ms=5050 ahead_mm=211 width_mm=- edges=right_only centre_x_mm=- side=RIGHT lclear_mm=0 rclear_mm=564 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+20:26:44.690 [CAR STOP] reasons=0x1 mission=10
+20:26:47.755 [B4] hump 22 mm +/-3, peak 5 deg, 0 cm, INVALID
+20:26:47.755 [B4]   one wheel (height from roll): roll peak 11.5 deg -> track x sin = 22.32 mm, pitch term 12.00 mm | width 0 mm (no fit: cm = path), path 3 mm
+
+# session 31: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:26:58.283Z to 2026-11-24T20:31:21.343Z UTC, 3212 batches, 25 gaps
+20:27:05.147 [B4] hump 11 mm +/-3, peak 6 deg, 0 cm, INVALID
+20:27:05.147 [B4]   one wheel (height from roll): roll peak 5.4 deg -> track x sin = 10.54 mm, pitch term 12.68 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:27:08.641 [CAR] RUN: following the line (no time limit)
+20:27:09.970 [B4] hump 6 mm +/-3, peak 3 deg, 5 cm, INVALID
+20:27:09.970 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 51 mm
+20:27:16.252 [B5 PROFILE] n=1 scan=1 ahead_mm=163 L=missing R=found dir=-23 x_mm=89 y_mm=209 clear_mm=1472 width_mm=- centre_x_mm=- side=RIGHT backoffs=0
+20:27:19.183 [B4] hump 7 mm +/-3, peak 3 deg, 8 cm, INVALID
+20:27:19.183 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 7.70 mm | width 81 mm (profile 25/75% fit), path 78 mm
+20:27:23.955 [B5 RESULT] n=1 outcome=REJOINED ms=13189 scan_ms=5528 ahead_mm=163 width_mm=- edges=right_only centre_x_mm=- side=RIGHT lclear_mm=0 rclear_mm=1472 aligned=0 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=133 depth_mm=14 reason="tracking handoff and wheel progress"
+20:27:24.464 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:27:25.217 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:27:25.427 [B4] hump 14 mm +/-3, peak 6 deg, 6 cm, INVALID
+20:27:25.510 [B4]   full width (height from pitch): roll peak 1.4 deg -> track x sin = 2.73 mm, pitch term 13.58 mm | width 0 mm (no fit: cm = path), path 69 mm
+20:27:29.059 [B4] hump 4 mm +/-3, peak 2 deg, 6 cm, INVALID
+20:27:29.059 [B4]   one wheel (height from roll): roll peak 2.0 deg -> track x sin = 3.91 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 62 mm
+20:27:32.237 [CAR STOP] reasons=0x8 mission=10
+20:27:32.363 [B2 STOP DETAIL] seq=1 reason=NO_WHEEL_PROGRESS result=7 gen=8 command=879 wheel_mask=0x1 before_target=9/120 before_speed=0/0 mm/s speed_valid=1
+20:27:33.831 [CAR STOP] reasons=0xa mission=10
+20:27:37.854 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:27:37.854 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:27:37.854 [CAR STOP] reasons=0xb mission=10
+20:27:37.854 [B4] hump 35 mm +/-6, peak 18 deg, 3 cm, INVALID
+20:27:37.854 [B4]   one wheel (height from roll): roll peak 18.0 deg -> track x sin = 34.61 mm, pitch term 39.74 mm | width 0 mm (no fit: cm = path), path 30 mm
+20:27:38.707 [B4] hump 25 mm +/-6, peak 1 deg, 3 cm, INVALID
+20:27:38.707 [B4]   one wheel (height from roll): roll peak 12.7 deg -> track x sin = 24.62 mm, pitch term 2.95 mm | width 0 mm (no fit: cm = path), path 30 mm
+20:30:30.181 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:30:30.181 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:30:32.460 [B4] hump 35 mm +/-3, peak 10 deg, 0 cm, INVALID
+20:30:32.460 [B4]   one wheel (height from roll): roll peak 18.1 deg -> track x sin = 34.79 mm, pitch term 23.46 mm | width 0 mm (no fit: cm = path), path 3 mm
+20:30:39.113 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:30:39.978 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:30:45.552 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:30:45.552 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:30:45.677 [B4] hump 14 mm +/-3, peak 6 deg, 0 cm, INVALID
+20:30:45.677 [B4]   full width (height from pitch): roll peak 2.4 deg -> track x sin = 4.68 mm, pitch term 13.13 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:30:53.230 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:30:54.577 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:31:10.115 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 32: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:31:26.242Z to 2026-11-24T20:33:39.083Z UTC, 1749 batches, 48 gaps
+20:31:29.599 [CAR] MQTT START requested at configured car speed
+20:31:37.933 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:31:38.377 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:31:38.481 [CAR] STOPPED: MQTT STOP
+20:31:38.543 [CAR STOP] reasons=0x2 mission=10
+20:31:40.094 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:31:40.094 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:31:40.094 [CAR STOP] reasons=0x3 mission=10
+20:31:40.763 [B4] hump 13 mm +/-3, peak 9 deg, 0 cm, INVALID
+20:31:40.763 [B4]   one wheel (height from roll): roll peak 6.5 deg -> track x sin = 12.67 mm, pitch term 20.11 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:31:42.889 [CAR] MQTT START requested at configured car speed
+20:31:42.889 [CAR STOP] reasons=0x0 mission=1
+20:31:50.979 [B5] sta[CAR] STOPPED: MQTT STOP
+20:31:51.051 [CAR STOP] reasons=0x2 mission=10
+20:31:51.125 [B4] hump 5 mm +/-3, peak 2 deg, 3 cm, INVALID
+20:31:51.125 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 34 mm
+20:31:55.973 [B4] hump 33 mm +/-3, peak 14 deg, 0 cm, INVALID
+20:31:55.973 [B4]   full width (height from pitch): roll peak 4.8 deg -> track x sin = 9.37 mm, pitch term 30.56 mm | width 0 mm (no fit: cm = path), path 1 mm
+20:31:58.543 [CAR] MQTT START requested at configured car speed
+20:31:58.543 [CAR STOP] reasons=0x0 mission=1
+20:31:59.961 [B4] hump 5 mm +/-3, peak 2 deg, 4 cm, INVALID
+20:31:59.961 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 49 mm
+20:32:07.923 [CAR ROUTE] accepted=0 junction=2 phase=7 comma[GROUND] L=1 R=1 adc=123 valid=1 seq=43640
+20:32:08.242 [CAR] STOPPED: MQTT STOP
+20:32:08.242 [CAR STOP] reasons=0x2 mission=10
+20:32:08.297 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+20:32:54.422 [B4] hump 46 mm +/-3, peak 20 deg, 0 cm, INVALID
+20:32:54.422 [B4]   full width (height from pitch): roll peak 7.0 deg -> track x sin = 13.64 mm, pitch term 45.31 mm | width 0 mm (no fit: cm = path), path 1 mm
+20:32:57.526 [CAR] MQTT START requested at configured car speed
+20:32:57.526 [CAR STOP] reasons=0x0 mission=1
+20:33:06.209 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=1
+20:33:07.720 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+20:33:08.109 [CAR] STOPPED: MQTT STOP
+20:33:08.109 [CAR STOP] reasons=0x2 mission=10
+20:33:09.457 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+20:33:09.457 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+20:33:09.457 [CAR STOP] reasons=0x3 mission=10
+20:33:09.851 [B4] hump 12 mm +/-3, peak 10 deg, 0 cm, INVALID
+20:33:09.851 [B4]   one wheel (height from roll): roll peak 6.3 deg -> track x sin = 12.28 mm, pitch term 21.67 mm | width 0 mm (no fit: cm = path), path 1 mm
+20:33:23.112 [CAR] MQTT START requested at configured car speed
+20:33:23.112 [CAR STOP] reasons=0x0 mission=1
+20:33:25.159 [B4] hump 5 mm +/-4, peak 2 deg, 7 cm, INVALID
+20:33:25.159 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 79 mm
+20:33:27.924 [CAR ROUTE] accepted=1 junction=3 phase=0 command=1 done=2
+20:33:31.812 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=127126 steering=digital curve=-2 target=54/93 mea[CAR ROUTE] accepted=1 junction=4 phase=7 command=1 done=2
+20:33:32.246 [CAR ROUTE] accepted=1 junction=4 phase=5 command=1 done=2
+20:33:32.834 [B4] hump 5 mm +/-3, peak 2 deg, 22 cm, INVALID
+20:33:32.834 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.99 mm | width 218 mm (profile 25/75% fit), path 58 mm
+20:33:33.295 [CAR ROUTE] accepted=1 junction=4 phase=6 command=1 done=2
+20:33:34.470 [CAR ROUTE] accepted=1 junction=4 phase=0 command=1 done=3
+20:33:35.386 [CAR ROUTE] accepted=1 junction=5 phase=7 command=1 done=3
+20:33:36.223 [CAR ROUTE] accepted=1 junction=5 phase=0 command=3 done=4
+
+# session 33: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:33:43.580Z to 2026-11-24T20:34:12.875Z UTC, 399 batches, 7 gaps
+20:33:46.961 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:33:46.961 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:33:46.961 [CAR STOP] reasons=0x1 mission=10
+20:33:47.570 [B4] hump 15 mm +/-3, peak 5 deg, 0 cm, INVALID
+20:33:47.570 [B4]   one wheel (height from roll): roll peak 7.8 deg -> track x sin = 15.19 mm, pitch term 12.00 mm | width 0 mm (no fit: cm = path), path 1 mm
+20:33:56.568 [CAR] MQTT START requested at configured car speed
+20:33:56.568 [CAR STOP] reasons=0x0 mission=1
+20:34:01.398 [CAR ROUTE] accepted=1 junction=0 phase=0 command=2 done=0
+20:34:05.502 [CAR ROUTE] accepted=1 junction=1 phase=5 command=2 done=0
+20:34:06.613 [CAR ROUTE] accepted=1 junction=1 phase=6 command=2 done=0
+20:34:08.632 [CAR ROUTE] accepted=1 junction=1 phase=0 command=2 done=1
+20:34:10.467 [B4] hump 4 mm +/-3, peak 1 deg, 9 cm, INVALID
+20:34:10.467 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 3.17 mm | width 0 mm (no fit: cm = path), path 90 mm
+20:34:12.467 [CAR ROUTE] accepted=1 junction=2 phase=7 command=2 done=1
+20:34:12.799 [CAR ROUTE] accepted=1 junction=2 phase=0 command=3 done=2
+
+# session 34: group18-combined-retry80-closing-bars-2026-11-25, 2026-11-24T20:34:19.128Z to 2026-11-24T20:36:19.337Z UTC, 1486 batches, 60 gaps
+20:34:21.116 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:34:21.198 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:34:21.198 [CAR STOP] reasons=0x1 mission=10
+20:34:22.040 [B4] hump 51 mm +/-8, peak 23 deg, 1 cm, INVALID
+20:34:22.040 [B4]   full width (height from pitch): roll peak 7.4 deg -> track x sin = 14.42 mm, pitch term 50.16 mm | width 0 mm (no fit: cm = path), path 15 mm
+20:34:32.489 [CAR] MQTT START requested at configured car speed
+20:34:32.489 [CAR STOP] reasons=0x0 mission=1
+20:34:38.049 [B4] hump 5 mm +/-3, peak 2 deg, 5 cm, INVALID
+20:34:38.049 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 56 mm
+20:34:41.284 [CAR ROUTE] accepted=0 junction=1 phase=7 command <cut>
+20:34:41.749 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:34:45.118 [B4] hump 6 mm +/-6, peak 2 deg, 12 cm, valid
+20:34:45.118 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 124 mm
+20:34:45.126 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+20:34:48.982 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:34:48.982 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:34:48.982 [CAR STOP] reasons=0x1 mission=10
+20:34:48.982 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+20:34:50.449 [B4] hump 38 mm +/-9, peak 12 deg, 33 cm, valid
+20:34:50.449 [B4]   one wheel (height from roll): roll peak 22.4 deg -> track x sin = 42.67 mm, pitch term 27.69 mm | width 325 mm (profile 25/75% fit), path 290 mm
+20:34:53.316 [CAR] MQTT START requested at configured car speed
+20:34:53.316 [CAR STOP] reasons=0x0 mission=1
+20:34:55.576 [B4] hump 4 mm +/-3, peak 2 deg, 6 cm, INVALID
+20:34:55.576 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 63 mm
+20:35:02.517 [CAR ROUTE] accepted=1 junction=4 phase=7 command=4 done=2
+20:35:02.956 [CAR ROUTE] accepted=1 junction=4 phase=5 command=4 done=2
+20:35:04.832 [B4] hump 5 mm +/-3, peak 2 deg, 6 cm, INVALID
+20:35:04.832 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 69 mm
+20:35:05.052 [CAR ROUTE] accepted=1 junction=4 phase=6 command=4 done=2
+20:35:06.226 [B4] hump 3 mm +/-3, peak 2 deg, 1 cm, INVALID
+20:35:06.226 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 18 mm
+20:35:06.740 [CAR ROUTE] accepted=1 junction=4 phase=0 command=4 done=3
+20:35:07.260 [CAR STOP] reasons=0x8 mission=10
+20:35:07.345 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=59 command=1773 wheel_mask=0x3 before_target=9/120 before_speed=0/0 mm/s speed_valid=0
+20:35:54.945 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:35:58.654 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+20:36:10.182 [B4] hump 12 mm +/-3, peak 7 deg, 0 cm, INVALID
+20:36:10.182 [B4]   one wheel (height from roll): roll peak 5.9 deg -> track x sin = 11.51 mm, pitch term 16.28 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:36:14.027 [B4] hump 2 mm +/-3, peak 2 deg, 0 cm, INVALID
+20:36:14.027 [B4]   one wheel (height from roll): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 0 mm
+20:36:14.617 [B4] hump 4 mm +/-3, peak 1 deg, 0 cm, INVALID
+20:36:14.617 [B4]   one wheel (height from roll): roll peak 2.1 deg -> track x sin = 4.10 mm, pitch term 2.49 mm | width 0 mm (no fit: cm = path), path 1 mm
+
+# session 35: group18-combined-retry80-controller-trace-2026-11-25, 2026-11-24T20:36:47.945Z to 2026-11-24T20:36:53.411Z UTC, 77 batches, 0 gaps
+
+# session 36: group18-combined-retry80-controller-trace-2026-11-25, 2026-11-24T20:36:59.757Z to 2026-11-24T20:37:10.055Z UTC, 148 batches, 3 gaps
+20:37:04.838 [CAR] MQTT START requested at configured car speed
+20:37:08.626 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:37:09.013 [B4] hump 4 mm +/-3, peak 2 deg, 5 cm, INVALID
+20:37:09.089 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 50 mm
+20:37:09.172 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+
+# session 37: group18-combined-retry80-controller-trace-2026-11-25, 2026-11-24T20:37:28.251Z to 2026-11-24T20:38:16.010Z UTC, 677 batches, 6 gaps
+20:37:32.018 [CAR] MQTT START requested at configured car speed
+20:37:35.030 [B4] hump 3 mm +/-3, peak 2 deg, 6 cm, INVALID
+20:37:35.030 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 68 mm
+20:37:39.102 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+20:37:39.171 [B4] hump 3 mm +/-6, peak 2 deg, 12 cm, INVALID
+20:37:39.171 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 129 mm
+20:37:39.554 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+20:37:40.855 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+20:37:40.867 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+20:37:40.867 [CAR STOP] reasons=0x1 mission=10
+20:37:42.154 [B4] hump 41 mm +/-11, peak 13 deg, 5 cm, INVALID
+20:37:42.154 [B4]   one wheel (height from roll): roll peak 21.3 deg -> track x sin = 40.68 mm, pitch term 29.24 mm | width 0 mm (no fit: cm = path), path 57 mm
+20:37:45.966 [CAR] RUN: following the line (no time limit)
+20:37:45.966 [CAR STOP] reasons=0x0 mission=1
+20:37:50.215 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+20:37:50.416 [B4] hump 4 mm +/-7, peak 2 de cm, INVALID
+20:37:50.416 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 174 mm
+20:37:50.723 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+20:37:52.834 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:37:52.834 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:37:52.914 [CAR STOP] reasons=0x1 mission=10
+20:37:53.250 [B4] hump 7 mm +/-3, peak 3 deg, 2 cm, INVALID
+20:37:53.250 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 26 mm
+20:37:54.687 [B4] hump 11 mm +/-3, peak 5 deg, 1 cm, INVALID
+20:37:54.762 [B4]   one wheel (height from roll): rak 5.7 deg -> track x sin = 11.12 mm, pitch term 11.78 mm | width 0 mm (no fit: cm = path), path 10 mm
+20:37:55.017 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+20:37:55.017 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+20:37:57.313 [CAR] RUN: following the line (no time limit)
+20:37:57.313 [CAR STOP] reasons=0x0 mission=1
+20:38:01.807 [B4] hump 9 mm +/-8, peak 4 deg, 38 cm, valid
+20:38:01.893 [B4]   full width (height from pitch): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 8.39 mm | width 378 mm (profile 25/75% fit), path 211 mm
+20:38:03.857 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+20:38:04.318 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+20:38:05.547 [CAR] STOPPED: MQTT STOP
+20:38:05.547 [CAR STOP] reasons=0x2 mission=10
+20:38:09.465 [B4] hump 8 mm +/-7, peak 3 deg, 10 cm, INVALID
+20:38:09.465 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 7.70 mm | width 0 mm (no fit: cm = path), path 109 mm
+
+# session 38: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:27:48.773Z to 2026-11-25T01:34:29.239Z UTC, 5059 batches, 106 gaps
+01:28:03.390 [CAR] MQTT START requested at configured car speed
+01:28:11.191 [CAR ROUTE] accepted=0 junction=1 phase=7 comma[GROUND] L=1 R=1 adc=178 valid=1 seq=9045
+01:28:11.263 [B4] hump 4 mm +/-3, peak 2 deg, 7 cm, INVALID
+01:28:11.263 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 73 mm
+01:28:11.631 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+01:28:14.554 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+01:28:14.711 [B4] hump 2 mm +/-3, peak 2 deg, 2 cm, INVALID
+01:28:14.711 [B4]   one wheel (height from roll): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 25 mm
+01:28:14.986 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+01:28:16.239 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+01:28:16.314 [CAR] STOPPED: MQTT STOP
+01:28:16.314 [CAR STOP] reasons=0x2 mission=10
+01:28:16.314 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+01:28:17.571 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+01:28:17.571 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+01:28:17.652 [CAR STOP] reasons=0x3 mission=10
+01:28:22.464 [B4] hump 63 mm +/-3, peak 26 deg, 0 cm, INVALID
+01:28:22.464 [B4]   full width (height from pitch): roll peak 12.7 deg -> track x sin = 24.62 mm, pitch term 56.37 mm | width 0 mm (no fit: cm = path), path 2 mm
+01:28:24.887 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:28:24.887 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:28:26.072 <cut> [B4] hump 26 mm +/-3, peak 20 deg, 0 cm, INVALID
+01:28:26.072 [B4]   one wheel (height from roll): roll p <cut>
+01:28:27.638 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:28:27.638 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:28:29.432 [B4] hump 12 mm +/-3, peak 3 deg, 0 cm, INVALID
+01:28:29.432 [B4]   one wheel (height from roll): roll peak 6.4 deg -> track x sin = 12.48 mm, pitch term 6.80 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:28:32.121 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:28:32.121 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:28:39.947 [B4] hump 62 mm +/-3, peak 29 deg, 0 cm, INVALID
+01:28:39.947 [B4]   one wheel (height from roll): roll peak 33.5 deg -> track x sin = 61.81 mm, pitch term 62.02 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:28:47.954 [B4] hump 57 mm +/-3, peak 22 deg, 0 cm, INVALID
+01:28:47.954 [B4]   full width (height from pitch): roll peak 10.2 deg -> track x sin = 19.83 mm, pitch term 48.90 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:28:56.079 [B4] hump 35 mm +/-3, peak 14 deg, 0 cm, INVALID
+01:28:56.079 [B4]   full width (height from pitch): roll peak 5.7 deg -> track x sin = 11.12 mm, pitch term 32.32 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:28:59.543 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:28:59.543 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:29:04.545 [B4] hump 21 mm +/-3, peak 15 deg, 0 cm, INVALID
+01:29:04.545 [B4]   one wheel (height from roll): roll peak 10.9 deg -> track x sin = 21.17 mm <cut>
+01:29:09.586 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:29:09.586 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:29:12.878 [B4] hump 33 mm +/-3, peak 28 deg, 0 cm, INVALID
+01:29:12.878 [B4]   one wheel (height from roll): roll peak 17.1 deg -> track x sin = 32.93 mm, pitch term 60.82 mm | width 0 mm (no fit: cm = path), path 2 mm
+01:29:13.971 [B4] hump 17 mm +/-3, peak 6 deg, 0 cm, INVALID
+01:29:13.971 [B4]   one wheel (height from roll): roll peak 8.9 deg -> track x sin = 17.32 mm, pitch term 12.68 mm | width 0 mm (no fit: cm = path), path 2 mm
+01:29:20.295 [CAR] MQTT START requested at configured car speed
+01:29:20.295 [CAR STOP] reasons=0x0 mission=1
+01:29:26.656 [CAR ROUTE] accepted=1 junction=3 phase=0 command=1 done=2
+01:29:28.119 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=151374 steering=digital curve=0 target=80/7[B4] hump 5 mm +/-3, peak 2 deg, 6 cm, INVALID
+01:29:28.190 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 63 mm
+01:29:28.598 [CAR ROUTE] accepted=1 junction=4 phase=5 command=1 done=2
+01:29:29.744 [CAR ROUTE] accepted=1 junction=4 phase=6 command=1 done=2
+01:29:31.355 [B4] hump 3 mm +/-3, peak 2 deg, 0 cm, INVALID
+01:29:31.355 [B4]   one wheel (height from roll): roll peak 1.6 deg -> track x sin = 3.12 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 4 mm
+01:29:31.662 [CAR ROUTE] accepted=1 junction=4 phase=0 command=1 done=3
+01:29:33.412 [B4] hump 8 mm +/-4, peak 3 deg, 8 cm, valid
+01:29:33.412 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 7.48 mm | width 0 mm (no fit: cm = path), path 82 mm
+01:29:38.775 [CAR] STOPPED: MQTT STOP
+01:29:38.836 [CAR STOP] reasons=0x2 mission=10
+01:29:39.162 [B4] hump 5 mm +/-3, peak 2 deg, 5 cm, INVALID
+01:29:39.162 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 58 mm
+01:29:44.832 [B4] hump 25 mm +/-3, peak 9 deg, 0 cm, INVALID
+01:29:44.832 [B4]   one wheel (height from roll): roll peak 12.9 deg -> track x sin = 25.00 mm, pitch term 19.43 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:29:48.671 [CAR] MQTT START requested at configured car speed
+01:29:48.671 [CAR STOP] reasons=0x0 mission=1
+01:29:53.809 [B4]   one wheel (height from roll): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 3.17 mm | width 0 mm (no fit: cm = path), path 47 mm
+01:29:55.254 [CAR ROUTE] accepted=2 junction=4 phase=0 command=4 done=3
+01:29:56.734 [CAR ROUTE] accepted=2 junction=5 phase=7 com[GROUND] L=1 R=1 adc=156 valid=1 seq=48440
+01:29:56.909 [B4] hump 2 mm +/-5, peak 2 deg, 10 cm, INVALID
+01:29:56.909 [B4]   one wheel (height from roll): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 107 mm
+01:29:56.969 [CAR ROUTE] accepted=2 junction=5 phase=5 command=4 done=3
+01:29:58.226 [CAR ROUTE] accepted=2 junction=5 phase=6 command=4 done=3
+01:29:59.805 [B4] hump 5 mm +/-3, peak 2 deg, 1 cm, INVALID
+01:29:59.805 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 12 mm
+01:30:00.435 [CAR ROUTE] accepted=2 junction=5 phase=0 command=4 done=4
+01:30:08.078 [CAR STOP] reasons=0x2 mission=10
+01:31:29.215 [B4] hump 17 mm +/-3, peak 14 deg, 0 cm, INVALID
+01:31:29.215 [B4]   one wheel (height from roll): roll peak 8.8 deg -> track x sin = 17.13 mm, pitch term 30.78 mm | width 0 mm (no fit: cm = path), path 1 mm
+01:31:35.119 [CAR] MQTT START requested at configured car speed
+01:31:35.119 [CAR STOP] reasons=0x0 mission=1
+01:31:42.878 [CAR] run=1 mode=2 mission=1 stops=0x0 steer=-32 source=digital | line_black L=1 R=0 state=1 last_side=1 | effort L=130 R=194 speed L=75 R=82 mm/s | drive=3418 rej=0 exec_rej=0[CAR ROUTE] accepted=2 junction=6 phase=7 command=4 done=4
+01:31:43.099 [CAR] STOPPED: MQTT STOP
+01:31:43.099 [CAR STOP] reasons=0x2 mission=10
+01:31:43.099 [CAR ROUTE] accepted=2 junction=6 phase=0 command=4 done=4
+01:31:48.752 [B4] hump 14 mm +/-3, peak 6 deg, 0 cm, INVALID
+01:31:48.752 [B4]   one wheel (height from roll): roll peak 7.3 deg -> track x sin = 14.22 mm, pitch term 13.58 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:32:02.723 [CAR] MQTT START requested at configured car speed
+01:32:02.723 [CAR STOP] reasons=0x0 mission=1
+01:32:10.849 [CAR ROUTE] accepted=3 junction=7 phase=7 command=2 done=4
+01:32:11.262 [CAR ROUTE] accepted=3 junction=7 phase=5 command=2 done=4
+01:32:12.107 [CAR ROUTE] accepted=3 junction=7 phase=6 command=2 done=4
+01:32:13.731 [CAR ROUTE] accepted=3 junction=7 phase=0 command=2 done=5
+01:32:15.250 [CAR ROUTE] accepted=3 junction=8 phase=7 command=2 done=5
+01:32:15.862 [CAR ROUTE] accepted=3 junction=8 phase=0 command=3 done=6
+01:32:16.499 [CAR STOP] reasons=0x8 mission=10
+01:32:16.499 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=244 command=4102 wheel_mask=0x3 before_target=53/42 before_speed=0/0 mm/s speed_valid=0
+01:32:17.347 [CAR STOP] reasons=0xa mission=10
+01:32:22.657 [B4] hump 12 mm +/-3, peak 5 deg, 2 cm, INVALID
+01:32:22.657 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 11.78 mm | width 0 mm (no fit: cm = path), path 24 mm
+01:32:31.015 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:32:31.015 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:32:31.015 [CAR STOP] reasons=0xb mission=10
+01:32:38.492 [B4] hump 31 mm +/-3, peak 16 deg, 0 cm, INVALID
+01:32:38.492 [B4]   one wheel (height from roll): roll peak 16.3 deg -> track x sin = 31.43 mm, pitch term 36.05 mm | width 0 mm (no fit: cm = path), path 4 mm
+01:32:45.055 [B4] hump 24 mm +/-3, peak 15 deg, 0 cm, INVALID
+01:32:45.055 [B4]   one wheel (height from roll): roll peak 12.5 deg -> track x sin = 24.24 mm, pitch term 33.64 mm | width 0 mm (no fit: cm = path), path 5 mm
+01:34:21.179 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+01:34:21.471 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+01:34:22.753 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 39: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:34:33.890Z to 2026-11-25T01:34:51.004Z UTC, 193 batches, 0 gaps
+01:34:37.438 [CAR] MQTT START requested at configured car speed
+01:34:46.307 [B5 PROFILE] n=1 scan=1 ahead_mm=233 L=missing R=found dir=-23 x_mm=69 y_mm=162 clear_mm=707 width_mm=- centre_x_mm=- side=RIGHT backoffs=0
+01:34:48.685 [B4] hump 9 mm +/-6, peak 4 deg, 14 cm, valid
+01:34:48.685 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 8.39 mm | width 0 mm (no fit: cm = path), path 142 mm
+
+# session 40: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:34:55.555Z to 2026-11-25T01:35:28.525Z UTC, 430 batches, 7 gaps
+01:34:59.935 [B4] hump 13 mm +/-3, peak 2 deg, 0 cm, INVALID
+01:34:59.935 [B4]   one wheel (height from roll): roll peak 6.7 deg -> track x sin = 13.06 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 1 mm
+01:35:09.311 [CAR] MQTT START requested at configured car speed
+01:35:16.695 [B5 PROFILE] n=1 scan=1 ahead_mm=169 L=missing R=found dir=-13 x_mm=32 y_mm=141 clear_mm=0 width_mm=- centre_x_mm=- side=NONE backoffs=0
+01:35:18.239 [B4] hump 5 mm +/-3, peak 2 deg, 3 cm, INVALID
+01:35:18.239 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 33 mm
+01:35:26.706 [B4] hump 5 mm +/-3, peak 2 deg, 0 cm, INVALID
+01:35:26.706 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 3 mm
+
+# session 41: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:35:33.640Z to 2026-11-25T01:52:14.021Z UTC, 1953 batches, 36 gaps
+01:48:51.868 [B2 TRAC[B4] hump 6 mm +/-6, peak 2 deg, 13 cm, valid
+01:48:51.940 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 134 mm
+01:48:52.233 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=34086 steering=digital curve=-11 target=18/1[CAR ROUTE] accepted=1 junction=4 phase=7 command=3 done=3
+01:48:52.614 [CAR ROUTE] accepted=1 junction=4 phase=0 command=3 done=4
+01:48:55.203 [CAR STOP] reasons=0x8 mission=10
+01:48:55.989 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:48:56.049 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:48:56.049 [CAR STOP] reasons=0x9 mission=10
+01:48:56.538 [B4] hump 41 mm +/-11, peak 18 deg, 6 cm, INVALID
+01:48:56.538 [B4]   full width (height from pitch): roll peak 7.1 deg -> track x sin = 13.84 mm, pitch term 39.08 mm | width 0 mm (no fit: cm = path), path 60 mm
+01:51:35.866 [B4] hump 41 mm +/-4, peak 18 deg, 0 cm, INVALID
+01:51:35.978 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 40.17 mm | width 0 mm (no fit: cm = path), path 7 mm
+01:52:01.799 [B4] hump 8 mm +/-3, peak 4 deg, 0 cm, INVALID
+01:52:01.799 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 8.39 mm | width 0 mm (no fit: cm = path), path 6 mm
+
+# session 42: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:52:22.883Z to 2026-11-25T01:55:02.386Z UTC, 1644 batches, 53 gaps
+01:52:27.547 [CAR] MQTT START requested at configured car speed
+01:52:34.178 [B2 TRACK] fw=b2-stra[CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+01:52:34.454 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+01:52:34.454 [CAR] STOPPED: MQTT STOP
+01:52:34.454 [CAR STOP] reasons=0x2 mission=10
+01:52:52.770 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:52:52.770 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:52:52.770 [CAR STOP] reasons=0x3 mission=10
+01:52:58.008 [B4] hump 28 mm +/-3, peak 13 deg, 0 cm, INVALID
+01:52:58.008 [B4]   one wheel (height from roll): roll peak 14.6 deg -> track x sin = 28.22 mm, pitch term 28.79 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:53:42.565 [B4] hump 1 mm +/-3, peak 18 deg, 0 cm, INVALID
+01:53:42.565 [B4]   full width (height from pitch): roll peak 2.0 deg -> track x sin = 3.91 mm, pitch term 41.03 mm | width 0 mm (no fit: cm = path), path 2 mm
+01:53:51.778 [B4] hump 0 mm +/-3, peak 19 deg, 0 cm, INVALID
+01:53:51.778 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 42.96 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:54:02.457 [B4] hump 41 mm +/-3, peak 19 deg, 0 cm, INVALID
+01:54:02.457 [B4]   full width (height from pitch): roll peak 2.7 deg -> track x sin = 5.27 mm, pitch term 41.24 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:54:09.320 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:54:09.320 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:54:10.753 [B4] hump 30 mm +/-3, peak 17 deg, 0 cm, INVALID
+01:54:10.753 [B4]   one wheel (height from roll): roll peak 15.8 deg -> track x sin = 30.49 mm, pitch term 38.65 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:54:11.622 [CAR] MQTT START requested at configured car speed
+01:54:11.622 [CAR STOP] reasons=0x0 mission=1
+01:54:18.712 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=119509 steering=digital curve=-3 target=53[CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+01:54:18.983 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+01:54:19.385 [CAR] STOPPED: MQTT STOP
+01:54:19.470 [CAR STOP] reasons=0x2 mission=10
+01:54:26.041 [B4] hump 16 mm +/-3, peak 11 deg, 0 cm, INVALID
+01:54:26.041 [B4]   one wheel (height from roll): roll peak 8.0 deg -> track x sin = 15.58 mm, pitch term 24.13 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:54:28.566 [CAR] MQTT START requested at configured car speed
+01:54:28.566 [CAR STOP] reasons=0x0 mission=1
+01:54:38.346 [CAR] STOPPED: MQTT STOP
+01:54:38.404 [CAR STOP] reasons=0x2 mission=10
+01:54:38.404 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=2
+01:54:56.188 [B4] hump 16 mm +/-3, peak 8 deg, 0 cm, INVALID
+01:54:56.188 [B4]   one wheel (height from roll): roll peak 8.3 deg -> track x sin = 16.16 mm, pitch term 18.53 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 43: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:55:08.604Z to 2026-11-25T01:55:55.375Z UTC, 562 batches, 69 gaps
+01:55:18.275 [CAR] MQTT START requested at configured car speed
+01:55:24.884 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+01:55:25.041 [B4 TASK] loops=613 (+50) sampl[B4] hump 5 mm +/-4, peak 2 deg, 8 cm, valid
+01:55:25.113 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 83 mm
+01:55:25.233 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+01:55:27.995 [CAR ROUTE] accepted=0 junctio[GROUND] L=0 R=1 adc=142 valid=1 seq=15253
+01:55:28.192 [B4] hump 6 mm +/-3, peak 2 deg, 4 cm, INVALID
+01:55:28.260 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 46 mm
+01:55:28.323 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+01:55:30.558 [CAR STOP] reasons=0x8 mission=10
+01:55:31.362 [CAR STOP] reasons=0xa mission=10
+01:55:31.362 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+01:55:31.362 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+01:55:31.478 [CAR STOP] reasons=0xb mission=10
+01:55:34.301 [B4] hump 67 mm +/-4, peak 24 deg, 2 cm, INVALID
+01:55:34.301 [B4]   one wheel (height from roll): roll peak 36.9 deg -> track x sin = 67.24 mm, pitch term 53.70 mm | width 0 mm (no fit: cm = path), path 24 mm
+01:55:53.455 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 44: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T01:56:01.949Z to 2026-11-25T02:00:03.794Z UTC, 3014 batches, 91 gaps
+01:56:03.847 [CAR] MQTT START requested at configured car speed
+01:56:11.214 [B4] hump 7 mm +/-4, peak 3 deg, 6 cm, INVALID
+01:56:11.214 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 6.80 mm | width 0 mm (no fit: cm = path), path 64 mm
+01:56:11.529 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+01:56:13.044 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=14819 steering=digital curve=2 target=97/53 measured=72[B4] hump 5 mm +/-3, peak 3 deg, 30 cm, INVALID
+01:56:13.105 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.89 mm | width 300 mm (profile 25/75% fit), path 59 mm
+01:56:13.453 [CAR] STOPPED: MQTT STOP
+01:56:13.517 [CAR STOP] reasons=0x2 mission=10
+01:56:18.447 [B4] hump 27 mm +/-3, peak 11 deg, 0 cm, INVALID
+01:56:18.447 [B4]   one wheel (height from roll): roll peak 13.8 deg -> track x sin = 26.71 mm, pitch term 23.68 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:56:31.885 [CAR] MQTT START requested at configured car speed
+01:56:31.885 [CAR STOP] reasons=0x0 mission=1
+01:56:37.935 [CAR] STOPPED: MQTT STOP
+01:56:37.935 [CAR STOP] reasons=0x2 mission=10
+01:56:38.309 [B4] hump 2 mm +/-4, peak 2 deg, 7 cm, INVALID
+01:56:38.309 [B4]   one wheel (height from roll): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 72 mm
+01:56:43.941 [B4] hump 32 mm +/-3, peak 12 deg, 0 cm, INVALID
+01:56:43.941 [B4]   full width (height from pitch): roll peak 6.3 deg -> track x sin = 12.28 mm, pitch term 27.25 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:56:44.008 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:56:44.008 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:56:44.008 [CAR STOP] reasons=0x3 mission=10
+01:57:00.308 [CAR] MQTT START requested at configured car speed
+01:57:00.308 [CAR STOP] reasons=0x0 mission=1
+01:57:07.757 [B4] hump 4 mm +/-4, peak 2 deg, 5 cm, INVALID
+01:57:07.757 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 56 mm
+01:57:07.945 [S3 TASK] t_ms=69604 loops=69539 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+01:57:08.367 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+01:57:09.043 [CAR] STOPPED: MQTT STOP
+01:57:09.105 [CAR STOP] reasons=0x2 mission=10
+01:57:19.968 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:57:20.031 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:57:20.031 [CAR STOP] reasons=0x3 mission=10
+01:57:21.026 [B4] hump 29 mm +/-3, peak 6 deg, 0 cm, INVALID
+01:57:21.026 [B4]   one wheel (height from roll): roll peak 15.2 deg -> track x sin = 29.36 mm, pitch term 14.48 mm | width 0 mm (no fit: cm = path), path 0 mm
+01:57:30.084 [CAR] MQTT START requested at configured car speed
+01:57:30.084 [CAR STOP] reasons=0x0 mission=1
+01:57:31.437 [B4] hump 3 mm +/-3, peak 2 deg, 39 cm, INVALID
+01:57:31.437 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 3.85 mm | width 390 mm (profile 25/75% fit), path 51 mm
+01:57:35.827 [B4] hump 3 mm +/-4, peak 1 deg, 6 cm, INVALID
+01:57:35.827 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 3.17 mm | width 0 mm (no fit: cm = path), path 62 mm
+01:57:37.955 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+01:57:38.317 [B4] hump 6 mm +/-3, peak 2 deg, 7 cm, INVALID
+01:57:38.317 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 74 mm
+01:57:38.450 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+01:57:40.424 [B4] hump 3 mm +/-3, peak 2 deg, 9 cm, INVALID
+01:57:40.424 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 90 mm
+01:57:40.582 [CAR STOP] reasons=0x3 mission=10
+01:57:43.519 [B4] hump 16 mm +/-3, peak 9 deg, 0 cm, INVALID
+01:57:43.519 [B4]   one wheel (height from roll): roll peak 8.3 deg -> track x sin = 16.16 mm, pitch term 19.43 mm | width 0 mm (no fit: cm = path), path 4 mm
+01:57:43.599 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:57:43.599 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:58:05.717 [CAR] MQTT START requested at configured car speed
+01:58:05.717 [CAR STOP] reasons=0x0 mission=1
+01:58:13.335 [B4] hump 6 mm +/-6, peak 2 deg, 13 cm, valid
+01:58:13.403 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 135 mm
+01:58:13.604 [B4 I2C] software bus | opens=1 step=done last_er=0 nacks=0 scl_stuck=0 | before recover SDA=1 SCL=1 pulses=0 | now SDA[CAR ROUTE] accepted=1 junction=4 phase=5 command=1 done=3
+01:58:14.233 [B4] hump 8 mm +/-4, peak 3 deg, 7 cm, INVALID
+01:58:14.233 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 6.80 mm | width 0 mm (no fit: cm = path), path 72 mm
+01:58:14.631 [CAR ROUTE] accepted=1 junction=4 phase=6 command=1 done=3
+01:58:15.527 [CAR ROUTE] accepted=1 junction=4 phase=0 command=1 done=4
+01:58:16.843 [B4] hump 6 mm +/-4, peak 4 deg, 51 cm, valid
+01:58:16.843 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 8.84 mm | width 506 mm (profile 25/75% fit), path 83 mm
+01:58:22.414 [B4] hump 8 mm +/-8, peak 3 deg, 19 cm, valid
+01:58:22.414 [B4]   one wheel (height from roll): roll peak 4.7 deg -> track x sin = 9.17 mm, pitch term 7.03 mm | width 191 mm (profile 25/75% fit), path 261 mm
+01:58:23.284 [CAR ROUTE] accepted=1 junction=5 phase=7 command=1 done=4
+01:58:23.648 [CAR ROUTE] accepted=1 junction=5 phase=0 command=3 done=5
+01:58:26.466 [B4] hump 6 mm +/-6, peak 3 deg, 24 cm, valid
+01:58:27.124 [CAR] STOPPED: MQTT STOP
+01:58:27.194 [B4] hump 4 mm +/-3, peak 2 deg, 1 cm, INVALID
+01:58:27.256 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 18 mm
+01:59:40.707 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+01:59:40.707 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+01:59:40.780 [CAR STOP] reasons=0x3 mission=10
+01:59:47.662 [GROUND] L=1 R=0 adc=160 valid=1 seq=34124[B4] hump 48 mm +/-3, peak 21 deg, 0 cm, INVALID
+01:59:47.723 [B4]   one wheel (height from roll): roll peak 25.2 deg -> track x sin = 47.68 mm, pitch term 46.58 mm | width 0 mm (no fit: cm = path), path 1 mm
+01:59:49.040 [B4] hump 19 mm +/-3, peak 4 deg, 0 cm, INVALID
+01:59:49.040 [B4]   one wheel (height from roll): roll peak 9.8 deg -> track x sin = 19.06 mm, pitch term 9.74 mm | width 0 mm (no fit: cm = path), path 4 mm
+
+# session 45: group18-combined-retry80-uturn-plus5-2026-11-25, 2026-11-25T02:00:10.655Z to 2026-11-25T02:05:29.042Z UTC, 3803 batches, 45 gaps
+02:00:26.410 [CAR] MQTT START requested at configured car speed
+02:00:32.970 [CAR ROUTE] accepted=1 junction=0 phase=0 command=1 done=0
+02:00:33.854 [CAR ROUTE] accepted=1 junction=1 phase=7 command=1[GROUND] L=1 R=1 adc=185 valid=1 seq=26949
+02:00:34.234 [B4] hump 3 mm +/-6, peak 2 deg, 10 cm, INVALID
+02:00:34.234 [B4]   one wheel (height from roll): roll peak 1.4 deg -> track x sin = 2.73 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 101 mm[GROUND] L=1 R=1 adc=186 valid=1 seq=27348
+02:00:34.381 [CAR ROUTE] accepted=1 junction=1 phase=5 command=1 done=0
+02:00:34.885 [B4] hump 5 mm +/-3, peak 2 deg, 6 cm, INVALID
+02:00:34.885 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 60 mm
+02:00:35.545 [CAR ROUTE] accepted=1 junction=1 phase=6 command=1 done=0
+02:00:36.791 [CAR ROUTE] accepted=1 junction=1 phase=0 command=1 done=1
+02:00:39.124 [B4] hump 9 mm +/-5, peak 4 deg, 11 cm, valid
+02:00:39.124 [B4]   full width (height from pitch): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 9.06 mm | width 0 mm (no fit: cm = path), path 112 mm
+02:00:42.419 [CAR ROUTE] accepted=1 junction=2 phase=7 command=1 done=1
+02:00:42.913 [CAR ROUTE] accepted=1 junction=2 phase=0 command=3 done=2
+02:00:44.992 [B4] hump 9 mm +/-6, peak 3 deg, 21 cm, valid
+02:00:44.992 [B4]   one wheel (height from roll): roll peak 5.2 deg -> track x sin = 10.15 mm, pitch term 7.70 mm | width 210 mm (profile 25/75% fit), path 125 mm
+02:00:45.289 [CAR ROUTE] accepted=1 junction=3 phase=7 command=3 done=2
+02:00:45.694 [CAR ROUTE] accepted=1 junction=3 phase=0 command=3 done=3
+02:00:48.420 [B4] hump 5 mm +/-5, peak 3 deg, 20 cm, valid
+02:00:48.420 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 6.80 mm | width 204 mm (profile 25/75% fit), path 108 mm
+02:00:49.110 [CAR] STOPPED: MQTT STOP
+02:00:49.110 [CAR STOP] reasons=0x2 mission=10
+02:04:29.005 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+02:04:29.005 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+02:04:29.005 [CAR STOP] reasons=0x3 mission=10
+02:04:35.627 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:04:35.627 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:04:36.516 [B4] hump 37 mm +/-3, peak 15 deg, 0 cm, INVALID
+02:04:36.516 [B4]   one wheel (height from roll): roll peak 19.5 deg -> track x sin = 37.38 mm, pitch term 34.30 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 46: group18-combined-b5-echo-exit-2026-11-25, 2026-11-25T02:06:07.023Z to 2026-11-25T02:07:38.549Z UTC, 1095 batches, 17 gaps
+02:06:19.054 [CAR] MQTT START requested at configured car speed
+02:06:22.635 [B4] hump 6 mm +/-7, peak 2 deg, 12 cm, valid
+02:06:22.635 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 128 mm
+02:06:25.794 [CAR ROUTE] accepted=1 junction=0 phase=0 command=1 done=0
+02:06:26.165 [CAR ROUTE] accepted=1 junction=1 phase=7 command=1 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=21110 steering=idle curve=0 target=0/0 measured=78/81 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=2 rejected=0 trim=9500
+02:06:26.520 [CAR ROUTE] accepted=1 junction=1 phase=5 command=1 done=0
+02:06:27.451 [CAR ROUTE] accepted=1 junction=1 phase=6 command=1 done=0
+02:06:28.384 [CAR ROUTE] accepted=1 junction=1 phase=0 command=1 done=0
+02:06:29.817 [B4] hump 10 mm +/-13, peak 4 deg, 29 cm, INVALID
+02:06:29.817 [B4]   full width (height from pitch): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 9.74 mm | width 0 mm (no fit: cm = path), path 292 mm
+02:06:32.879 [B5 PROFILE] n=1 scan=1 ahead_mm=157 L=found dir=3 x_mm=-8 y_mm=160 clear_mm=0 R=found dir=-13 x_mm=37 y_mm=159 clear_mm=2820 width_mm=45 centre_x_mm=14 side=RIGHT backoffs=0
+02:06:35.370 [CAR] STOPPED: MQTT STOP
+02:06:35.370 [CAR STOP] reasons=0x2 mission=10
+02:06:35.370 [B5 RESULT] n=1 outcome=ABORTED ms=6979 scan_ms=4695 ahead_mm=157 width_mm=45 edges=both centre_x_mm=14 side=RIGHT lclear_mm=0 rclear_mm=2820 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+02:06:35.638 [B4] hump 13 mm +/-4, peak 6 deg, 5 cm, INVALID
+02:06:35.638 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 13.13 mm | width 0 mm (no fit: cm = path), path 54 mm
+02:06:41.508 [B4] END OF RUN: car lifted 20 cm  20 cm)
+02:06:41.508 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:06:41.586 [CAR STOP] reasons=0x3 mission=10
+02:06:46.983 [B4] hump 10 mm +/-3, peak 3 deg, 0 cm, INVALID
+02:06:46.983 [B4]   one wheel (height from roll): roll peak 5.1 deg -> track x sin = 9.95 mm, pitch term 7.03 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:06:53.580 [CAR] MQTT START requested at configured car speed
+02:06:53.695 [CAR STOP] reasons=0x0 mission=1
+02:06:55.986 [B4] hump 23 mm +/-5, peak 9 deg, 6 cm, INVALID
+02:06:55.986 [B4]   full width (height from pitch): roll peak 4.9 deg -> track x sin = 9.56 mm, pitch term 20.78 mm | width 0 mm (no fit: cm = path), path 66 mm
+02:06:58.460 [B5 PROFILE] n=2 scan=1 ahead_mm=177 L=found dir=3 x_mm=-10 y_mm=189 clear_mm=0 R=found dir=-10 x_mm=33 y_mm=178 clear_mm=0 width_mm=44 centre_x_mm=12 side=NONE backoffs=0
+02:07:02.758 [B4] hump 8 mm +/-4, peak 3 deg, 4 cm, INVALID
+02:07:02.758 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 7.48 mm | width 0 mm (no fit: cm = path), path 47 mm
+02:07:04.721 [B5 PROFILE] n=2 scan=2 ahead_mm=277 L=found dir=3 x_mm=-14 y_mm=268 clear_mm=0 R=found dir=-30 x_mm=153 y_mm=259 clear_mm=840 width_mm=167 centre_x_mm=69 side=RIGHT backoffs=0
+02:07:06.707 [CAR] STOPPED: MQTT STOP
+02:07:06.784 [CAR STOP] reasons=0x2 mission=10
+02:07:06.784 [B5 RESULT] n=2 outcome=ABORTED ms=12304 scan_ms=10214 ahead_mm=277 width_mm=167 edges=both centre_x_mm=69 side=RIGHT lclear_mm=0 rclear_mm=840 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+02:07:13.033 [B4] hump 21 mm +/-5, peak 14 deg, 3 cm, INVALID
+02:07:13.033 [B4]   one wheel (height from roll): roll peak 10.9 deg -> track x sin = 21.17 mm, pitch term 30.56 mm | width 0 mm (no fit: cm = path), path 32 mm
+02:07:15.944 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:07:15.944 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:07:15.944 [CAR STOP] reasons=0x3 mission=10
+02:07:16.535 [CAR] MQTT START refused: pickup stop is still active.
+02:07:18.441 [B4] hump 2 mm +/-3, peak 2 deg, 0 cm, INVALID
+02:07:18.441 [B4]   one wheel (height from roll): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:07:22.501 [CAR] MQTT START requested at configured car speed
+02:07:22.501 [CAR STOP] reasons=0x0 mission=1
+02:07:25.473 [B4] hump 7 mm +/-7, peak 3 deg, 11 cm, valid
+02:07:25.483 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 6.57 mm | width 0 mm (no fit: cm = path), path 115 mm
+02:07:27.762 [B5 PROFILE] n=3 scan=1 ahead_mm=182 L=found dir=3 x_mm=-12 y_mm=233 clear_mm=0 R=found dir=-13 x_mm=49 y_mm=214 clear_mm=0 width_mm=65 centre_x_mm=19 side=NONE backoffs=0
+02:07:33.738 [B5 PROFILE] n=3 scan=2 ahead_mm=282 L=found dir=13 x_mm=-68 y_mm=293 clear_mm=0 R=found dir=-33 x_mm=174 y_mm=267 clear_mm=2700 width_mm=243 centre_x_mm=53 side=RIGHT backoffs=0
+02:07:34.747 [CAR] STOPPED: MQTT STOP
+02:07:34.747 [B5 RESULT] n=3 outcome=ABORTED ms=10461 scan_ms=9189 ahead_mm=282 width_mm=243 edges=both centre_x_mm=53 side=RIGHT lclear_mm=0 rclear_mm=2700 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+02:07:34.816 [CAR STOP] reasons=0x2 mission=10
+02:07:36.747 [B4] hump 9 mm +/-6, peak 4 deg, 5 cm, INVALID
+02:07:36.747 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 8.61 mm | width 0 mm (no fit: cm = path), path 56 mm
+
+# session 47: group18-combined-b5-sweep-2026-11-25, 2026-11-25T02:46:23.638Z to 2026-11-25T02:47:16.036Z UTC, 646 batches, 4 gaps
+02:46:32.035 [CAR] MQTT START requested at configured car speed
+02:46:41.112 [B5 PROFILE] n=1 scan=1 ahead_mm=179 L=found dir=13 x_mm=-51 y_mm=222 clear_mm=860 R=found dir=-23 x_mm=88 y_mm=208 clear_mm=3496 width_mm=140 centre_x_mm=19 side=LEFT backoffs=0
+02:46:43.996 [B4] hump 4 mm +/-4, peak 2 deg, 4 cm, INVALID
+02:46:43.996 [B4]   one wheel (height from roll): roll peak 2.3 deg -> track x sin = 4.49 mm, pitch term 5.21 mm | width 38 mm (profile 25/75% fit), path 107 mm
+02:46:47.694 [CAR STOP] reasons=0x8 mission=10
+02:46:47.845 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=6 command=3 wheel_mask=0x3 before_target=60/50 before_speed=0/0 mm/s speed_valid=0
+02:46:47.916 [B5 RESULT] n=1 outcome=ABORTED ms=13208 scan_ms=6733 ahead_mm=179 width_mm=140 edges=both centre_x_mm=19 side=LEFT lclear_mm=860 rclear_mm=3496 aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+02:46:56.085 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:46:56.085 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:46:56.085 [CAR STOP] reasons=0x9 mission=10
+02:46:56.211 [B4] hump 23 mm +/-3, peak 8 deg, 0 cm, INVALID
+02:46:56.211 [B4]   one wheel (height from roll): roll peak 12.1 deg -> track x sin = 23.47 mm, pitch term 18.98 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:46:57.101 [B4] hump 10 mm +/-3, peak 3 deg, 0 cm, INVALID
+02:46:57.101 [B4]   one wheel (height from roll): roll peak 5.2 deg -> track x sin = 10.15 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 3 mm
+02:47:10.866 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+02:47:14.177 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 48: group18-combined-b5-sweep-2026-11-25, 2026-11-25T02:47:23.762Z to 2026-11-25T02:49:51.639Z UTC, 1739 batches, 25 gaps
+02:47:25.882 [CAR] MQTT START requested at configured car speed
+02:47:27.698 [B4] hump 3 mm +/-3, peak 2 deg, 7 cm, INVALID
+02:47:27.698 [B4]   one wheel (height from roll): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 77 mm
+02:47:33.549 [B5 PROFILE] n=1 scan=1 ahead_mm=173 L=found dir=3 x_mm=-10 y_mm=185 clear_mm=0 R=found dir=-23 x_mm=76 y_mm=179 clear_mm=0 width_mm=86 centre_x_mm=33 side=NONE backoffs=0
+02:47:36.705 [B4] hump 7 mm +/-4, peak 3 deg, 4 cm, INVALID
+02:47:36.705 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 42 mm
+02:47:42.278 [B5 PROFILE] n=1 scan=2 ahead_mm=273 L=found dir=13 x_mm=-64 y_mm=278 clear_mm=749 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+02:47:47.471 [B4] hump 2 mm +/-3, peak 2 deg, 7 cm, INVALID
+02:47:47.559 [B4]   one wheel (height from roll): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 75 mm
+02:47:52.878 [B4] hump 3 mm +/-7, peak 3 deg, 4 cm, INVALID
+02:47:52.878 [B4]   one wheel (height from roll): roll peak 2.5 deg -> track x sin = 4.88 mm, pitch term 7.48 mm | width 43 mm (profile 25/75% fit), path 150 mm
+02:47:54.216 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+02:47:54.442 [B4] hump 8 mm +/-3, peak 3 deg, 4 cm, INVALID
+02:47:54.442 [B4]   full width (height from pitch): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 7.70 mm | width 0 mm (no fit: cm = path), path 42 mm
+02:47:54.951 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+02:47:55.499 [B5 RESULT] n=1 outcome=REJOIN_UNVERIFIED ms=28432 scan_ms=15264 ahead_mm=273 width_mm=- edges=left_only centre_x_mm=- side=LEFT lclear_mm=749 rclear_mm=0 aligned=0 backoffs=0 reverses=1 reacq=0 pass=clear side_mm=114 depth_mm=69 reason="tracking and wheel progress not confirmed"
+02:47:58.122 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+02:47:58.536 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+02:47:59.490 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=2
+02:48:00.119 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=3
+02:48:01.144 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:48:01.144 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:48:01.144 [CAR STOP] reasons=0x1 mission=10
+02:48:01.281 [B5 RESULT] n=2 outcome=ABORTED ms=1002 scan_ms=0 ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=- aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+02:48:04.510 [B4] hump 23 mm +/-6, peak 11 deg, 2 cm, INVALID
+02:48:04.510 [B4]   one wheel (height from roll): roll peak 11.7 deg -> track x sin = 22.71 mm, pitch term 25.69 mm | width 0 mm (no fit: cm = path), path 29 mm
+02:48:05.394 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+02:48:05.394 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+02:48:05.753 [B4] hump 14 mm +/-3, peak 4 deg, 0 cm, INVALID
+02:48:05.753 [B4]   one wheel (height from roll): roll peak 7.0 deg -> track x sin = 13.64 mm, pitch term 8.84 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:48:07.439 [B4] hump 8 mm +/-3, peak 5 deg, 0 cm, INVALID
+02:48:07.439 [B4]   one wheel (height from roll): roll peak 4.2 deg -> track x sin = 8.20 mm, pitch term 11.55 mm | width 0 mm (no fit: cm = path), path 1 mm
+02:48:12.544 [B4] hump 16 mm +/-3, peak 5 deg, 0 cm, INVALID
+02:48:12.544 [B4]   one wheel (height from roll): roll peak 8.2 deg -> track x sin = 15.97 mm, pitch term 11.33 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:48:12.546 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+02:48:12.546 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+02:48:45.012 [CAR] MQTT START requested at configured car speed
+02:48:45.012 [CAR STOP] reasons=0x0 mission=1
+02:48:47.325 [B4] hump 4 mm +/-3, peak 2 deg, 25 cm, INVALID
+02:48:47.411 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.53 mm | width 249 mm (profile 25/75% fit), path 64 mm
+02:48:51.741 [CAR] STOPPED: MQTT STOP
+02:48:51.741 [CAR STOP] reasons=0x2 mission=10
+02:48:52.242 [B4] hump 9 mm +/-3, peak 4 deg, 0 cm, INVALID
+02:48:52.242 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 8.16 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:48:53.008 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:48:53.008 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:48:53.075 [CAR STOP] reasons=0x3 mission=10
+02:48:53.221 [B4] hump 40 mm +/-3, peak 16 deg, 0 cm, INVALID
+02:48:53.221 [B4]   full width (height from pitch): roll peak 4.7 deg -> track x sin = 9.17 mm, pitch term 36.26 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:48:53.736 [B4] hump 8 mm +/-3, peak 6 deg, 0 cm, INVALID
+02:48:53.817 [B4]   one wheel (height from roll): roll peak 4.2 deg -> track x sin = 8.20 mm, pitch term 12.68 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:48:55.216 [CAR] MQTT START requested at configured car speed
+02:48:55.216 [CAR STOP] reasons=0x0 mission=1
+02:49:03.556 [B5 PROFILE] n=3 scan=1 ahead_mm=173 L=found dir=3 x_mm=-9 y_mm=172 clear_mm=849 R=found dir=-3 x_mm=9 y_mm=170 clear_mm=0 width_mm=18 centre_x_mm=0 side=LEFT backoffs=0
+02:49:06.407 [B4] hump 6 mm +/-4, peak 2 deg, 8 cm, valid
+02:49:06.407 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 85 mm
+02:49:11.423 [B4] hump 7 mm +/-5, peak 4 deg, 11 cm, valid
+02:49:11.423 [B4]   full width (height from pitch): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 8.16 mm | width 109 mm (profile 25/75% fit), path 94 mm
+02:49:22.819 [CAR] STOPPED: MQTT STOP
+02:49:22.819 [CAR STOP] reasons=0x2 mission=10
+02:49:22.819 [B5 RESULT] n=3 outcome=ABORTED ms=25598 scan_ms=6229 ahead_mm=173 width_mm=18 edges=both centre_x_mm=0 side=LEFT lclear_mm=849 rclear_mm=0 aligned=0 backoffs=0 reverses=0 reacq=0 pass=unseen side_mm=- depth_mm=- reason="AUTO ended"
+02:49:23.003 [B4] hump 5 mm +/-3, peak 3 deg, 1 cm, INVALID
+02:49:23.079 [B4]   one wheel (height from roll): roll peak 2.4 deg -> track x sin = 4.68 mm, pitch term 6.80 mm | width 0 mm (no fit: cm = path), path 10 mm
+02:49:27.752 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:49:27.752 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:49:27.752 [CAR STOP] reasons=0x3 mission=10
+02:49:30.634 [B4] hump 27 mm +/-3, peak 18 deg, 0 cm, INVALID
+02:49:30.634 [B4]   one wheel (height from roll): roll peak 14.2 deg -> track x sin = 27.47 mm, pitch term 40.38 mm | width 0 mm (no fit: cm = path), path 1 mm
+02:49:35.617 [CAR] MQTT START requested at configured car speed
+02:49:35.790 [CAR STOP] reasons=0x0 mission=1
+02:49:43.638 [B5 PROFILE] n=4 scan=1 ahead_mm=173 L=found dir=3 x_mm=-9 y_mm=177 clear_mm=0 R=found dir=0 x_mm=0 y_mm=173 clear_mm=0 width_mm=10 centre_x_mm=-5 side=NONE backoffs=0
+02:49:50.909 [CAR] STOPPED: MQTT STOP
+02:49:50.909 [CAR STOP] reasons=0x2 mission=10
+02:49:50.909 [B5 RESULT] n=4 outcome=ABORTED ms=13140 scan_ms=5840 ahead_mm=173 width_mm=10 edges=both centre_x_mm=-5 side=NONE lclear_mm=0 rclear_mm=0 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+
+# session 49: group18-combined-b5-sweep-2026-11-25, 2026-11-25T02:49:57.441Z to 2026-11-25T02:56:53.846Z UTC, 1802 batches, 20 gaps
+02:49:59.932 [B4] hump 11 mm +/-3, peak 6 deg, 0 cm, INVALID
+02:49:59.932 [B4]   one wheel (height from roll): roll peak 5.6 deg -> track x sin = 10.92 mm, pitch term 13.58 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:50:00.189 [CAR] MQTT START requested at configured car speed
+02:50:01.883 [B4] hump 5 mm +/-3, peak 2 deg, 7 cm, INVALID
+02:50:01.883 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 77 mm
+02:50:08.459 [B5 PROFILE] n=1 scan=1 ahead_mm=176 L=found dir=13 x_mm=-39 y_mm=169 clear_mm=0 R=found dir=-3 x_mm=10 y_mm=192 clear_mm=1005 width_mm=54 centre_x_mm=-14 side=RIGHT backoffs=0
+02:50:12.138 [B4] hump 7 mm +/-6, peak 4 deg, 28 cm, valid
+02:50:12.138 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 8.84 mm | width 276 mm (profile 25/75% fit), path 136 mm
+02:50:12.945 [B4] hump 5 mm +/-3, peak 2 deg, 2 cm, INVALID
+02:50:12.945 [B4]   full width (height from pitch): roll peak 0.3 deg -> track x sin = 0.58 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 20 mm
+02:50:14.685 [B4] hump 6 mm +/-3, peak 2 deg, 6 cm, INVALID
+02:50:14.685 [B4]   full width (height from pitch): roll peak 0.4 deg -> track x sin = 0.78 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 64 mm
+02:50:17.867 [B4] hump 8 mm +/-7, peak 4 deg, 12 cm, valid
+02:50:17.867 [B4]   full width (height from pitch): roll peak 1.4 deg -> track x sin = 2.73 mm, pitch term 8.61 mm | width 123 mm (profile 25/75% fit), path 139 mm
+02:50:21.196 [B5 RESULT] n=1 outcome=REJOINED ms=17600 scan_ms=6199 ahead_mm=176 width_mm=54 edges=both centre_x_mm=-14 side=RIGHT lclear_mm=0 rclear_mm=1005 aligned=0 backoffs=0 reverses=0 reacq=0 pass=clear side_mm=148 depth_mm=5 reason="tracking handoff and wheel progress"
+02:50:22.615 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+02:50:22.688 [B4] hump 8 mm +/-6, peak 3 deg, 11 cm, valid
+02:50:22.688 [B4]   full width (height from pitch): roll peak 1.5 deg -> track x sin = 2.93 mm, pitch term 7.70 mm | width 0 mm (no fit: cm = path), path 115 mm
+02:50:23.036 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+02:50:23.891 [CAR STOP] reasons=0x8 mission=10
+02:50:23.972 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=8 command=693 wheel_mask=0x3 before_target=119/38 before_speed=0/0 mm/s speed_valid=0
+02:50:26.122 [CAR STOP] reasons=0xa mission=10
+02:55:43.237 [B4] hump 3 mm +/-3, peak 2 deg, 0 cm, INVALID
+02:55:43.237 [B4]   one wheel (height from roll): roll peak 1.3g -> track x sin = 2.54 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:55:44.136 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+02:55:44.136 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+02:55:44.136 [CAR STOP] reasons=0xb mission=10
+02:55:47.912 [B4] hump 6 mm +/-3, peak 2 deg, 0 cm, INVALID
+02:55:47.912 [B4]   one wheel (height from roll): roll peak 3.2 deg -> track x sin = 6.25 mm, pitch term 5.44 mm | width 0 mm (no fit: cm = path), path 0 mm
+02:55:48.826 [B4] hump 5 mm +/-3, peak 2 deg, 0 cm, INVALID
+02:55:48.826 [B4]   one wheel (height from roll): roll peak 2.4 deg -> track x sin = 4.68 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 50: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:04:55.102Z to 2026-11-25T03:05:01.476Z UTC, 82 batches, 1 gaps
+
+# session 51: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:05:07.277Z to 2026-11-25T03:09:43.611Z UTC, 3311 batches, 65 gaps
+03:05:10.459 [CAR] MQTT START requested at configured car speed
+03:05:18.858 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=14731 steering=digital curve=-2 targe[S3 CAP] id=1 ok=0 n=21 pass=0 fail=1 us=22017,79858,128220,90849,129997,81069,22924,538011,114948,120030,106040,314969,9776,94183,137018,74512[CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:05:19.333 [CAR] STOPPED: MQTT STOP
+03:05:19.333 [CAR STOP] reasons=0x2 mission=10
+03:05:19.333 [CAR ROUTE] accepted=0 junction=1 phase=0 command=0 done=0
+03:05:20.136 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:05:20.197 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:05:20.197 [CAR STOP] reasons=0x3 mission=10
+03:05:22.758 [B4] hump 34 mm +/-4, peak 19 deg, 0 cm, INVALID
+03:05:22.758 [B4]   one wheel (height from roll): roll peak 17.7 deg -> track x sin = 34.04 mm, pitch term 43.17 mm | width 0 mm (no fit: cm = path), path 8 mm
+03:05:31.414 [CAR] MQTT START requested at configured car speed
+03:05:31.414 [CAR STOP] reasons=0x0 mission=1
+03:05:39.901 [CAR ROUTE] accepted=0 junction=2 phase=7 command=0 done=0
+03:05:40.375 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=1
+03:05:41.203 [CAR] STOPPED: MQTT STOP
+03:05:41.203 [CAR STOP] reasons=0x2 mission=10
+03:05:42.380 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:05:42.380 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:05:42.424 [CAR STOP] reasons=0x3 mission=10
+03:05:47.796 [B4] hump 55 mm +/-3, peak 22 deg, 0 cm, INVALID
+03:05:47.796 [B4]   full width (height from pitch): roll peak 11.9 deg -> track x sin = 23.09 mm, pitch term 48.69 mm | width 0 mm (no fit: cm = path), path 8 mm
+03:05:48.976 [CAR] MQTT START requested at configured car speed
+03:05:48.976 [CAR STOP] reasons=0x0 mission=1
+03:05:55.259 [CAR ROUTE] accepted=0 junction=3 phase=7 command=3 done=1
+03:05:55.401 [CAR] STOPPED: MQTT STOP
+03:05:55.401 [CAR STOP] reasons=0x2 mission=10
+03:05:55.468 [CAR ROUTE] accepted=0 junction=3 phase=0 command=3 done=1
+03:05:59.775 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:05:59.775 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:05:59.775 [CAR STOP] reasons=0x3 mission=10
+03:06:00.209 [B4] hump 17 mm +/-3, peak 13 deg, 0 cm, INVALID
+03:06:00.209 [B4]   one wheel (height from roll): roll peak 8.7 deg -> track x sin = 16.93 mm, pitch term 29.46 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:06:09.515 [CAR] MQTT START requested at configured car speed
+03:06:09.515 [CAR STOP] reasons=0x0 mission=1
+03:06:18.257 [CAR ROUTE] accepted=1 junction=4 phase=7 command=1 done=1
+03:06:18.693 [CAR ROUTE] accepted=1 junction=4 phase=5 command=1 done=1
+03:06:19.217 [B4] hump 6 mm +/-3, peak 3 deg, 9 cm, INVALID
+03:06:19.217 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 6.57 mm | width 91 mm (profile 25/75% fit), path 57 mm
+03:06:19.634 [CAR ROUTE] accepted=1 junction=4 phase=6 command=1 done=1
+03:06:21.068 [CAR ROUTE] accepted=1 junction=4 phase=0 command=1 done=2
+03:06:22.666 [B4] hump 4 mm +/-3, peak 2 deg, 7 cm, INVALID
+03:06:22.737 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.99 mm | width 68 mm (profile 25/75% fit), path 47 mm
+03:06:24.176 [CAR ROUTE] accepted=1 junction=5 phase=7 command=1 done=2
+03:06:24.561 [B4] hump 6 mm +/-5, peak 3 deg, 8 cm, valid
+03:06:24.561 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 86 mm
+03:06:24.693 [CAR ROUTE] accepted=1 junction=5 phase=0 command=3 done=3
+03:06:35.903 [B5 PROFILE] n=1 scan=1 ahead_mm=160 L=found dir=0 x_mm=0 y_mm=160 clear_mm=2901 R=found dir=-13 x_mm=18 y_mm=148 clear_mm=458 width_mm=22 centre_x_mm=9 side=LEFT backoffs=1
+03:06:39.084 [B4] hump 5 mm +/-4, peak 3 deg, 12 cm, valid
+03:06:39.084 [B4]   one wheel (height from roll): roll peak 2.4 deg -> track x sin = 4.68 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 123 mm
+03:06:41.724 [B4] hump 5 mm +/-3, peak 2 deg, 0 cm, INVALID
+03:06:41.724 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.53 mm | width 0 mm (no fit: cm = path), path 2 mm
+03:06:46.191 [CAR STOP] reasons=0x8 mission=10
+03:06:46.243 [B5 RESULT] n=1 outcome=ABORTED ms=18461 scan_ms=7954 ahead_mm=160 width_mm=22 edges=both centre_x_mm=9 side=LEFT lclear_mm=2901 rclear_mm=458 aligned=0 backoffs=1 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+03:06:47.058 [B2 STOP DETAIL] seq=1 reason=NO_WHEEL_PROGRESS result=7 gen=135 command=6 wheel_mask=0x1 before_target=60/51 before_speed=0/0 mm/s speed_valid=1
+03:06:51.334 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:06:51.334 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:06:51.334 [CAR STOP] reasons=0x9 mission=10
+03:06:52.049 [CAR STOP] reasons=0xb mission=10
+03:06:55.829 [B4] hump 33 mm +/-3, peak 19 deg, 0 cm, INVALID
+03:06:55.829 [B4]   one wheel (height from roll): roll peak 17.1 deg -> track x sin = 32.93 mm, pitch term 42.53 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:07:07.862 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+03:07:07.862 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+03:07:15.424 [B4] hump 37 mm +/-3, peak 30 deg, 0 cm, INVALID
+03:07:15.424 [B4]   one wheel (height from roll): roll peak 19.1 deg -> track x sin = 36.64 mm, pitch term 64.20 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:07:34.935 [B4] hump 0 mm +/-3, peak 18 deg, 0 cm, INVALID
+03:07:34.935 [B4]   full width (height from pitch): roll peak 1.4 deg -> track x sin = 2.73 mm, pitch term 40.17 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:07:43.757 [B4] hump 48 mm +/-3, peak 19 deg, 0 cm, INVALID
+03:07:43.757 [B4]   full width (height from pitch): roll peak 7.4 deg -> track x sin = 14.42 mm, pitch term 42.53 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:07:46.328 <cut> [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+03:07:46.328 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+03:07:47.838 [B4] hump 27 mm +/-3, peak 12 deg, 0 cm, INVALID
+03:07:47.838 [B4]   one wheel (height from roll): roll peak 14.2 deg -> track x sin = 27.47 mm, pitch term 27.02 mm | width 0 mm (no fit: cm = path), path 2 mm
+03:08:25.750 [B4] END OF RUN: car lifted 22 cm (limit 20 cm)
+03:08:25.750 [CAR] END OF RUN: car lifted 22 cm (Buddy 4 IMU); motors stopped.
+03:08:29.040 [B4] hump 50 mm +/-3, peak 17 deg, 0 cm, INVALID
+03:08:29.040 [B4]   one wheel (height from roll): roll peak 26.4 deg -> track x sin = 49.79 mm, pitch term 37.57 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:09:30.368 [CAR] MQTT START refused: STOP, fault or sensor interlock active.
+
+# session 52: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:09:49.864Z to 2026-11-25T03:11:20.171Z UTC, 1128 batches, 68 gaps
+03:09:58.864 [CAR] MQTT START requested at configured car speed
+03:10:03.395 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:10:03.842 [B4] hump 5 mm +/-4, peak 2 deg, 7 cm, INVALID
+03:10:03.842 [B4]   full width (height from pitch): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 71 mm
+03:10:03.845 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+03:10:12.470 [B4] hump 4 mm +/-3, peak 2 deg, 6 cm, INVALID
+03:10:12.470 [B4]   one wheel (height from roll): roll peak 1.8 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=24738 steering=digital curve=-4 target=49/109 measured=70/76 mm/s speed_valid=1 effort=76/304 output_valid=1 floor_mask=0x0 state=2 gen=3 rejected=0 trim=9500
+03:10:13.263 [B4] hump 2 mm +/-3, peak 1 deg, 4 cm, INVALID
+03:10:16.168 [B4] hump [B2 TRACK] fw=b2-straight80-right95-digital t_ms=28484 steering=digital curve=0 target=80/76 measured=76/70 mm/s speed_valid=1 effort=189/160 output_valid=1 floor_mask=0x0 state=2 gen=3 rejected=0 trim=9500
+03:10:16.561 [CAR ROUTE] accepted=0 junction=2 phase=7 command=3 done=1
+03:10:17.017 [CAR ROUTE] accepted=0 junction=2 phase=0 command=3 done=2
+03:10:19.962 [CAR] STOPPED: MQTT STOP
+03:10:19.962 [CAR STOP] reasons=0x2 mission=10
+03:10:34.879 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:10:34.879 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:10:34.879 [CAR STOP] reasons=0x3 mission=10
+03:10:35.427 [B4] hump 17 mm +/-3, peak 9 deg, 0 cm, INVALID
+03:10:35.501 [B4]   one wheel (height from roll): roll peak 8.8 deg -> track x sin = 17.13 mm, pitch term 19.43 mm | width 0 mm (no fit: cm = path), path 3 mm
+03:10:50.083 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:10:50.083 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:10:51.839 [B4] hump 22 mm +/-3, peak 19 deg, 0 cm, INVALID
+03:10:51.839 [B4]   one wheel (height from roll): roll peak 11.2 deg -> track x sin = 21.75 mm, pitch term 42.53 mm | width 0 mm (no fit: cm = path), path 1 mm
+03:10:54.092 [B4] hump 12 mm +/-3, peak 5 deg, 0 cm, INVALID
+03:10:54.092 [B4]   one wheel (height from roll): roll peak 6.3 deg -> track x sin = 12.28 mm, pitch term 10.42 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 53: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:11:27.931Z to 2026-11-25T03:12:22.638Z UTC, 687 batches, 57 gaps
+03:11:42.162 [CAR] MQTT START requested at configured car speed
+03:11:48.454 [CAR ROUTE] accepted=1 junction=0 phase=0 command=1 done=0
+03:11:50.115 [B2 TRACK] fw=b2-straight80-right95-digital t_ms[CAR ROUTE] accepted=1 junction=1 phase=7 command=1 done=0
+03:11:50.514 [CAR ROUTE] accepted=1 junction=1 phase=5 command=1 done=0
+03:11:51.663 [CAR ROUTE] accepted=1 junction=1 phase=6 command=1 done=0
+03:11:54.424 [CAR ROUTE] accepted=1 junction=1 phase=0 command=1 done=1
+03:11:57.641 [CAR ROUTE] accepted=1 junction=2 phase=0 command=3 done=2
+03:11:57.704 [B4] hump 8 mm +/-8, peak 3 deg, 15 cm, valid
+03:11:57.704 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 7.70 mm | width 0 mm (no fit: cm = path), path 153 mm
+03:11:59.654 [B4] hump 8 mm +/-4, peak 4 deg, 34 cm, INVALID
+03:11:59.654 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 8.16 mm | width 335 mm (profile 25/75% fit), path 78 mm
+03:12:01.664 [B4] hump 4 mm +/-3, peak 2 deg, 7 cm, INVALID
+03:12:06.122 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 [B5] state=MONITOR servo=90 dist=259cm | ctrl mode=STOPPED mission=SAFE_STOP stops=4 | move=0 refused=0 dropped=0
+03:12:06.193 [B4] hump 5 mm +/-6, peak 2 deg, 16 cm, valid
+03:12:06.193 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 5.44 mm | width 162 mm (profile 25/75% fit), path 129 mm
+03:12:17.779 [CAR STOP] reasons=0xa mission=10
+03:12:18.996 [B4] hump 22 mm +/-3, peak 6 deg, 0 cm, INVALID
+03:12:18.996 [B4]   one wheel (height from roll): roll peak 11.2 deg -> track x sin = 21.75 mm, pitch term 14.26 mm | width 0 mm (no fit: cm = path), path 1 mm
+
+# session 54: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:12:28.766Z to 2026-11-25T03:16:04.386Z UTC, 2585 batches, 91 gaps
+03:12:41.208 [CAR] MQTT START requested at configured car speed
+03:12:49.729 [CAR ROUTE] accepted=1 [B2 TRACK] fw=b2-straight80-right95-digital t_ms=23204 steering=idle curve=0 target=0/0 measured=67/84 mm/s speed_valid=1 effort=0/0 output_valid=1 floor_mask=0x0 state=1 gen=2 rejected=0 trim=9500
+03:12:50.191 [CAR ROUTE] accepted=1 junction=1 phase=5 command=1 done=0
+03:12:51.408 [B4] hump 6 mm +/-3, peak 3 deg, 22 cm, INVALID
+03:12:51.408 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 5.89 mm | width 217 mm (profile 25/75% fit), path 67 mm
+03:12:51.493 [CAR ROUTE] accepted=1 junction=1 phase=6 command=1 done=0
+03:12:52.605 [CAR ROUTE] accepted=1 junction=1 phase=0 command=1 done=1
+03:12:55.635 [CAR ROUTE] accepted=1 junction=2 phase=7 command=1 done=1
+03:12:55.973 [B4] hump 7 mm +/-7, peak 3 deg, 13 cm, valid
+03:12:55.973 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 130 mm
+03:12:56.109 [CAR ROUTE] accepted=1 junction=2 phase=0 command=3 done=2
+03:13:00.549 [B4] hump 5 mm +/-7, peak 2 deg, 53 cm, valid
+03:13:00.549 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.99 mm | width 527 mm (profile 25/75% fit), path 170 mm
+03:13:06.605 [B4] hump 3 mm +/-6, peak 2 deg, 12 cm, INVALID
+03:13:06.679 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 126 mm
+03:13:08.892 [CAR ROUTE] accepted=1 junction=3 phase=7 command=[GROUND] L=1 R=1 adc=217 valid=1 seq=41073
+03:13:08.959 [B4] hump 4 mm +/-3, peak 2 deg, 4 cm, INVALID
+03:13:08.959 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.08 mm | width 41 mm (profile 25/75% fit), path 46 mm
+03:13:29.663 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:13:29.663 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:13:29.663 [CAR STOP] reasons=0x3 mission=10
+03:13:29.663 [B4] hump 10 mm +/-3, peak 9 deg, 0 cm, INVALID
+03:13:29.663 [B4]   one wheel (height from roll): roll peak 5.1 deg -> track x sin = 9.95 mm, pitch term 19.88 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:14:10.535 [B4] hump 17 mm +/-3, peak 15 deg, 0 cm, INVALID
+03:14:10.536 [B4]   one wheel (height from roll): roll peak 8.6 deg -> track x sin = 16.74 mm, pitch term 33.20 mm | width 0 mm (no fit: cm = path), path 5 mm
+03:14:11.443 [B4] hump 6 mm +/-3, peak 3 deg, 0 cm, INVALID
+03:14:11.443 [B4]   one wheel (height from roll): roll peak 2.9 deg -> track x sin = 5.66 mm, pitch term 6.80 mm | width 0 mm (no fit: cm = path), path 9 mm
+03:15:06.739 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:15:06.739 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:15:06.874 [B4] hump 35 mm +/-3, peak 16 deg, 0 cm, INVALID
+03:15:06.874 [B4]   one wheel (height from roll): roll peak 18.1 deg -> track x sin = 34.79 mm, pitch term 35.83 mm | width 0 mm (no fit: cm = path), path 5 mm
+03:15:45.599 [CAR] MQTT START requested at configured car speed
+03:15:45.599 [CAR STOP] reasons=0x0 mission=1
+03:15:50.312 [CAR ROUTE] accepted=1 junction=4 phase=7 command=3 done=2
+03:15:50.719 [CAR ROUTE] accepted=1 junction=4 phase=0 command=3 done=3
+03:15:55.085 [B4] hump 8 mm +/-13, peak 3 deg, 45 cm, valid
+03:15:55.085 [B4]   full width (height from pitch): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 7.48 mm | width 452 mm (profile 25/75% fit), path 322 mm
+03:15:55.300 [CAR] STOPPED: MQTT STOP
+03:15:55.300 [B5 RESULT] n=1 outcome=ABORTED ms=921 scan_ms=0 ahead_mm=- width_mm=- edges=- centre_x_mm=- side=- lclear_mm=- rclear_mm=- aligned=0 backoffs=0 reverses=0 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+03:15:55.383 [CAR STOP] reasons=0x2 mission=10
+
+# session 55: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:16:10.098Z to 2026-11-25T03:17:45.924Z UTC, 1101 batches, 15 gaps
+03:16:38.775 [CAR] MQTT START requested at configured car speed
+03:16:40.427 [B4] hump 2 mm +/-3, peak 2 deg, 4 cm, INVALID
+03:16:40.580 [B4]   one wheel (height from roll): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 49 mm
+03:16:43.375 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:16:43.447 [B4] hump 5 mm +/-5, peak 2 deg, 9 cm, valid
+03:16:43.447 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 98 mm
+03:16:43.824 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+03:16:46.001 [B4] hump 4 mm +/-3, peak 2 deg, 7 cm, INVALID
+03:16:46.001 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 74 mm
+03:16:55.726 [B5 PROFILE] n=1 scan=1 ahead_mm=153 L=found dir=3 x_mm=-8 y_mm=152 clear_mm=708 R=found dir=-23 x_mm=58 y_mm=137 clear_mm=1194 width_mm=68 centre_x_mm=25 side=LEFT backoffs=0
+03:16:56.034 [B4] hump 7 mm +/-3, peak 3 deg, 1 cm, INVALID
+03:16:56.034 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 14 mm
+03:16:56.312 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=7 command=467 wheel_mask=0x3 before_target=6/110 before_speed=0/0 mm/s speed_valid=0
+03:17:09.062 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+03:17:09.062 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+03:17:09.062 [CAR STOP] reasons=0x9 mission=10
+03:17:16.393 [B4] hump 72 mm +/-3, peak 63 deg, 0 cm, INVALID
+03:17:16.393 [B4]   one wheel (height from roll): roll peak 39.7 deg -> track x sin = 71.53 mm, pitch term 116.33 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:17:18.232 [B4] hump 18 mm +/-3, peak 14 deg, 0 cm, INVALID
+03:17:18.232 [B4]   one wheel (height from roll): roll peak 9.1 deg -> track x sin = 17.71 mm, pitch term 31.88 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 56: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:17:50.411Z to 2026-11-25T03:18:51.345Z UTC, 718 batches, 8 gaps
+03:18:09.447 [CAR] MQTT START requested at configured car speed
+03:18:13.489 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:18:13.880 [CAR ROUTE] accepted=0 junction=1 phase=0 command=0 done=0
+03:18:15.777 [B4] hump 6 mm +/-8, peak 3 deg, 19 cm, valid
+03:18:15.777 [B4]   full width (height from pitch): roll peak 1.1 deg -> track x sin = 2.14 mm, pitch term 5.67 mm | width 0 mm (no fit: cm = path), path 190 mm
+03:18:19.583 [B5 PROFILE] n=1 scan=1 ahead_mm=198 L=found dir=0 x_mm=-2 y_mm=190 clear_mm=389 R=found dir=-13 x_mm=43 y_mm=187 clear_mm=0 width_mm=45 centre_x_mm=21 side=LEFT backoffs=0
+03:18:21.274 [B4] hump 4 mm +/-3, peak 2 deg, 4 cm, INVALID
+03:18:21.274 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 46 mm
+03:18:22.734 [B4] hump 6 mm +/-4, peak 3 deg, 10 cm, valid
+03:18:22.805 [B4]   full width (height from pitch): roll peak 0.9 deg -> track x sin = 1.76 mm, pitch term 6.12 mm | width 0 mm (no fit: cm = path), path 101 mm
+03:18:30.676 [B4] hump 4 mm +/-3, peak 2 deg, 41 cm, INVALID
+03:18:30.676 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.76 mm | width 407 mm (profile 25/75% fit), path 66 mm
+03:18:36.148 [B4] hump 8 mm +/-3, peak 3 deg, 5 cm, INVALID
+03:18:36.148 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 7.48 mm | width 0 mm (no fit: cm = path), path 55 mm
+03:18:45.670 [B4] hump 2 mm +/-3, peak 2 deg, 0 cm, INVALID
+03:18:45.670 [B4]   one wheel (height from roll): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 2 mm
+03:18:47.365 [CAR] STOPPED: MQTT STOP
+03:18:47.365 [CAR STOP] reasons=0x2 mission=10
+03:18:47.426 [B5 RESULT] n=1 outcome=ABORTED ms=34578 scan_ms=6915 ahead_mm=198 width_mm=45 edges=both centre_x_mm=21 side=LEFT lclear_mm=389 rclear_mm=0 aligned=1 backoffs=0 reverses=0 reacq=1 pass=unseen side_mm=- depth_mm=- reason="AUTO ended"
+
+# session 57: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:18:57.592Z to 2026-11-25T03:20:14.193Z UTC, 923 batches, 13 gaps
+03:19:04.125 [B4] END OF RUN: car lifted 20 cm (limit 20 cm)
+03:19:04.125 [CAR] END OF RUN: car lifted 20 cm (Buddy 4 IMU); motors stopped.
+03:19:04.125 [CAR STOP] reasons=0x1 mission=10
+03:19:05.590 [B4] hump 30 mm +/-3, peak 8 deg, 0 cm, INVALID
+03:19:05.590 [B4]   one wheel (height from roll): roll peak 15.5 deg -> track x sin = 29.93 mm, pitch term 18.31 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:19:34.692 [CAR] MQTT START requested at configured car speed
+03:19:34.692 [CAR STOP] reasons=0x0 mission=1
+03:19:36.410 [B4] hump 3 mm +/-3, peak 2 deg, 5 cm, INVALID
+03:19:36.410 [B4]   one wheel (height from roll): roll peak 1.3 deg -> track x sin = 2.54 mm, pitch term 3.63 mm | width 0 mm (no fit: cm = path), path 51 mm
+03:19:38.512 [B4] hump 4 mm +/-3, peak 1 deg, 0 cm, INVALID
+03:19:38.512 [B4]   one wheel (height from roll): roll peak 2.3 deg -> track x sin = 4.49 mm, pitch term 2.49 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:19:43.576 [B5 PROFILE] n=1 scan=1 ahead_mm=183 L=found dir=0 x_mm=0 y_mm=183 clear_mm=372 R=found dir=-23 x_mm=118 y_mm=278 clear_mm=0 width_mm=152 centre_x_mm=59 side=LEFT backoffs=0
+03:19:45.439 [B4] hump 7 mm +/-3, peak 4 deg, 11 cm, INVALID
+03:19:45.439 [B4]   full width (height from pitch): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 8.84 mm | width 106 mm (profile 25/75% fit), path 65 mm
+03:19:46.491 [B4] hump 3 mm +/-3, peak 3 deg, 5 cm, INVALID
+03:19:46.491 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 6.35 mm | width 53 mm (profile 25/75% fit), path 84 mm
+03:20:02.423 [B4] hump 3 mm +/-3, peak 2 deg, 4 cm, INVALID
+03:20:02.423 [B4]   one wheel (height from roll): roll peak 1.6 deg -> track x sin = 3.12 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 40 mm
+
+# session 58: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:20:18.704Z to 2026-11-25T03:23:34.174Z UTC, 2327 batches, 14 gaps
+03:20:22.835 [CAR STOP] reasons=0x2 mission=10
+03:20:24.226 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+03:20:24.226 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+03:20:24.226 [CAR STOP] reasons=0x3 mission=10
+03:20:29.702 [B4] hump 27 mm +/-3, peak 24 deg, 0 cm, INVALID
+03:20:29.702 [B4]   one wheel (height from roll): roll peak 14.2 deg -> track x sin = 27.47 mm, pitch term 52.66 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:20:38.256 [B4] hump 51 mm +/-4, peak 20 deg, 0 cm, INVALID
+03:20:38.256 [B4]   one wheel (height from roll): roll peak 27.1 deg -> track x sin = 51.02 mm, pitch term 44.46 mm | width 0 mm (no fit: cm = path), path 7 mm
+03:20:46.368 [B4] hump 4 mm +/-4, peak 2 deg, 0 cm, INVALID
+03:20:46.368 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 7 mm
+
+# session 59: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:23:54.109Z to 2026-11-25T03:24:35.613Z UTC, 492 batches, 7 gaps
+
+# session 60: group18-combined-b5-sweep-2026-11-25, 2026-11-25T03:25:06.327Z to 2026-11-25T03:25:06.327Z UTC, 1 batches, 0 gaps
+
+# session 61: group18-combined-curve-rejoin-2026-11-25, 2026-11-25T03:31:36.409Z to 2026-11-25T03:32:10.728Z UTC, 365 batches, 59 gaps
+03:31:47.634 [CAR] MQTT START requested at configured car speed
+03:31:49.828 [B4] hump 5 mm +/-3, peak 2 deg, 2 cm, INVALID
+03:31:49.828 [B4]   full width (height from pitch): roll peak 0.8 deg -> track x sin = 1.56 mm, pitch term 3.85 mm | width 0 mm (no fit: cm = path), path 20 mm
+03:31:57.876 [B5 PROFILE] n=1 scan=1 ahead_mm=167 L=missing R=found dir=-13 x_mm=39 y_mm=168 clear_mm=0 width_mm=- centre_x_mm=- side=NONE backoffs=0
+03:31:59.857 [B4] hump 6 mm +/-4, peak 2 deg, 4 cm, INVALID
+03:31:59.857 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 5.21 mm | width 0 mm (no fit: cm = path), path 42 mm
+
+# session 62: group18-combined-curve-rejoin-2026-11-25, 2026-11-25T03:32:15.992Z to 2026-11-25T03:32:52.863Z UTC, 449 batches, 6 gaps
+03:32:24.179 [CAR] MQTT START requested at configured car speed
+03:32:26.271 [B4] hump 5 mm +/-3, peak 2 deg, 6 VALID
+03:32:26.271 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.08 mm | width 0 mm (no fit: cm = path), path 67 mm
+03:32:35.074 [B5 PROFILE] n=1 scan=1 ahead_mm=195 L=missing R=found dir=-13 x_mm=51 y_mm=222 clear_mm=0 width_mm=- centre_x_mm=- side=NONE backoffs=0
+03:32:36.760 [B4] hump 7 mm +/-4, peak 3 deg, 4 cm, INVALID
+03:32:36.760 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 6.35 mm | width 0 mm (no fit: cm = path), path 44 mm
+03:32:51.007 [B4] hump 5 mm +/-3, peak 2 deg, 0 cm, INVALID
+03:32:51.007 [B4]   full width (height from pitch): roll peak 1.0 deg -> track x sin = 1.95 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 0 mm
+03:32:51.506 [B5 PROFILE] n=1 scan=2 ahead_mm=295 L=missing R=missing width_mm=- centre_x_mm=- side=NONE backoffs=0
+
+# session 63: group18-combined-curve-rejoin-2026-11-25, 2026-11-25T03:32:58.664Z to 2026-11-25T03:35:25.632Z UTC, 1718 batches, 16 gaps
+03:33:09.979 [CAR] MQTT START requested at configured car speed
+03:33:24.058 [B4] hump 8 mm +/-3, peak 3 deg, 0 cm, INVALID
+03:33:24.058 [B4]   full width (height from pitch): roll peak 1.6 deg -> track x sin = 3.12 mm, pitch term 7.03 mm | width 0 mm (no fit: cm = path), path 6 mm
+03:33:25.071 [B5 PROFILE] n=1 scan=1 ahead_mm=187 L=missing R=missing width_mm=- centre_x_mm=- side=NONE backoffs=0
+03:33:28.192 [B4] hump 3 mm +/-3, peak 2 deg, 16 cm, INVALID
+03:33:28.192 [B4]   full width (height from pitch): roll peak 0.7 deg -> track x sin = 1.36 mm, pitch term 4.08 mm | width 161 mm (profile 25/75% fit), path 31 mm
+03:33:29.091 [CAR] STOPPED: MQTT STOP
+03:33:29.091 [B5 RESULT] n=1 outcome=ABORTED ms=18244 scan_ms=14221 ahead_mm=187 width_mm=- edges=none centre_x_mm=- side=NONE lclear_mm=0 rclear_mm=0 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+03:33:29.157 [CAR STOP] reasons=0x2 mission=10
+03:35:24.352 [B4] hump 11 mm +/-3, peak 4 deg, 0 cm, INVALID
+03:35:24.352 [B4]   one wheel (height from roll): roll peak 5.6 deg -> track x sin = 10.92 mm, pitch term 7.93 mm | width 0 mm (no fit: cm = path), path 0 mm
+
+# session 64: group18-combined-curve-rejoin-2026-11-25, 2026-11-25T03:35:31.981Z to 2026-11-25T03:35:37.569Z UTC, 79 batches, 0 gaps
+
+# session 65: group18-combined-curve-rejoin-2026-11-25, 2026-11-25T03:35:42.516Z to 2026-11-25T03:35:42.880Z UTC, 6 batches, 0 gaps
+
+# session 66: group18-combined-encoder-grace-2026-11-25, 2026-11-25T03:37:27.468Z to 2026-11-25T03:37:55.894Z UTC, 307 batches, 0 gaps
+03:37:36.856 [CAR] MQTT START requested at configured car speed
+03:37:49.013 [B5 PROFILE] n=1 scan=1 ahead_mm=179 L=found dir=0 x_mm=0 y_mm=179 clear_mm=382 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+03:37:51.028 [B4] END OF RUN: car lifted 21 cm (limit 20 cm)
+03:37:51.028 [CAR] END OF RUN: car lifted 21 cm (Buddy 4 IMU); motors stopped.
+03:37:51.028 [CAR STOP] reasons=0x1 mission=10
+03:37:51.028 [B5 RESULT] n=1 outcome=ABORTED ms=12387 scan_ms=7706 ahead_mm=179 width_mm=- edges=left_only centre_x_mm=- side=LEFT lclear_mm=382 rclear_mm=0 aligned=0 backoffs=0 reverses=0 reacq=0[GROUND] L=0 R=0 adc=139 valid=1 seq=27167
+03:37:51.648 [B4] hump 26 mm +/-5, peak 11 deg, 13 cm, valid
+03:37:51.648 [B4]   one wheel (height from roll): roll peak 13.6 deg -> track x sin = 26.33 mm, pitch term 23.91 mm | width 0 mm (no fit: cm = path), path 137 mm
+03:37:55.784 [CAR] MQTT START requested at configured car speed
+03:37:55.784 [CAR STOP] reasons=0x0 mission=1
+
+# session 67: group18-combined-encoder-grace-2026-11-25, 2026-11-25T03:38:01.363Z to 2026-11-25T03:38:36.935Z UTC, 447 batches, 5 gaps
+03:38:03.831 [CAR] MQTT START requested at configured car speed
+03:38:15.586 [B5 PROFILE] n=1 scan=1 ahead_mm=176 L=found dir=20 x_mm=-62 y_mm=165 clear_mm=892 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+03:38:36.241 [B5 RESULT] n=1 outcome=REJOINED ms=29532 scan_ms=9163 ahead_mm=176 width_mm=- edges=left_only centre_x_mm=- side=LEFT lclear_mm=892 rclear_mm=0 aligned=1 backoffs=0 reverses=0 reacq=0 pass=unseen side_mm=- depth_mm=- reason="tracking handoff and wheel progress"
+
+# session 68: group18-combined-encoder-grace-2026-11-25, 2026-11-25T03:38:43.278Z to 2026-11-25T03:39:15.908Z UTC, 369 batches, 5 gaps
+03:38:48.378 [CAR] MQTT START requested at configured car speed
+03:38:50.635 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:38:51.079 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+03:38:57.178 [B5 PROFILE] n=1 scan=1 ahead_mm=183 L=found dir=3 x_mm=-10 y_mm=195 clear_mm=0 R=missing width_mm=- centre_x_mm=- side=NONE backoffs=0
+03:38:58.826 [B4] hump 6 mm +/-3, peak 3 deg, 3 cm, INVALID
+03:38:58.921 [B4]   full width (height from pitch): roll peak 0.3 deg -> track x sin = 0.58 mm, pitch term 5.89 mm | width 0 mm (no fit: cm = path), path 36 mm
+03:39:03.647 [B4] hump 5 mm +/-4, peak 2 deg, 3 cm, INVALID
+03:39:03.647 [B4]   full width (height from pitch): roll peak 0.6 deg -> track x sin = 1.17 mm, pitch term 4.76 mm | width 0 mm (no fit: cm = path), path 38 mm
+03:39:06.896 [B5 PROFILE] n=1 scan=2 ahead_mm=283 L=found dir=23 x_mm=-118 y_mm=278 clear_mm=1048 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+03:39:08.890 [CAR STOP] reasons=0x8 mission=10
+03:39:08.890 [B5 RESULT] n=1 outcome=ABORTED ms=18279 scan_ms=15686 ahead_mm=283 width_mm=- edges=left_only centre_x_mm=- side=LEFT lclear_mm=1048 rclear_mm=0 aligned=0 backoffs=0 reverses=1 reacq=0 pass=- side_mm=- depth_mm=- reason="AUTO ended"
+03:39:09.644 [B2 STOP DETAIL] seq=1 reason=MEASUREMENT_QUALITY result=6 gen=9 command=3 wheel_mask=0x2 before_target=110/110 before_speed=0/0 mm/s speed_valid=0
+
+# session 69: group18-combined-encoder-grace-2026-11-25, 2026-11-25T03:39:22.180Z to 2026-11-25T03:40:03.773Z UTC, 498 batches, 10 gaps
+03:39:24.641 [CAR] MQTT START requested at configured car speed
+03:39:24.850 [CAR ROUTE] accepted=0 junction=1 phase=7 command=0 done=0
+03:39:25.293 [CAR ROUTE] accepted=0 junction=1 phase=0 command=3 done=1
+03:39:32.566 [B5 PROFILE] n=1 scan=1 ahead_mm=189 L=found dir=3 x_mm=-11 y_mm=202 clear_mm=0 R=missing width_mm=- centre_x_mm=- side=NONE backoffs=0
+03:39:34.891 [B4] hump 4 mm +/-3, peak 2 deg, 0 cm, INVALID
+03:39:34.891 [B4]   full width (height from pitch): roll peak 0.5 deg -> track x sin = 0.97 mm, pitch term 4.31 mm | width 0 mm (no fit: cm = path), path 2 mm
+03:39:41.993 [B5 PROFILE] n=1 scan=2 ahead_mm=289 L=found dir=23 x_mm=-118 y_mm=278 clear_mm=1210 R=missing width_mm=- centre_x_mm=- side=LEFT backoffs=0
+03:39:45.821 [B4] hump 4 mm +/-4, peak 3 deg, 13 cm, INVALID
+03:39:45.821 [B4]   one wheel (height from roll): roll peak 1.8 deg -> track x sin = 3.52 mm, pitch term 6.57 mm | width 0 mm (no fit: cm = path), path 135 mm
+03:39:52.725 [B4] hump 3 mm +/-4, peak 2 deg, 10 cm, INVALID
+03:39:52.725 [B4]   one wheel (height from roll): roll peak 1.7 deg -> track x sin = 3.32 mm, pitch term 4.99 mm | width 0 mm (no fit: cm = path), path 101 mm
+03:39:57.939 [B4] hump 7 mm +/-3, peak 3 deg, 5 cm, INVALID
+03:39:58.020 [B4]   full width (height from pitch): roll peak 1.2 deg -> track x sin = 2.34 mm, pitch term 6.57 mm | width 0 mm (no fit: cm = path), path 57 mm
+
+# session 70: group18-combined-encoder-grace-2026-11-25, 2026-11-25T03:40:10.348Z to 2026-11-25T03:40:18.402Z UTC, 102 batches, 1 gaps

@@ -88,7 +88,42 @@ Reproduce: `python testing/subsystem2/pid_log_analysis.py`. Logs:
 [13:54](../integration/logs/2026-11-19_car_run_1354.txt) and
 [15:01](../integration/logs/2026-11-19_car_run_1501.txt).
 
+## Wireless runs, 25 November 2026
+
+Data: 9,542 moving samples, all with valid speed, from Buddy 2's wireless exports
+of 03:16 to 11:40 SGT ([track samples](../integration/logs/2026-11-25_wireless_track.csv), [events](../integration/logs/2026-11-25_wireless_events.txt)).
+They come from twelve builds whose firmware IDs run from `pivot90` to
+`encoder-grace`. The ID on `main`, `group18-combined-compact-data-2026-11-25`,
+is not among them, so none is the published image. All use the tag `b2-straight80-right95-digital`.
+
+| Case | Wheel | Samples | Bias | Mean absolute | RMS | Largest |
+|---|---|---|---|---|---|---|
+| Cruise 80/76, target unchanged for 200 ms | Left | 3906 | -1.6 | 4.3 | 8.7 | 80 |
+| | Right | 3906 | +4.3 | 6.2 | 9.9 | 76 |
+| Forward, unequal targets | Left | 1793 | -5.8 | 18.7 | 23.6 | 99 |
+| | Right | 1793 | +10.8 | 23.7 | 28.7 | 120 |
+| Pivots | Left | 73 | -10.5 | 18.8 | 26.1 | 89 |
+| | Right | 73 | -3.3 | 20.3 | 27.0 | 82 |
+
+- In steady cruise, 89% of left and 80% of right samples are within 8 mm/s.
+  Mean effort is 192 left and 184 right.
+- The left bias is smaller than on 19 November. The right wheel now averages
+  4 mm/s above its 76 target, so the two wheels run at nearly the same speed and
+  most of the 95% right trim does not appear in the measured speed.
+- The largest errors are samples where a wheel read 0 or was moved by hand or a
+  stall. They were kept in.
+- Pivots have more samples than before, but still lag their targets.
+
+14 motion stops were logged: 10 `MEASUREMENT_QUALITY` (encoder signal rejected)
+and 4 `NO_WHEEL_PROGRESS` (stall). One `MEASUREMENT_QUALITY` stop is on
+`encoder-grace`, the last build in the logs, so the encoder fault was not
+eliminated there.
+
+Reproduce: `python testing/subsystem2/wireless_track_analysis.py`.
+
 ## Limits
+
+- Wireless batches are missing in places, so some samples and stops may be absent.
 
 - Samples are about 50 ms apart on a 100 ms measurement, so neighbours are
   correlated and the sample count overstates the evidence.
