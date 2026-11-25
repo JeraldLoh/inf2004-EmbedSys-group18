@@ -4,6 +4,15 @@ import {DEFAULT_MAP,encodeMapSet,encodeMapShow,decodeMapCommand,mapFromHex,mapTo
 import {RobotState} from './state.mjs';
 import {barcodeView} from './barcode-status.mjs';
 import {encodeLiveStatus,decodeLiveStatus} from './live-status.mjs';
+import {ASSIGNABLE_ACTIONS,editableRouteMap} from './route-map.mjs';
+
+test('route editor leaves straight to the default junction behavior',()=>{
+ const oldMap={A:1,B:2,C:3,D:4};
+ assert.deepEqual(ASSIGNABLE_ACTIONS.map(action=>action.name),['Left','Right','U-turn']);
+ const command=decodeMapCommand(encodeMapSet(editableRouteMap(oldMap),1));
+ assert.deepEqual(command.map,{A:1,B:2,D:4});
+ assert.equal(oldMap.C,3);
+});
 
 test('power-on map matches the firmware reply bytes',()=>{
  assert.equal(mapToHex(DEFAULT_MAP),'0'.repeat(28));

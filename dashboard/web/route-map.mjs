@@ -11,6 +11,8 @@ export const ACTIONS=[
  {value:3,key:'S',name:'Straight',icon:'↑'},
  {value:4,key:'U',name:'U-turn',icon:'↶'}
 ];
+export const ASSIGNABLE_ACTIONS=ACTIONS.filter(action=>action.value!==3);
+export const editableRouteMap=map=>Object.fromEntries(Object.entries(map).filter(([,value])=>value!==3));
 export const MAP_BYTES=14,ENTRIES=36;
 export const DEFAULT_MAP=Object.freeze({});
 export function charIndex(c){

@@ -4,16 +4,16 @@ import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=barcode-d
 import {encodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
 import {encodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {encodeCommand,decodeCommand} from './commands.mjs?v=barcode-digital-4';
-import {buddyView,motionSpeed,motionView} from './telemetry-view.mjs?v=route-slots-1';
+import {buddyView,motionView} from './telemetry-view.mjs?v=route-slots-1';
 import {renderSensorHighlights} from './sensor-panels.mjs?v=route-slots-1';
 import {renderRoverOverview} from './rover-overview.mjs?v=overview-1';
 import {createHumpLog,updateHumpLog,renderHumpLog} from './hump-log.mjs?v=humps-1';
 let humpLog=createHumpLog();
 import {RobotState,validateCommand} from './state.mjs?v=route-slots-1';
 import {MqttConnection,validateConnection} from './mqtt.mjs?v=combined-1';
-import {ACTIONS,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,sameMap,assignDirection,lettersForDirection} from './route-map.mjs?v=route-current-1';
+import {ASSIGNABLE_ACTIONS,editableRouteMap,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,sameMap,assignDirection,lettersForDirection} from './route-map.mjs?v=route-no-straight-1';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;
-let state=new RobotState(),preview=false,connecting=false,history=[],previewTimer=null,simRunning=false,simSeq=0,simDistance=0,simHumps=0,commandSeq=0,previousStatus='',lastUpdateText='',lastMotorStamp='';
+let state=new RobotState(),preview=false,connecting=false,previewTimer=null,simRunning=false,simSeq=0,simDistance=0,simHumps=0,commandSeq=0,previousStatus='';
 let buildEvidence=null;
 fetch('./build-memory.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{buildEvidence=v;render();}).catch(()=>{});
 let prefix='group18/robot1',endpoint='ws://localhost:9001';
@@ -77,13 +77,12 @@ function receive(topic,payload,time,retained=false){
   if(topic==='live_status')for(const event of [...lineSearchEvents(previousLiveStatus,state.liveStatus),...calibrationEvents(previousLiveStatus,state.liveStatus)])log(event.text,event.type);
   if(topic==='telemetry')for(const event of robotEvents(previousTelemetry,state.telemetry))log(event.text,event.type);
   if(topic==='telemetry'){const r=updateHumpLog(humpLog,state.telemetry);humpLog=r.log;for(const event of r.events)log(event.text,event.type);}
-  if(topic==='telemetry'){lastUpdateText=new Date().toLocaleTimeString('en-SG',{hour12:false,timeZone:'Asia/Singapore'})+' SGT';const m=motionView(state.telemetry),b=state.telemetry.buddies?.[2],stamp=b?`${b.updated_ms}:${b.sequence}`:'';if(m.fresh&&stamp!==lastMotorStamp){history.push({time:time-m.age/1000,speed:m.speed});lastMotorStamp=stamp;}if(history.length>305)history.shift();}
   if(topic==='command_result'&&state.result.map!==undefined){
    if(pendingRoute===state.result.command_id){
     pendingRoute=0;
     if(pendingMapSet)routeDirty=false;
    }
-   if(!routeDirty){routeDraft={...state.routeMap};drawDirectionSlots();}
+   if(!routeDirty){routeDraft=editableRouteMap(state.routeMap);drawDirectionSlots();}
    $('route-feedback').textContent=preview?'Preview map confirmed.':'Rover confirmed the current map.';
   }else if(topic==='command_result'&&state.result.status==='rejected'&&pendingRoute===state.result.command_id){
    pendingRoute=0;
@@ -97,7 +96,7 @@ function receive(topic,payload,time,retained=false){
  }catch(error){log('Ignored message: '+error.message,'warning');}
  render();
 }
-function reset(){state=new RobotState();humpLog=createHumpLog();pendingRoute=0;routeDraft={};routeDirty=false;drawDirectionSlots();if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';history=[];previousStatus='';lastUpdateText='';lastMotorStamp='';$('command-feedback').textContent='Waiting for rover connection.';}
+function reset(){state=new RobotState();humpLog=createHumpLog();pendingRoute=0;routeDraft={};routeDirty=false;drawDirectionSlots();if($('route-feedback'))$('route-feedback').textContent='Waiting for rover connection.';previousStatus='';$('command-feedback').textContent='Waiting for rover connection.';}
 function setPreview(value){
  clearInterval(previewTimer);client.disconnect();preview=value;reset();
  document.body.classList.toggle('preview',preview);
@@ -151,7 +150,7 @@ function send(command){
 let routeDraft={},pendingRoute=0,routeDeadline=0,routeReadAt=0,routeDirty=false,pendingMapSet=false,previewRouteMap={};
 const directionInputs=new Map();
 const confirmedLetters=new Map();
-for(const direction of ACTIONS){
+for(const direction of ASSIGNABLE_ACTIONS){
  const row=document.createElement('div'),name=document.createElement('dt'),mapped=document.createElement('dd');
  name.textContent=direction.icon+' '+direction.name;
  mapped.textContent='—';
@@ -186,10 +185,11 @@ function renderRouteSync(){
  const online=state.status(now())==='online';
  const onboard=online&&(revision===undefined||revision===state.routeMapRevision)?state.routeMap:null;
  const synced=onboard&&sameMap(onboard,routeDraft);
+ const oldStraight=onboard&&!synced&&sameMap(editableRouteMap(onboard),routeDraft);
  for(const [direction,label] of confirmedLetters){
   label.textContent=onboard?lettersForDirection(onboard,direction).join(', ')||'Unassigned':'—';
  }
- sync.textContent=pendingRoute?'Waiting for rover':!online?'Offline':synced?'In sync':onboard?'Changes not sent':'Reading map';
+ sync.textContent=pendingRoute?'Waiting for rover':!online?'Offline':synced?'In sync':oldStraight?'Send to clear old Straight assignment':onboard?'Changes not sent':'Reading map';
  sync.className='route-sync'+(synced?' synced':'');
  $('route-send').disabled=!online||!!pendingRoute;
  $('route-read').disabled=!online||!!pendingRoute;
@@ -236,16 +236,6 @@ function render(){
  $('message-value').textContent=String(state.received).padStart(2,'0');
  $('rover-caption').textContent=preview?'Exploring a simulated rover.':status==='online'?'Receiving heartbeat from rover.':status==='offline'?'Signal lost. Waiting for recovery.':'Standing by for a signal.';
  for(const id of ['start','stop'])$(id).disabled=status!=='online';
- $('endpoint-label').textContent=preview?'Preview · no broker':endpoint;$('prefix-label').textContent=prefix;
- const samples=history.filter(s=>t-s.time<=60);history=samples;let d='',last=null;
- const max=Math.ceil(Math.max(50,...samples.map(s=>s.speed))/50)*50,min=Math.floor(Math.min(0,...samples.map(s=>s.speed))/50)*50;
- $('chart-max').textContent=max;$('chart-mid').textContent=(max+min)/2;$('chart-min').textContent=min;
- for(const s of samples){const x=Math.max(0,600-(t-s.time)*10),y=118-(s.speed-min)/(max-min)*116;d+=(last&&s.time-last.time<3?'L':'M')+x.toFixed(1)+','+y.toFixed(1);last=s;}
- $('chart-line').setAttribute('d',d);
- // Disconnected runs remain separate; the line does not interpolate missing packets.
- $('chart-area').setAttribute('d','');
- $('chart-empty').hidden=samples.length>0;
- $('chart-freshness').textContent=fresh&&motor.fresh?(preview?'SIMULATED SAMPLES':'RECEIVING TELEMETRY'):samples.length?'LAST RECEIVED SAMPLES':'NO SAMPLES YET';
  renderBuddies(view,t);
  renderHumpLog($('hump-log-4'),humpLog);
  renderRouteSync();
@@ -272,7 +262,7 @@ function renderBuddies(view,t){
 function settings(){$('broker-url').value=endpoint;$('topic-prefix').value=prefix;$('form-error').textContent='';$('connection-dialog').showModal();}
 $('preview-toggle').onclick=()=>setPreview(!preview);
 $('sensor-preview').onclick=()=>setPreview(true);
-$('connection-open').onclick=settings;$('connection-edit').onclick=settings;
+$('connection-open').onclick=settings;
 $('dialog-close').onclick=()=>$('connection-dialog').close();
 $('disconnect').onclick=()=>{if(preview)setPreview(false);client.disconnect();reset();$('connection-dialog').close();log('Disconnected by operator.');render();};
 $('connection-form').onsubmit=e=>{
