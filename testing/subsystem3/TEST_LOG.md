@@ -12,7 +12,7 @@ Use the [shared setup, tolerances and recording rules](../DEMO_TRACEABILITY.md) 
 | S3-T04 | P0 · B3 with B2 · Straight and bend tracking | Run practice loop with straights and both bends three times, then repeat with one modest documented lighting or surface variation. Record sensor flags, steer, wheel targets and overhead path. | P: zero manual corrections/track departures over each loop, steering sign matches each turn and no ordinary line-loss reverse. | E1 historical operator observation; controlled repetition open. |
 | S3-T05 | P1 · B3 · Junction debounce | Cross a marked + ten times with normal mounting. Insert short single-sensor transients and ordinary centred white in marked portions; use route case for T/+ decisions. | P: 10/10 crossings each generate one junction, zero extra events in controls. Save physical crossing and event sequence. | E3/E4 junction events, fixture-based count Not run. |
 | S3-T06 | P1 · B3 · Legacy no-barcode probe applicability | Inspect normal firmware phase and run INT-29b with + and T fixtures. Preserve the legacy probe-angle case for matching bench images. | In normal combined, record actual pause/straight fallback; capture any unexpected automatic right turn or probe. Legacy procedure is applicable only with its matching profile. | Normal-profile regression Not run. |
-| S3-T07 | P0 · B3/controller · Route validity interval | Measure decode-to-junction time for normal fixtures at full supply and representative low supply. Hold an expired instruction on the stand for INT-28c. | Decode arrives within configured 10 s TTL, P: at least 2 s margin in each nominal run, and expired instructions cannot execute. Save timestamps and expiry disposition. | E3 route completion observed. Timing margin Not run. |
+| S3-T07 | P0 · B3/controller · Route lifetime: barcode route applies at the next junction only | Decode a mapped barcode, then cross two junctions. Repeat with a short and a long barcode-to-junction distance. Record decode and junction timestamps from `[S3] Route` and controller lines. | P: the route runs at the first junction after the decode, and the second junction gets the no-barcode behaviour (pause, then straight). Barcode routes have no timer (valid until the next junction); record decode-to-junction time as information, not a limit. Save timestamps. | E3 route completion observed. Two-junction check Not run. |
 
 Host tests check the logic only. Hardware cases still need G1 electrical
 clearance; active motion needs explicit bounded-test approval and a physical
@@ -20,18 +20,44 @@ power cut.
 
 ## Host tests (no hardware)
 
-Run from the repository root:
+Run from the repository root (or build `testing/host` with CMake and run the
+same four targets):
 
 ```
-gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
-  testing/host/test_subsystem3_sensors.c \
-  app_program/subsystem3/line_follow.c app_program/subsystem3/barcode_sensor.c \
-  app_program/subsystem3/barcode_decoder.c app_program/subsystem3/barcode_edges.c \
-  app_program/subsystem3/barcode_map.c app_program/subsystem3/line_drive.c \
-  app_program/contracts/hardware_faults.c \
-  app_program/vehicle_controller/vehicle_controller.c \
-  app_program/vehicle_controller/safety.c -o test_s3 && ./test_s3
+gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG \
+  testing/host/test_perception_math.c \
+  app_program/subsystem3/barcode_decoder.c app_program/subsystem3/barcode_map.c \
+  app_program/subsystem4/imu_math.c -lm -o perception && ./perception
+gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG \
+  -DLINE_PID_KP_X100=80 -DLINE_PID_KI_X100=0 -DLINE_PID_KD_X100=300 \
+  testing/host/test_line_pid.c app_program/subsystem3/line_pid.c -o line_pid && ./line_pid
+gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG \
+  -DLINE_PID_KP_X100=80 -DLINE_PID_KI_X100=100 -DLINE_PID_KD_X100=0 \
+  testing/host/test_line_pid.c app_program/subsystem3/line_pid.c -o line_pid_i && ./line_pid_i
+cd testing/host && gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG \
+  -DB1_DEMO=0 -Ibuddy1_stubs test_buddy1_map.c \
+  ../../app_program/subsystem1/buddy1_bridge.c ../../app_program/subsystem3/barcode_map.c \
+  ../../app_program/subsystem1/buddy1_live_status.c ../../app_program/subsystem1/buddy1_binary.c \
+  ../../app_program/subsystem1/buddy1_diagnostics.c ../../app_program/subsystem1/buddy1_protocol.c \
+  -o map && ./map
 ```
+
+| Target | Covers |
+|---|---|
+| `perception_math_host_tests` | Code 39 decoding of 'A': partial read then real, measured car widths, after long black, blurred reverse read, A maps to Left; re-read signature accepts and rejects |
+| `buddy1_map_tests` | MAP_SET / MAP_SHOW through Buddy 1 into the barcode map: empty power-on map, whole-map replace, bad entry and second letter for one direction rejected, map revision |
+| `line_pid_host_tests` | Line PID with P+D gains |
+| `line_pid_integral_host_tests` | Line PID with P+I gains |
+
+### Retired suite S3-H01..S3-H16
+
+These cases ran from `testing/host/test_subsystem3_sensors.c`, which was
+removed together with `barcode_edges.c` and `line_drive.c`. The table is kept
+because the October results below refer to it. Reverse decoding (part of
+S3-H07) is covered by `perception_math_host_tests`, and the run-time map
+(S3-H13, S3-H14) by `buddy1_map_tests`. These have no current host test:
+full A-Z, 0-9 decoding, malformed reads (S3-H08), and the line-follow logic
+(filter, steering ramp and damping, junction debounce, reacquire).
 
 | ID | Purpose | Acceptance |
 |---|---|---|
@@ -52,7 +78,11 @@ gcc -std=c11 -Wall -Wextra -Werror -Wpedantic -UNDEBUG -Iapp_program \
 | S3-H15 | Bench steering mixer | right steer speeds left wheel; efforts clamped 0..max, never negative |
 | S3-H16 | Bench junction rule | stop for wait; barcode turn, else straight; route used once; U-turn ends run |
 
-## Hardware cases (to run on the car)
+## Retired bench cases (`S3_BENCH` images)
+
+Superseded by the November demo cases at the top of this file. The
+`S3_BENCH` images these cases need were removed on 2026-10-29, so they can no
+longer be run as written. Kept for reference only.
 
 | ID | Purpose | Method | Acceptance |
 |---|---|---|---|
@@ -76,6 +106,7 @@ profile, configuration and raw log/video.
 | 2026-10-21 | S3-H01..S3-H12 | buddy3 working tree, before first commit; host gcc 11, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 12/12 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H12)" | Logic only; no hardware. Re-run and replace commit field after committing. |
 | 2026-10-28 | S3-H01..S3-H14 | buddy3 working tree (uncommitted, adds barcode_map); host gcc, `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 14/14 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H14)" | Logic only; no hardware. |
 | 2026-10-28 | S3-H01..S3-H16 | buddy3 working tree (adds line_drive, s3_bench); host gcc `-Wall -Wextra -Werror -Wpedantic` | Zane (host run) | PASS 16/16 | console: "subsystem3 sensor host tests passed (S3-H01..S3-H16)"; B2 suite 38/38; normal, B2_BENCH, S3_BENCH=1, S3_BENCH=2 images compile and link (arm-none-eabi-gcc 13.2, pico-sdk 2.2.0) | Logic and build only; not flashed. |
+| 2026-11-25 | perception_math, buddy1_map, line_pid, line_pid_integral host tests | `ee0e70d` (main), host gcc `-Wall -Wextra -Werror -Wpedantic` | Claude for Zane (host run) | PASS 4/4 | console: "perception math host tests passed", "PASS binary MAP set/show through the bridge, whole-table replace, bad entry rejected", "line_pid host tests passed" (x2) | Logic only; no hardware. Old S3-H suite no longer exists. |
 
 ## November evidence review
 
