@@ -1,121 +1,57 @@
-# Buddy 2 - Motion
+# Buddy 2 — Motion control
 
-Main-based publication, reproducible commands and dependency/test limits are
-recorded in `../../testing/subsystem2/PUBLISH_VERIFICATION.md`. Generated firmware
-is not committed; hardware qualification remains pending.
+Buddy 2 drives the Group 18 rover's motors, reads both wheel encoders, controls wheel speed, and reports odometry and motion results. The vehicle controller authorizes movement. Buddy 3 supplies line and junction observations, Buddy 5 requests obstacle maneuvers, and Buddy 4 uses wheel odometry for hump estimation. Buddy 2 owns normal motor output.
 
-Primary responsibility: motor output, encoder snapshots, wheel control,
-odometry, continuous requests, finite goals, and motion faults.
+## Build and run
 
-This subsystem must remain the sole normal runtime writer of motor-driver
-commands. Other buddies may contribute, but Buddy 2 remains accountable for
-its contracts, calibration, and evidence.
+Use the [combined demo build command](../../docs/DEMO_BUILD.md#combined-demo-profile-through-u-turn-5), which selects `CAR_RUN=1 CAR_B2_TRIAL=1`. This profile loads the v6 wheel-control settings and waits for an operator START. Physical STOP, the watchdog, and motion interlocks remain active. The generic `CAR_RUN` profile with `CAR_B2_TRIAL=0` uses the unqualified candidate configuration with zero gains. The standalone movement test and bench profiles have their own build and acceptance scope.
 
-The course folder is `subsystem2`. B2-01 now provides `drv_motor`, `drv_encoder`,
-an injected `motion_hal` and a course-BSP `motion_hal_rp2040` adapter. Driver C
-files stay directly here because the make source glob supports one folder level.
-No periodic control task, PID, speed profile, odometry or goal executor is added
-by this foundation. `motion_math.c/.h` remains portable integer-mm arithmetic;
-it is not the future fractional low-speed estimator.
+## Motion-control library
 
-`subsystem2_bind_hal()` must run before init, with a reviewed shared lock,
-microsecond clock and encoder dispatcher. Without it init/start return
-`E_NOSPT`. Bound init drives GP8-GP11 low through SIO, disables the slices,
-configures GP27/5 inputs and subscribes to the shared dispatcher. Init/start
-never clear inhibit, arm, move or calibrate the car. There are no allocations
-or tasks in this slice. Normal `app_main` remains unchanged and starts no
-vehicle tasks. This is deliberately not a hardware-test image.
+Use the typed requests and results defined in [the motion header](subsystem2_motion.h) and [the shared contracts](../contracts/system_types.h).
 
-The motor driver serializes all commits and persistent urgent STOP through the
-same injected IRQ/core lock. It preserves the diagnostic's low-SIO-before-PWM-
-disable fix; every shutdown operation is attempted even on HAL failure. HAL
-success is not electrical feedback. Clear requires the current STOP sequence;
-arm additionally requires a fresh generation and leaves outputs off. Nonzero
-effort needs the armed generation. Direct powered sign reversal is rejected
-with STOP/inhibit; later control must qualify reversal deadtime and start
-authority. Effort is signed per-mille, not speed. No profile policy is stored
-in the driver; the controller retains that responsibility.
-
-Snapshots contain both unsigned U32 modulo edge counts, acquisition time, reset
-epoch, per-wheel last-edge time/presence and command-direction metadata under
-one lock. Counters persist across goals; explicit reset changes epoch. Stopped
-fresh counts and old edge time are distinct. Future/reordered or half-domain-
-ambiguous edge times are marked invalid. Coalesced rising+falling bits count
-two observed edges and flag potential loss; target edge-rate/dispatch timing
-still needs measurement. Commanded sign is never independently measured sign.
-
-The HAL lock contract requires cross-core exclusion and local ISR masking
-before lock acquisition; callbacks cannot block, allocate, reenter, or leave a
-preempted owner holding a lock needed by STOP. No default spinlock/IRQ callback
-is installed here. The integration lead owns the real primitive, sole GPIO
-dispatcher, physical STOP evidence and lifecycle hookup. Do not run the manual
-diagnostic concurrently with this motor owner.
-
-Historical bench bring-up confirmed both quadrature channels on both motors
-with approximately 1,200 both-edge transitions during a visually judged wheel
-revolution. This confirms the signal path but is not precise calibration.
-Production can use channel B only on GP5 (right) and GP27 (left), deriving sign
-from the commanded motor direction, because left channel A on GP26 conflicts
-with the barcode ADC. Leave both red channel-A wires insulated when unused;
-never reconnect them to 3V3. Raw three-by-ten-turn runs support candidate
-1271 left/1264 right both-edge counts/revolution; metadata is in
-`motion_calibration.h`. The 65 mm diameter is user-measured. Neither those
-polling runs nor supplied 112 mm geometry qualify effective floor/pivot scale,
-an IRQ/filter convention, or PID constants.
-
-Use shared motion contracts and explicit completion/cancellation/timeout/fault
-results. Do not copy old blocking movement routines or assume local interrupt
-disabling protects data across both cores. Evidence belongs in
-`../../testing/subsystem2/`. The old standalone bench UF2 is not the integrated
-kernel application.
-
-See `../../docs/migration/standalone-port-inventory.md` before moving any more
-files from the sibling Buddy 2/3/4 bench projects.
-
-Software tests and platform contract: `../../testing/subsystem2/b2_01/README.md`.
-28 new CTest cases and all four existing host tests pass; all five foundation
-sources compile with real Cortex-M0+ course headers and the full inactive
-course image links. STOP <=50 ms, hardware lock/dispatcher timing, encoder edge
-loss and powered floor/load/ramp acceptance are not established by these tests.
-
-The later runtime slice now supplies `b2_platform_rp2040`, the shared
-`project_config/gpio_dispatcher`, a bounded `b2_trial` controller adapter and a
-manual `b2_gesture` / bench task. It is enabled only by `B2_BENCH=1`, with a
-distinct image; normal startup remains inactive. The bench task is pinned to
-core 0 and uses the existing interrupt-preserving SMP lock. GP21 STOP and
-alarm0 cutoff act independently of the ordinary task loop. The fixed menu
-requests 15% effort for 250 ms, never automatically at boot.
-
-38 B2 tests now pass, plus the four shared host tests; runtime target/normal
-builds pass. Hardware execution/timing remain pending. See
-`../../testing/subsystem2/B2_RUNTIME_TEST_GUIDE.md` before any later test.
-
-## CAR_RUN measured wheel controller (29 October 2026)
-
-CAR_RUN now uses the measured executor. The former open-loop draft remains in
-motion_executor.* for reference/regression only; it is not the CAR_RUN mover.
-
-| File | Purpose |
+| Interface | Use |
 |---|---|
-| car_motion.c/.h | Legacy steering units/sign conversion, external goal ID namespaces and retained results |
-| measured_motion_executor.c/.h | Wheel PID, continuous leases, bounded distance/pivot goals and STOP checks |
-| subsystem2_motion.c/.h | Core-0 task, priority 6, nominal 20 ms, static 4096-byte stack and 100 ms watchdog |
-| subsystem2.c / subsystem2_internal.h | Private CAR_RUN driver access during init, before foundation start |
+| `subsystem2_motion_continuous(request)` | Refresh a wheel-motion request for line following. Requests expire and carry controller authority. |
+| `subsystem2_motion_goal(goal)` | Request a finite forward, reverse, pivot, or enabled retrace goal. Distance goals use millimetres and pivot goals use millidegrees. |
+| `subsystem2_motion_goal_result_for(source, id, result)` | Read progress or the terminal result. Junction and obstacle requests each have their own goal ID namespace. |
+| `subsystem2_motion_telemetry(telemetry)` | Read wheel-speed targets, measured speed magnitudes, validity, distance travelled, and motion diagnostics. |
+| `subsystem2_motion_halt()` | Cancel the current maneuver and set motor output to zero. |
+| `subsystem2_urgent_stop()` | Apply the driver inhibit for an urgent stop. Continuing requires fresh controller authority after the stop is cleared. |
 
-IF-05 remains subsystem2_motion_continuous() and subsystem2_motion_goal().
-IF-06 now uses subsystem2_motion_goal_result_for(source, id, result), so a
-junction and an obstacle goal with the same numeric ID cannot consume each
-other's result. A controller halt pauses at zero and blocks old LINE work;
-physical/urgent STOP stays sticky and requires a new controller generation.
-The existing junction state machine still sequences approach then pivot.
+The runtime adapter in [`car_motion.c`](car_motion.c) handles steering conversion and goal routing. The [measured executor](measured_motion_executor.c) runs wheel control and checks timeouts and encoder quality. The [motor task](subsystem2_motion.c) runs on core 0. Driver access uses the bound HAL and the shared GPIO dispatcher. Encoder snapshots capture both wheel counts and timing together. Direction in odometry comes from the command history because the car uses one encoder channel per wheel.
 
-car_motion_candidate_config() deliberately has zero gains and qualified=false.
-CAR_RUN boots for diagnosis but refuses START until measured control/load/STOP/
-pivot qualification is supplied. Passing host fixtures does not qualify it.
-Encoder candidates remain 65 mm diameter, 1271/1264 B-channel both-edge counts
-per revolution; 112 mm is ruler track width, not effective pivot calibration.
+## Demo configuration and PID settings
 
-See ../../testing/integration/CAR_RUN_MEASURED_PID.md for the runtime path,
-qualification boundary, startup/STOP handling, test coverage and remaining
-hardware checks. No flashing or powered motor test was performed for this
-integration.
+| Setting | Value |
+|---|---|
+| Normal line-follow cruise | 80 mm/s |
+| Nominal motor-control period and hardware cutoff | 20 ms loop, 100 ms watchdog |
+| Encoder inputs and conversion | GP27 left and GP5 right, channel B on both edges. Left 1,271 and right 1,264 counts per revolution. |
+| Wheel geometry | 65 mm wheel diameter, 112 mm ruler track width |
+| Wheel PID gains as stored, multiplied by 1,000 | Both wheels Kp 1500, Ki 1500, Kd 0 |
+| Feedforward as stored, multiplied by 1,000 | Left 2163, right 2689 |
+| Effort limits | 30% for normal wheel control, 40% for integrated pivots |
+| Latest pivot change | U-turn requests 5% more wheel travel than the preceding combined profile. Left and Right retain their prior travel. |
+
+The v6 profile's initial feedforward estimates came from observed wheel speeds of about 92 mm/s left and 74 mm/s right at the same effort of 199 per mille. The [profile source](../diagnostics/b2_move_profile.c) records the gains, effort limits, and rolling-speed floors. A full PID tuning report should add target-versus-measured speed traces, the run conditions, and the rationale for the final gains.
+
+## Motion accuracy and test evidence
+
+| Evidence | Result and scope |
+|---|---|
+| Earlier standalone distance trials | Encoder feedback reported 296 mm for a 300 mm forward command, 996 mm for a 1,000 mm forward command, and 296 mm of reverse travel for a 300 mm reverse command. These are encoder estimates. Separate ruler readings are needed for physical error. |
+| Earlier v6 turn trials | The operator reported approximately 90° Left and Right pivots. Exact measured angles and repeat counts were unavailable. |
+| Integrated floor runs | The operator observed straight and bend tracking. Controller logs recorded accepted barcode routes and completed junction turns. One completed U-turn resumed following the line and then stopped on encoder `MEASUREMENT_QUALITY` fault `0x8`. The exact rejected encoder check is still unknown. |
+| U-turn +5% candidate | The Pico build and controller host tests passed. The reviewed hardware logs predate this profile. Its physical turn angle and post-turn repeatability still need a floor check. |
+| STOP and watchdog | Earlier standalone hardware tests recorded physical STOP and a watchdog cutoff. The logged observation time does not establish physical motor-pin cutoff latency. |
+
+The [Buddy 2 test log](../../testing/subsystem2/TEST_LOG.md) is the index for test cases and results. The [standalone hardware evidence](../../testing/subsystem2/B2_HARDWARE_EVIDENCE_2026-11-02.md) identifies the earlier profiles and measurements. The [publication notes](../../testing/subsystem2/PUBLISH_VERIFICATION.md) and [host test instructions](../../testing/subsystem2/b2_01/README.md) cover reproducible software checks.
+
+## Deliverables
+
+- **Motion-control library:** the code and interfaces in this directory.
+- **PID tuning report:** the settings and tuning evidence above are a starting point. The proposed standalone report is `testing/subsystem2/PID_TUNING_REPORT.md`.
+- **Motion accuracy evaluation:** record commanded and ruler-measured distance, measured turn angle, absolute error, repeat count, test conditions, and tested firmware profile. The proposed standalone evaluation is `testing/subsystem2/MOTION_ACCURACY_EVALUATION.md`.
+
+Link the finished reports and their evidence from the test log. Keep historical bench measurements attached to the profiles that produced them.
