@@ -1,10 +1,30 @@
 #include "barcode_map.h"
 
 #include <stdatomic.h>
+#include <stddef.h>
 
-/* One writer. Readers fail closed during publication without waiting. */
-static atomic_uchar map_table[BARCODE_MAP_SIZE];
+/* Four directions, one permitted character per direction. Each field stores
+ * index + 1 (1..36), with 0 meaning unassigned. A native atomic word publishes
+ * the whole 24-bit map. Keep the version handshake for scan invalidation. */
+#define CHARACTER_BITS 6U
+#define CHARACTER_MASK ((1U << CHARACTER_BITS) - 1U)
+static atomic_uint_least32_t map_slots;
 static atomic_uint_least32_t revision = 2U;
+_Static_assert(BARCODE_MAP_SIZE <= CHARACTER_MASK, "barcode index must fit");
+_Static_assert(ROUTE_COMMAND_UTURN * CHARACTER_BITS <= 32U, "route map must fit");
+
+static unsigned slot_shift(unsigned command)
+{
+    return (command - 1U) * CHARACTER_BITS;
+}
+
+static void publish(uint32_t slots)
+{
+    uint32_t prior = atomic_load(&revision);
+    atomic_store(&revision, prior + 1U);
+    atomic_store(&map_slots, slots);
+    atomic_store(&revision, prior == UINT32_MAX - 1U ? 2U : prior + 2U);
+}
 
 uint32_t barcode_map_revision(void)
 {
@@ -14,20 +34,18 @@ uint32_t barcode_map_revision(void)
 
 bool barcode_map_replace(const uint8_t commands[BARCODE_MAP_SIZE])
 {
-    unsigned used = 0U;
+    uint32_t slots = 0U;
+    if (commands == NULL) return false;
     for (unsigned i = 0; i < BARCODE_MAP_SIZE; ++i)
     {
         unsigned command = commands[i];
         if (command > ROUTE_COMMAND_UTURN) return false;
         if (command == ROUTE_COMMAND_NONE) continue;
-        if ((used & (1U << command)) != 0U) return false;
-        used |= 1U << command;
+        unsigned shift = slot_shift(command);
+        if (((slots >> shift) & CHARACTER_MASK) != 0U) return false;
+        slots |= (uint32_t)(i + 1U) << shift;
     }
-    uint32_t prior = atomic_load(&revision);
-    atomic_store(&revision, prior + 1U);
-    for (unsigned i = 0; i < BARCODE_MAP_SIZE; ++i)
-        atomic_store(&map_table[i], commands[i]);
-    atomic_store(&revision, prior == UINT32_MAX - 1U ? 2U : prior + 2U);
+    publish(slots);
     return true;
 }
 
@@ -56,7 +74,16 @@ route_command_t barcode_map_get(char character)
     int index = index_of(character);
     uint32_t current = barcode_map_revision();
     if (index < 0 || current == 0U) return ROUTE_COMMAND_NONE;
-    route_command_t command = (route_command_t)atomic_load(&map_table[index]);
+    uint32_t slots = atomic_load(&map_slots);
+    route_command_t command = ROUTE_COMMAND_NONE;
+    for (unsigned i = ROUTE_COMMAND_LEFT; i <= ROUTE_COMMAND_UTURN; ++i)
+    {
+        if (((slots >> slot_shift(i)) & CHARACTER_MASK) == (unsigned)index + 1U)
+        {
+            command = (route_command_t)i;
+            break;
+        }
+    }
     return current == barcode_map_revision() ? command : ROUTE_COMMAND_NONE;
 }
 
@@ -64,24 +91,31 @@ bool barcode_map_set(char character, route_command_t command)
 {
     int index = index_of(character);
 
-    if ((index < 0) || (command > ROUTE_COMMAND_UTURN))
+    if ((index < 0) || ((unsigned)command > ROUTE_COMMAND_UTURN))
     {
         return false;
     }
-    uint8_t replacement[BARCODE_MAP_SIZE];
-    for (unsigned i = 0; i < BARCODE_MAP_SIZE; ++i)
+    uint32_t slots = atomic_load(&map_slots);
+    unsigned character_slot = (unsigned)index + 1U;
+    for (unsigned i = ROUTE_COMMAND_LEFT; i <= ROUTE_COMMAND_UTURN; ++i)
     {
-        uint8_t old = atomic_load(&map_table[i]);
-        replacement[i] = old == command ? ROUTE_COMMAND_NONE : old;
+        unsigned shift = slot_shift(i);
+        if (i == (unsigned)command || ((slots >> shift) & CHARACTER_MASK) == character_slot)
+        {
+            slots &= ~((uint32_t)CHARACTER_MASK << shift);
+        }
     }
-    replacement[index] = (uint8_t)command;
-    return barcode_map_replace(replacement);
+    if (command != ROUTE_COMMAND_NONE)
+    {
+        slots |= (uint32_t)character_slot << slot_shift((unsigned)command);
+    }
+    publish(slots);
+    return true;
 }
 
 void barcode_map_clear(void)
 {
-    const uint8_t blank[BARCODE_MAP_SIZE] = {0};
-    (void)barcode_map_replace(blank);
+    publish(0U);
 }
 
 void barcode_map_defaults(void)

@@ -24,5 +24,18 @@ int main(void){
  unsigned char show[8]={0xb1,2,3,4,1,0,0,0};
  assert(b1_parse_map((char*)show,8,&m)&&m.kind==B1_MAP_SHOW&&m.command_id==1u);
  assert(!b1_parse_map((char*)show,22,&m));show[3]=1;assert(!b1_parse_map((char*)show,8,&m));
+ uint8_t out[B1_RESULT_MAP_SIZE],map[B1_MAP_BYTES]={0};
+ const uint8_t heartbeat[]={0xb1,1,5,1,255,255,255,255,0x78,0x56,0x34,0x12};
+ const uint8_t result[B1_RESULT_MAP_SIZE]={0xb1,1,6,20,255,255,255,255,254,255,255,255};
+ assert(b1_encode_heartbeat(out,sizeof(out),UINT32_MAX,0x12345678,1)==sizeof(heartbeat));
+ assert(memcmp(out,heartbeat,sizeof(heartbeat))==0);
+ assert(!b1_encode_heartbeat(out,sizeof(heartbeat)-1,0,0,0));
+ assert(b1_encode_result(out,sizeof(out),UINT32_MAX,B1_RESULT_APPLIED,0,map,UINT32_MAX-1)==sizeof(result));
+ assert(memcmp(out,result,sizeof(result))==0);
+ assert(!b1_encode_result(out,sizeof(out),UINT32_MAX,B1_RESULT_APPLIED,0,map,UINT32_MAX));
+ assert(!b1_encode_result(out,sizeof(out),0,B1_RESULT_APPLIED,0,map,2));
+ assert(!b1_encode_result(out,sizeof(out),1,8,0,NULL,0));
+ b1_map_put(map,0,1);b1_map_put(map,1,1);
+ assert(!b1_encode_result(out,sizeof(out),1,B1_RESULT_APPLIED,0,map,2));
  return 0;
 }

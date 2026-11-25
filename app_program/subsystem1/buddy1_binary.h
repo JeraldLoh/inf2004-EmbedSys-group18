@@ -2,7 +2,7 @@
 #ifndef BUDDY1_BINARY_H
 #define BUDDY1_BINARY_H
 #include <stdint.h>
-#define B1_BINARY_MAX 512
+#define B1_BINARY_MAX (19U + 43U + 23U + 23U + 144U) /* full v3 telemetry frame */
 #define B1_SECTION_2 8u
 #define B1_SECTION_3 1u
 #define B1_SECTION_4 2u
@@ -141,4 +141,12 @@ int b1_binary_validate(const b1_binary_snapshot *s,b1_validation_error *error);
 int b1_binary_valid(const b1_binary_snapshot *s);
 unsigned int b1_encode_telemetry(unsigned char *out, unsigned int capacity,
  const b1_binary_snapshot *s, uint32_t seq, uint32_t uptime_ms, int demo);
+/* Fixed section positions in RAM, compacted on publication. */
+typedef struct { uint8_t bytes[B1_BINARY_MAX]; } b1_binary_cache;
+int b1_cache_base(b1_binary_cache *cache,uint32_t speed,uint32_t distance,b1_validation_error *error);
+int b1_cache_snapshot(b1_binary_cache *cache,const b1_binary_snapshot *s,b1_validation_error *error);
+int b1_cache_section(b1_binary_cache *cache,unsigned id,const void *section,uint32_t at,
+ b1_validation_error *error);
+unsigned b1_encode_cached(uint8_t *out,unsigned capacity,const b1_binary_cache *cache,
+ uint32_t seq,uint32_t uptime_ms,int demo);
 #endif

@@ -19,7 +19,7 @@
 #include "obstacle.h"
 #include "range.h"
 
-#define AV_MAX_COARSE_POINTS 9
+#define AV_MAX_COARSE_POINTS 13
 
 typedef enum {
     AV_STATE_MONITOR,          // watching straight ahead; Buddy 5 is passive
@@ -54,6 +54,8 @@ typedef enum {
     AV_EVT_LINE_ALIGN,     // line crossed on a drive leg: centring on it, then turning along it
     AV_EVT_PASS_CLEAR,     // side sonar saw the obstacle's back corner go by on the pass leg
     AV_EVT_SIDE_BLOCKED,   // a reading beyond that edge lies in the bypass strip (point, side)
+    AV_EVT_EXIT_CHECK,     // stopped, facing the intended first bypass leg
+    AV_EVT_REACQUIRE_SWEEP, // commanded pivot target relative to the original line
 } av_event_type_t;
 
 typedef struct {
@@ -71,6 +73,7 @@ typedef struct {
     const char *reason;                // FAILED, OBSTACLE_CLEARED
     float side_cm;                     // PASS_CLEAR: car centre to the obstacle's side face
     float depth_cm;                    // PASS_CLEAR: obstacle depth along the pass; < 0 unknown
+    float exit_required_cm;
 } av_event_t;
 
 // Integration surface. Everything except on_event is required.
@@ -104,6 +107,11 @@ typedef struct {
     // Optional: distance covered so far by the current forward/reverse
     // command, from wheel odometry; < 0 when unknown. NULL: depth unknown.
     float (*motion_travelled_cm)(void *ctx);
+    // Optional stronger echo confirmation for stationary scan readings.
+    range_reading_t (*measure_scan)(void *ctx);
+    // Optional pair for taking the interior coarse readings during a sweep.
+    void (*servo_sweep)(void *ctx, int end_deg);
+    int (*servo_position)(void *ctx); // commanded angle, no shaft feedback
 } av_platform_t;
 
 typedef struct {
@@ -134,6 +142,8 @@ typedef struct {
     // fine_confirm_open only call an edge after two open steps in a row.
     int fine_no_echo_retries;
     bool fine_confirm_open;
+    bool fine_probe_uncertain; // one intermediate angle per side on inconclusive echoes
+    bool confirm_bypass_exit; // stationary clearance check before driving the outward leg
     float drive_estimate_cm_s; // pass-leg distance from time when odometry is not
                                // reported mid-drive (0 = odometry only)
     float bypass_min_lateral_cm; // never step out less than this from the line (0 = off)
@@ -267,6 +277,8 @@ typedef struct {
     float nearest_cm; // closest reading that hit the obstacle this scan
     int fine_offset;
     int fine_retries;      // no-echo retries spent at the current step
+    int fine_probe_offset;
+    bool fine_probe_used;
     bool fine_open_seen;   // one open step, waiting for the next to confirm
     float fine_open_dir;
     float fine_open_cm;
@@ -295,6 +307,7 @@ typedef struct {
     } legs[7];
     int leg_idx;
     bool leg_active;
+    bool exit_check_pending;
     bool reverse_issued;
     bool search_started;
     int align_step; // 0 none, 1 driving onto the line, 2 turning along it

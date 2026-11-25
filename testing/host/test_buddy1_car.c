@@ -72,10 +72,16 @@ int main(int argc,char **argv){
  assert(!b1_submit_section(3,NULL,99));
  live_expected.present=7;
  live_expected.motion=(b1_live_motion){.at_ms=11,.left_target=-40,.right_target=80,.targets_valid=1,.searching=1};
- live_expected.line=(b1_live_line){.at_ms=22,.paused=1};
+ live_expected.line=(b1_live_line){.at_ms=UINT32_MAX-2U,.paused=1,.barcode_state=3,
+  .barcode_sequence=UINT32_MAX,.barcode_failures=UINT32_MAX-1U,
+  .barcode_event_ms=1,.barcode_digital=1,.map_revision=UINT32_MAX-1U};
  live_expected.bypass=(b1_live_bypass){.at_ms=33,.active=1,.fast=1,.segment=2,.segments=5};
  assert(b1_submit_live_status(2,&live_expected.motion));assert(b1_submit_live_status(3,&live_expected.line));assert(b1_submit_live_status(5,&live_expected.bypass));
- b1_live_line invalid={.paused=2};assert(!b1_submit_live_status(3,&invalid));assert(!b1_submit_live_status(4,&invalid));assert(!b1_submit_live_status(3,NULL));
+ b1_live_line invalid=live_expected.line;
+ invalid.paused=2;invalid.barcode_state=8;invalid.barcode_character=128;
+ invalid.barcode_digital=2;invalid.barcode_route=8;invalid.calibration_state=8;invalid.calibration_reason=2;
+ assert(b1_submit_live_status(3,&invalid)); /* Sanitizes enum/flag fields, keeps freshness. */
+ assert(!b1_submit_live_status(4,&invalid));assert(!b1_submit_live_status(3,NULL));
  if(setjmp(done)==0)b1_telemetry_task(0,0);
  if(fixture)assert(fclose(fixture)==0);
  if(live_fixture)assert(fclose(live_fixture)==0);

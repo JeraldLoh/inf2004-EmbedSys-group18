@@ -1,34 +1,121 @@
 {
   "verified": true,
-  "profile": "Demo profile \u00b7 Pico SDK 2.3.0 \u00b7 measured 28 Oct 2026",
-  "flags": "NET=lwip MQTT=1 TEST=1 B1_DEMO_RUN=1 CONSOLE=usb_cdc CRASH_REPORT=0 SMP=1",
-  "before_revision": "4798953",
-  "after_revision": "uncommitted binary v3 + Buddy 2 + START/STOP + diagnostics prototype",
+  "measured_date": "25 Nov 2026 (SGT)",
+  "profile": "Combined Wi-Fi / Pico SDK 2.3.1",
+  "source_base": "da4e9d91e78a53f9e77ba030b086b44b38279a13",
+  "effective_profile": "smp1-usb_cdc-wificyw43-netlwip-mqtt1-crash0-test0-b2bench0-b5run0-carrun1-circuit0-b2move0-b1demo0-carmqtt1-carb2trial1-table0-nobarcal0-cruise80-trim-learn0-bsteer-hdg0-jpause1000-appr100-comp116-assist0-damp40x40-stale200-lost0-btrk0-wdr1-wdt0-ring256-minel9-bretry1x25x300x80x6000-captrace-linepid0-ground0x0x1x1x300x1000-glog1-lift200x1200x0-replay2-wdiag0-pivotapproach110-pivottravel90-uturntravel105",
+  "compiler": "arm-none-eabi-gcc.exe (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203",
+  "before_revision": "da4e9d91e78a53f9e77ba030b086b44b38279a13 + next-junction integration working tree",
+  "checkpoint_revision": "da4e9d91e78a53f9e77ba030b086b44b38279a13 + same working tree and representation patch",
+  "after_revision": "da4e9d91e78a53f9e77ba030b086b44b38279a13 + combined compact-data working tree",
   "before": {
-    "text_bytes": 333952,
-    "data_bytes": 96,
-    "bss_bytes": 82784,
-    "static_ram_bytes": 82880,
-    "elf_sha256": "88b3e0164f8cfd9342f65f59e12155657ca266db6548219e8e114aa5f4da3434"
+    "data_bytes": 404,
+    "bss_bytes": 112996,
+    "static_ram_bytes": 113400,
+    "vector_bytes": 192,
+    "text_bytes": 465008,
+    "flash_load_bytes": 466132,
+    "elf_sha256": "197bb7c553f4ffb9a4a5cf85e523913be180b8ea0ecf285dfc26fb2185c8e095",
+    "record_bytes": {
+      "b1_packet": 524,
+      "incoming_msg": 140,
+      "vehicle_msg": 16,
+      "controller_mail_t": 56
+    },
+    "controller_queue_reserved_bytes": 960,
+    "controller_task_local_frame_bytes": 156,
+    "symbols_bytes": {
+      "map_table": 36,
+      "occupied": 20,
+      "ram_heap": 16403,
+      "revision": 4,
+      "rx": 128,
+      "slots": 2620
+    },
+    "uf2_sha256": "1fd3f1a8c6140b8fff718f45183a9d0f0d9618293a7b758cff8ad3e35c148154"
+  },
+  "checkpoint": {
+    "data_bytes": 404,
+    "bss_bytes": 110948,
+    "static_ram_bytes": 111352,
+    "vector_bytes": 192,
+    "text_bytes": 465228,
+    "flash_load_bytes": 466352,
+    "elf_sha256": "4b16206cfb935815b5e8efab82aa6df60f16ee913f121c5ea9115a1bb9fcc934",
+    "record_bytes": {
+      "b1_packet": 264,
+      "incoming_msg": 140,
+      "vehicle_msg": 16,
+      "controller_mail_t": 40
+    },
+    "controller_queue_reserved_bytes": 704,
+    "controller_task_local_frame_bytes": 172,
+    "symbols_bytes": {
+      "map_slots": 4,
+      "outbox": 628,
+      "ram_heap": 16403,
+      "revision": 4,
+      "rx": 128
+    },
+    "uf2_sha256": "62e0ece4cf9ab7eac897b15e242106823354873a4d13b900a79c5a542fff5585"
   },
   "after": {
-    "text_bytes": 343740,
-    "data_bytes": 96,
-    "bss_bytes": 84352,
-    "static_ram_bytes": 84448,
-    "elf_sha256": "db870c7028b78500b9e8894c17f33ebf9903227ba5b2783ea94182c72cedd5f9"
+    "data_bytes": 404,
+    "bss_bytes": 109780,
+    "static_ram_bytes": 110184,
+    "vector_bytes": 192,
+    "text_bytes": 466796,
+    "flash_load_bytes": 467920,
+    "elf_sha256": "f71fff065f717d5af4a21b6ca05b161990f3f2976a0610d0f1baff1b95b5e2fb",
+    "uf2_sha256": "33d0bb9c6391a1d908bc42288245b3485f63462338ab6e16c4d5391c1ebf5046",
+    "symbols_bytes": {
+      "latest": 252,
+      "live_latest": 68,
+      "outbox": 468,
+      "s3_line": 28
+    },
+    "record_bytes": {
+      "b1_packet": 264,
+      "incoming_msg": 140,
+      "vehicle_msg": 16,
+      "controller_mail_t": 40
+    },
+    "controller_queue_reserved_bytes": 704
   },
-  "compiler": "arm-none-eabi-gcc (15:14.2.rel1-1) 14.2.1 20241119",
-  "after_source_sha256": {
-    "app_program/subsystem1/buddy1_binary.c": "ed8c47501aa318477b220484d1f9f6aa2d13cfca857d96a7c397f803cb243ae0",
-    "app_program/subsystem1/buddy1_binary.h": "823ad6106f2b03bf145bac884995940cfbabea2f6ad236179b9e145092d26143",
-    "app_program/subsystem1/buddy1_diagnostics.c": "1c2062c84f6976a5a4b54ef3f550475f66f8f741814a49c229920afc416ec9e5",
-    "app_program/subsystem1/buddy1_diagnostics.h": "c9b112e0762c972f8cf3bd36a4cdbbfb400ddbdb30ffe0578409ccf7b9a2a2a4",
-    "app_program/subsystem1/buddy1_bridge.c": "9d41ad8347bd802988543f93a1fbf7bd278aad44c83c12ad97618e191329485f",
-    "app_program/subsystem1/buddy1_bridge.h": "a498e0dc6ec4a3ebd7d91a0a8e7a6b8ab5f19b37017fc8c6a8899e67b58da774",
-    "app_program/subsystem1/buddy1_protocol.c": "abba5ca953c9e8d9fc53e96e453dffc1634c40642125673d06a67fc5f4808e41",
-    "app_program/subsystem1/buddy1_protocol.h": "5f35eec90c137faea0492efadbe1678b406cf61d118fb50588c899ba2b7e07bd",
-    "lib/liblwip/sysdepend/pico_rp2040/mqtt_utk.c": "21899e7aea9436a4e2b7e15b85021543af048b2499386ab92f47fa807a7ad43c",
-    "lib/liblwip/sysdepend/pico_rp2040/lwipopts.h": "12df8f90e84298e2beb93d56cc9d301798ea6046260d8099184985720477b0e2"
+  "mqtt_payload_bytes": {
+    "heartbeat": {
+      "checkpoint_max": 65,
+      "after": 12
+    },
+    "command_result": {
+      "checkpoint_map_max": 131,
+      "after_plain": 8,
+      "after_map": 26
+    },
+    "telemetry_v3_max": 252,
+    "live_status_v4_v5": [
+      96,
+      100
+    ],
+    "diagnostics": 52,
+    "command": [
+      8,
+      22
+    ],
+    "log_max": 361
+  },
+  "pc_telemetry_encode_median_ns": {
+    "checkpoint": 848,
+    "after": 528
+  },
+  "changed_firmware_source_sha256": {
+    "app_program/subsystem1/buddy1_binary.c": "db812a9561e6f511fae95582a5234a4d3f96998a31a39f32716b5486e866f5b8",
+    "app_program/subsystem1/buddy1_binary.h": "9727a4c0a166a092bcbf0155cb34a5064d7c631314b8dd8ab0730dfa32e9ed50",
+    "app_program/subsystem1/buddy1_bridge.c": "6f4de6ee3213053552b173c39f92c07ab264fa2ee58e3c27f00f781a5ee89427",
+    "app_program/subsystem1/buddy1_protocol.c": "fa5343a247c1c04643d643abb1c0f3850b985b913ab737adc58f7aa67cde242e",
+    "app_program/subsystem1/buddy1_protocol.h": "f180f88b5d15fc1a0cd068ca791898d7187d48f34c949564f80d99c3f2441cc3",
+    "app_program/subsystem3/line_follow.c": "21286817e8825e2bf3d1d371cd76153235f31eb6df3cc86c2433dd19a405c489",
+    "app_program/subsystem3/line_follow.h": "e535edf4ca2bf1c480c287acbf11afdefb525b842b9ffcac5ea2586c8a16dcee",
+    "lib/liblwip/sysdepend/pico_rp2040/mqtt_utk.c": "7a85c649a5575d3cdc849a9e439ea505ac7d018c1fe644d525a4346a6419ef80"
   }
 }

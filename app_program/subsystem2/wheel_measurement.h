@@ -27,11 +27,25 @@ typedef struct
     uint32_t window_batches[2]; /* Last completed speed window. */
 } wheel_measurement_sample_t;
 
+typedef enum {
+    WHEEL_REJECT_NONE, WHEEL_REJECT_ACQUISITION, WHEEL_REJECT_RESET,
+    WHEEL_REJECT_GAP, WHEEL_REJECT_EDGE_RATE, WHEEL_REJECT_BATCH_COUNT,
+    WHEEL_REJECT_BATCH_RATE, WHEEL_REJECT_BATCH_FRACTION,
+    WHEEL_REJECT_TRAVEL_RANGE, WHEEL_REJECT_SPEED_RANGE
+} wheel_reject_reason_t;
+
+typedef struct {
+    wheel_reject_reason_t reason;
+    uint32_t interval_us, edges[2], batches[2], window_edges[2], window_batches[2];
+    uint8_t wheel_mask;
+} wheel_reject_t;
+
 typedef struct
 {
     wheel_measurement_config_t config;
     motion_encoder_snapshot_t previous;
     wheel_measurement_sample_t sample;
+    wheel_reject_t reject;
     uint64_t remainder[2];
     uint64_t window_um[2];
     uint32_t window_us;
@@ -44,8 +58,9 @@ typedef struct
 bool wheel_measurement_init(wheel_measurement_t *measurement,
     const wheel_measurement_config_t *config);
 /* Epoch/gap/rate/quality failure returns unavailable. A new clean window
- * can recover after rebasing; an active executor still aborts on that failure.
+ * can recover after rebasing. The executor decides whether recovery is permitted.
  * Cumulative coalescing counters never clear on capture; policy uses deltas. */
 motion_status_t wheel_measurement_update(wheel_measurement_t *measurement,
     const motion_encoder_snapshot_t *snapshot);
+const char *wheel_reject_name(wheel_reject_reason_t reason);
 #endif

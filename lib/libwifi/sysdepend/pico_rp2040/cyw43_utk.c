@@ -5,6 +5,10 @@
 #include "cyw43_utk.h"
 #include "buddy1_retry.h"
 
+#ifndef WIFI_DHCP_DIAGNOSTICS
+#define WIFI_DHCP_DIAGNOSTICS 0
+#endif
+
 #if TM_NET_LWIP
 /* lwip_init() must run before cyw43_wifi_set_up() -- cyw43_cb_tcpip_init()
  * (lib/cyw43-driver/src/cyw43_lwip.c, unmodified upstream) calls netif_add()
@@ -16,6 +20,11 @@
 #include "lwip/init.h"
 #include "lwip/timeouts.h"
 #include "lwip/netif.h"
+#if WIFI_DHCP_DIAGNOSTICS
+#include "lwip/dhcp.h"
+#include "lwip/pbuf.h"
+#include "lwip/sys.h"
+#endif
 #include "wifi_secrets.h"
 #if TM_MQTT
 #include "mqtt_utk.h"
@@ -68,6 +77,67 @@ static T_CYW43_UTK_STATUS radio_status = {
     .init_result = -5,
     .strongest_rssi = -32768,
 };
+
+#if TM_NET_LWIP && WIFI_DHCP_DIAGNOSTICS
+static netif_input_fn wifi_input;
+static netif_linkoutput_fn wifi_output;
+static uint32_t wifi_rx, wifi_tx, wifi_tx_errors, dhcp_rx, dhcp_tx;
+
+/* Observe header fields only, then pass the original packet through intact.
+ * Single owner: these hooks and all lwIP calls run on the radio task. */
+static bool is_dhcp_packet(const struct pbuf *packet)
+{
+    uint8_t h[82];
+    uint16_t n = pbuf_copy_partial(packet, h, sizeof(h), 0U);
+    unsigned udp;
+    unsigned src, dst;
+    if (n < 42U || h[12] != 0x08U || h[13] != 0x00U ||
+        (h[14] >> 4) != 4U || h[23] != 17U)
+    { return false; }
+    udp = 14U + (h[14] & 0x0FU) * 4U;
+    if (udp < 34U || udp + 8U > n) { return false; }
+    src = ((unsigned)h[udp] << 8) | h[udp + 1U];
+    dst = ((unsigned)h[udp + 2U] << 8) | h[udp + 3U];
+    return (src == 67U && dst == 68U) || (src == 68U && dst == 67U);
+}
+
+static err_t wifi_input_count(struct pbuf *packet, struct netif *netif)
+{
+    wifi_rx++;
+    if (is_dhcp_packet(packet)) { dhcp_rx++; }
+    return wifi_input(packet, netif);
+}
+
+static err_t wifi_output_count(struct netif *netif, struct pbuf *packet)
+{
+    bool dhcp = is_dhcp_packet(packet);
+    err_t result = wifi_output(netif, packet);
+    if (result != ERR_OK) { wifi_tx_errors++; }
+    else { wifi_tx++; if (dhcp) { dhcp_tx++; } }
+    return result;
+}
+
+static void wifi_dhcp_report(void)
+{
+    static uint32_t last_report;
+    static int last_state = -1;
+    struct netif *n = &cyw43_state.netif[CYW43_ITF_STA];
+    const struct dhcp *d = netif_dhcp_data(n);
+    uint32_t now = sys_now();
+    int state = d != NULL ? d->state : -1;
+    if (state == last_state && (uint32_t)(now - last_report) < 5000U) { return; }
+    last_state = state;
+    last_report = now;
+    tm_printf((UB*)"wifi: DHCP state=%d tries=%u timer=%u up=%d link=%d "
+        "tx=%lu rx=%lu txerr=%lu dhcp_tx=%lu dhcp_rx=%lu\n",
+        state, (unsigned)(d != NULL ? d->tries : 0U),
+        (unsigned)(d != NULL ? d->request_timeout : 0U),
+        (int)netif_is_up(n), (int)netif_is_link_up(n),
+        (unsigned long)wifi_tx, (unsigned long)wifi_rx,
+        (unsigned long)wifi_tx_errors, (unsigned long)dhcp_tx,
+        (unsigned long)dhcp_rx);
+}
+#endif
 
 #if TM_NET_LWIP
 static const char *link_status_str(int32_t status)
@@ -238,6 +308,18 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
         interface_ready = 1;
         (void)cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA,
                                  radio_status.mac);
+#if TM_NET_LWIP && WIFI_DHCP_DIAGNOSTICS
+        {
+            struct netif *n = &cyw43_state.netif[CYW43_ITF_STA];
+            wifi_input = n->input;
+            wifi_output = n->linkoutput;
+            n->input = wifi_input_count;
+            n->linkoutput = wifi_output_count;
+            tm_printf((UB*)"wifi: MAC=%02x:%02x:%02x:%02x:%02x:%02x DHCP diagnostics enabled\n",
+                n->hwaddr[0], n->hwaddr[1], n->hwaddr[2],
+                n->hwaddr[3], n->hwaddr[4], n->hwaddr[5]);
+        }
+#endif
 #if TM_NET_LWIP
         /* Join instead of scan: with lwIP wired in, the point of coming up
          * is a working network, not a diagnostic scan. cyw43_cb_tcpip_init()
@@ -329,6 +411,9 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
         cyw43_thread_exit();
 #if TM_NET_LWIP
         sys_check_timeouts();
+#if WIFI_DHCP_DIAGNOSTICS
+        wifi_dhcp_report();
+#endif
 #if TM_MQTT
         /* All MQTT state and raw lwIP calls stay on this radio owner.
          * Pass link loss as well, so old sessions are invalidated. */

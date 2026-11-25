@@ -1,8 +1,33 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {decodeDiagnostics,encodeDiagnostics,validationLabel,equivalentJsonBytes} from './diagnostics.mjs';
+import {decodeDiagnostics,encodeDiagnostics,validationLabel,equivalentJsonBytes,renderDiagnostics} from './diagnostics.mjs';
 import {readFileSync} from 'node:fs';
 import {decodeTelemetry} from './binary.mjs';
 import {RobotState} from './state.mjs';
+test('recorded RAM panel uses measured ELF totals and labels their provenance',t=>{
+ const build=JSON.parse(readFileSync(new URL('./build-memory.json',import.meta.url),'utf8'));
+ const elements=new Map();
+ const original=globalThis.document;
+ globalThis.document={getElementById(id){
+  if(!elements.has(id))elements.set(id,{});
+  return elements.get(id);
+ }};
+ t.after(()=>{if(original===undefined)delete globalThis.document;else globalThis.document=original;});
+ const state=new RobotState();
+ renderDiagnostics(state,0,build);
+ assert.equal(elements.get('diagnostic-build').textContent,'Recorded static RAM');
+ for(const variant of ['before','after']){
+  const size=build[variant];
+  assert.equal(size.static_ram_bytes,size.data_bytes+size.bss_bytes);
+  assert.equal(elements.get(`diagnostic-${variant}`).textContent,`${size.static_ram_bytes.toLocaleString()} B`);
+ }
+ const provenance=elements.get('diagnostic-ram-note');
+ assert.ok(provenance.textContent.includes(build.measured_date));
+ assert.ok(provenance.textContent.includes(build.source_base.slice(0,7)));
+ assert.match(provenance.textContent,/Live stack and heap usage are unmeasured/);
+ assert.equal(provenance.title,build.effective_profile);
+ renderDiagnostics(state,0,{verified:true});
+ assert.equal(elements.get('diagnostic-before').textContent,'—');
+});
 test('diagnostics preserves unsigned counters and signed offending value',()=>{
  const v={demo:false,uptime_ms:1000,rejected:3,out_of_range:2,busy:1,last_at_ms:900,section:3,field:5,reason:2,value:-101,min:-100,max:100};
  const wire=encodeDiagnostics(v);assert.equal(wire.length,52);

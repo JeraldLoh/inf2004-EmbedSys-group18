@@ -79,6 +79,7 @@ static const char *ingress_name(uint32_t reason)
 static void diagnostic_worker(INT code, void *exinf)
 {
     uint32_t last_detail = 0U, last_rejected = 0U, last_ingress = 0U;
+    uint32_t last_encoder_event = 0U;
     bool announced = false;
     (void)code; (void)exinf;
     for (;;) {
@@ -132,6 +133,21 @@ static void diagnostic_worker(INT code, void *exinf)
                 }
             }
 #endif
+            if (s.encoder_event_seq != last_encoder_event) {
+                const wheel_reject_t *r = &s.encoder_reject;
+                const char *action = s.encoder_event == MOTION_ENCODER_HOLD ? "holding" :
+                    s.encoder_event == MOTION_ENCODER_RECOVERED ? "recovered" :
+                    s.encoder_event == MOTION_ENCODER_STOPPED ? "stopped" : "interrupted";
+                tm_printf((UB*)"[B2 ENCODER] seq=%lu action=%s check=%s wheel_mask=0x%x dt_us=%lu edges=%lu/%lu batches=%lu/%lu window_edges=%lu/%lu window_batches=%lu/%lu hold_us=%lu\n",
+                    (unsigned long)s.encoder_event_seq, action, wheel_reject_name(r->reason),
+                    (unsigned)r->wheel_mask, (unsigned long)r->interval_us,
+                    (unsigned long)r->edges[0], (unsigned long)r->edges[1],
+                    (unsigned long)r->batches[0], (unsigned long)r->batches[1],
+                    (unsigned long)r->window_edges[0], (unsigned long)r->window_edges[1],
+                    (unsigned long)r->window_batches[0], (unsigned long)r->window_batches[1],
+                    (unsigned long)s.encoder_elapsed_us);
+                last_encoder_event = s.encoder_event_seq;
+            }
             if (s.detail_sequence != last_detail) {
                 tm_printf((UB*)"[B2 STOP DETAIL] seq=%lu reason=%s result=%d gen=%lu command=%lu wheel_mask=0x%x before_target=%ld/%ld before_speed=%lu/%lu mm/s speed_valid=%d\n",
                     (unsigned long)s.detail_sequence,measured_motion_detail_name(s.detail_reason),
@@ -283,6 +299,7 @@ ER subsystem2_motion_init(const b2_trial_io_t *trial_io)
      * no overall run limit. Physical STOP, command leases and faults remain.
      * The profile itself stays unqualified for B2_MOVE_TEST and the B2 tests. */
     config.qualified = true;
+    config.line_encoder_retry = true;
 #else
     car_motion_candidate_config(&config);
 #endif

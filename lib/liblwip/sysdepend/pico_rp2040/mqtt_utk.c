@@ -33,7 +33,7 @@ static void publish_console(unsigned int now)
  UW count = tm_mqtt_console_peek(bytes, sizeof(bytes), &dropped);
  if (count == 0U && dropped == last_dropped) return;
  INT header = tm_sprintf(payload,
-     (const UB *)"fw=group18-combined-retry80-uturn-plus5-2026-11-25 seq=%u uptime_ms=%u dropped_bytes=%u\n",
+     (const UB *)"fw=group18-combined-compact-data-2026-11-25 seq=%u uptime_ms=%u dropped_bytes=%u\n",
      sequence, now, (unsigned)dropped);
  memcpy(payload + header, bytes, count);
  if (mqtt_publish(client, B1_TOPIC_PREFIX "/log", payload,

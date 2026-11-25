@@ -73,17 +73,18 @@ typedef enum
 
 typedef struct
 {
-    line_status_t status;
-    uint8_t history_left;        /* last 3 raw samples, bit 0 = newest */
-    uint8_t history_right;
-    uint8_t previous_state;      /* state before the current one */
     uint32_t previous_duration_ms; /* how long that state lasted */
     uint32_t both_black_since_ms;
     uint32_t state_since_ms;
-    bool both_black_active;
-    bool junction_reported;
-    bool probing;
-    bool probe_saw_line;
+    /* Private to the line task. Only status is published to other tasks. */
+    uint16_t history_left : 3;   /* bit 0 = newest */
+    uint16_t history_right : 3;
+    uint16_t previous_state : 3;
+    uint16_t both_black_active : 1;
+    uint16_t junction_reported : 1;
+    uint16_t probing : 1;
+    uint16_t probe_saw_line : 1;
+    line_status_t status;
 } line_follow_t;
 
 /* ---- Tuning (all overridable with -D, tune on the real track) ---------- */

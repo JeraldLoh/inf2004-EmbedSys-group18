@@ -7,19 +7,58 @@
 #define CONTROLLER_STATUS_WAIT_MS 10
 
 typedef enum { MAIL_EVENT = 0, MAIL_MOTION, MAIL_RESULT, MAIL_SAFETY, MAIL_WAKE, MAIL_REMOTE_START } mail_kind_t;
+/* Compact, task-local format. Low three bits are the tag, and the remaining
+ * bits are tag-specific. The kernel copies the whole record before publication. */
 typedef struct
 {
-    mail_kind_t kind;
-    uint32_t restart_stop_sequence;
+    uint32_t header;
     union
     {
-        stop_reason_mask_t remote_start_expected_stops;
-        controller_event_t event;
-        controller_motion_request_t motion;
-        motion_goal_result_t result;
+        struct { uint32_t restart_ticket; stop_reason_mask_t reasons; } event;
+        struct {
+            uint32_t session, id, generation, created_ms, expires_ms;
+            int32_t mm, mdeg;
+            uint32_t speed_mm_s, timeout_ms;
+        } motion;
+        struct { uint32_t id, generation; int32_t mm, mdeg; } result;
         struct { stop_reason_mask_t reasons; uint32_t evidence_id; } safety;
     } value;
 } controller_mail_t;
+_Static_assert(sizeof(controller_mail_t) == 40U, "mailbox record budget");
+_Static_assert(MAIL_REMOTE_START <= 7 && CONTROLLER_EVENT_COUNT <= 8 &&
+    SYSTEM_MODE_FAULT <= 7 && MISSION_SAFE_STOP <= 15 &&
+    CONTROLLER_MOTION_GOAL <= 3 && MOTION_SOURCE_CALIBRATION <= 7 &&
+    MOTION_GOAL_RETRACE <= 7 && MOTION_PROFILE_CRUISE <= 7 &&
+    MOTION_RESULT_FAULT <= 7, "mailbox header field budget");
+
+static uint32_t mail_field(uint32_t header, unsigned shift, uint32_t mask)
+{
+    return (header >> shift) & mask;
+}
+
+static void unpack_motion(const controller_mail_t *mail, controller_motion_request_t *request)
+{
+    *request = (controller_motion_request_t){0};
+    request->kind = (controller_motion_kind_t)mail_field(mail->header, 3U, 3U);
+    request->source = (motion_source_t)mail_field(mail->header, 5U, 7U);
+    request->session = mail->value.motion.session;
+    request->id = mail->value.motion.id;
+    request->generation = mail->value.motion.generation;
+    request->created_ms = mail->value.motion.created_ms;
+    request->expires_ms = mail->value.motion.expires_ms;
+    if (request->kind == CONTROLLER_MOTION_GOAL)
+    {
+        request->value.goal.type = (motion_goal_type_t)mail_field(mail->header, 8U, 7U);
+        request->value.goal.mm = mail->value.motion.mm;
+        request->value.goal.mdeg = mail->value.motion.mdeg;
+        request->value.goal.speed_mm_s = mail->value.motion.speed_mm_s;
+        request->value.goal.timeout_ms = mail->value.motion.timeout_ms;
+    }
+    else if (request->kind == CONTROLLER_MOTION_PROFILE)
+    {
+        request->value.profile = (motion_profile_t)mail_field(mail->header, 8U, 7U);
+    }
+}
 
 static controller_service_t service;
 static controller_motion_t motion;
@@ -93,6 +132,7 @@ static void drain_urgent(void)
 static void controller_task_main(INT code, void *exinf)
 {
     controller_mail_t mail;
+    controller_motion_request_t request;
     uint32_t last_tick = now_ms();
     (void)code; (void)exinf;
     for (;;)
@@ -104,31 +144,46 @@ static void controller_task_main(INT code, void *exinf)
         drain_urgent();
         if (received == (INT)sizeof(mail))
         {
-            switch (mail.kind)
+            switch (mail_field(mail.header, 0U, 7U))
             {
                 case MAIL_EVENT:
                 {
-                    bool restart=mail.value.event.type==CONTROLLER_EVENT_CLEAR_STOP ||
-                        (mail.value.event.type==CONTROLLER_EVENT_SET_MODE &&
-                         mail.value.event.mode==SYSTEM_MODE_AUTO);
+                    controller_event_t event = {
+                        (controller_event_type_t)mail_field(mail.header, 3U, 7U),
+                        (system_mode_t)mail_field(mail.header, 6U, 7U),
+                        mail.value.event.reasons,
+                        (mission_state_t)mail_field(mail.header, 9U, 15U),
+                        mail_field(mail.header, 13U, 1U) != 0U
+                    };
+                    bool restart=event.type==CONTROLLER_EVENT_CLEAR_STOP ||
+                        (event.type==CONTROLLER_EVENT_SET_MODE && event.mode==SYSTEM_MODE_AUTO);
                     if(restart){
                         UINT saved=ingress_enter();
-                        bool stale=mail.restart_stop_sequence!=urgent_sequence ||
+                        bool stale=mail.value.event.restart_ticket!=urgent_sequence ||
                             urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX;
                         ingress_leave(saved);
                         if(stale) break;
                     }
-                    (void)controller_service_handle(&service, &mail.value.event);
+                    (void)controller_service_handle(&service, &event);
                     controller_motion_sync(&motion);
                     if(restart) drain_urgent();
                     break;
                 }
                 case MAIL_MOTION:
-                    (void)controller_motion_handle(&motion, &mail.value.motion, now_ms());
+                    unpack_motion(&mail, &request);
+                    (void)controller_motion_handle(&motion, &request, now_ms());
                     break;
                 case MAIL_RESULT:
-                    controller_motion_result(&motion, &mail.value.result);
+                {
+                    motion_goal_result_t result = {
+                        mail.value.result.id, mail.value.result.generation,
+                        (motion_result_code_t)mail_field(mail.header, 3U, 7U),
+                        mail.value.result.mm, mail.value.result.mdeg,
+                        mail_field(mail.header, 6U, 1U) != 0U
+                    };
+                    controller_motion_result(&motion, &result);
                     break;
+                }
                 case MAIL_SAFETY:
                     controller_motion_stop_evidence(&motion, mail.value.safety.reasons,
                         mail.value.safety.evidence_id);
@@ -141,8 +196,8 @@ static void controller_task_main(INT code, void *exinf)
                     sequence=urgent_sequence;pending=urgent_reasons!=STOP_REASON_NONE;
                     ingress_leave(saved);
                     (void)controller_service_remote_start(&service,
-                        mail.restart_stop_sequence,sequence,pending,
-                        mail.value.remote_start_expected_stops);
+                        mail.value.event.restart_ticket,sequence,pending,
+                        mail.value.event.reasons);
                     controller_motion_sync(&motion);
                     /* A STOP racing with the conditional transition is applied
                      * before this task can issue any new line request. */
@@ -154,14 +209,13 @@ static void controller_task_main(INT code, void *exinf)
             }
         }
         {
-            controller_motion_request_t latest;
             bool pending;
             UINT saved = ingress_enter();
             pending = continuous_pending;
-            latest = latest_continuous;
+            if (pending) { request = latest_continuous; }
             continuous_pending = false;
             ingress_leave(saved);
-            if (pending) { (void)controller_motion_handle(&motion, &latest, now_ms()); }
+            if (pending) { (void)controller_motion_handle(&motion, &request, now_ms()); }
         }
         if (now_ms()-last_tick >= 10U)
         {
@@ -282,9 +336,9 @@ bool controller_post_remote_start(uint32_t ticket, stop_reason_mask_t expected_s
     if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence!=ticket || ticket==UINT32_MAX){
         ingress_leave(saved);return false;
     }
-    mail.kind=MAIL_REMOTE_START;
-    mail.restart_stop_sequence=ticket;
-    mail.value.remote_start_expected_stops=expected_stops;
+    mail.header=MAIL_REMOTE_START;
+    mail.value.event.restart_ticket=ticket;
+    mail.value.event.reasons=expected_stops;
     ingress_leave(saved);
     return post(&mail);
 }
@@ -302,10 +356,13 @@ bool controller_post(const controller_event_t *event)
         continuous_pending = false;
         ingress_leave(saved);
         (void)service.outputs.stop_motion(service.outputs.context);
-        mail.kind = MAIL_WAKE;
+        mail.header = MAIL_WAKE;
         (void)post(&mail);
         return true;
     }
+    if ((unsigned)event->type >= CONTROLLER_EVENT_COUNT ||
+        (unsigned)event->mode > SYSTEM_MODE_FAULT ||
+        (unsigned)event->mission > MISSION_SAFE_STOP) { return false; }
     /* Physical restart events also cannot erase a newer remote/physical STOP. */
     if(event->type==CONTROLLER_EVENT_CLEAR_STOP ||
        (event->type==CONTROLLER_EVENT_SET_MODE && event->mode==SYSTEM_MODE_AUTO)){
@@ -313,10 +370,14 @@ bool controller_post(const controller_event_t *event)
         if(urgent_reasons!=STOP_REASON_NONE || urgent_sequence==UINT32_MAX){
             ingress_leave(saved);return false;
         }
-        mail.restart_stop_sequence=urgent_sequence;
+        mail.value.event.restart_ticket=urgent_sequence;
         ingress_leave(saved);
     }
-    mail.kind = MAIL_EVENT; mail.value.event = *event; return post(&mail);
+    mail.header = MAIL_EVENT | ((uint32_t)event->type << 3U) |
+        ((uint32_t)event->mode << 6U) | ((uint32_t)event->mission << 9U) |
+        ((uint32_t)event->rejoined_line << 13U);
+    mail.value.event.reasons = event->reasons;
+    return post(&mail);
 }
 bool controller_post_motion(const controller_motion_request_t *request)
 {
@@ -328,28 +389,58 @@ bool controller_post_motion(const controller_motion_request_t *request)
             STOP_REASON_REMOTE, MISSION_IDLE, false};
         return controller_post(&stop);
     }
-    if (controller_urgent_stop_pending()) { return false; }
+    if ((unsigned)request->kind > CONTROLLER_MOTION_GOAL ||
+        (unsigned)request->source > MOTION_SOURCE_CALIBRATION ||
+        controller_urgent_stop_pending()) { return false; }
     if (request->kind == CONTROLLER_MOTION_CONTINUOUS)
     {
         UINT saved = ingress_enter();
         latest_continuous = *request; continuous_pending = true;
         ingress_leave(saved);
-        mail.kind = MAIL_WAKE; (void)post(&mail);
+        mail.header = MAIL_WAKE; (void)post(&mail);
         return true; /* Latest slot accepted even if normal queue is full. */
     }
-    mail.kind = MAIL_MOTION; mail.value.motion = *request; return post(&mail);
+    mail.header = MAIL_MOTION | ((uint32_t)request->kind << 3U) |
+        ((uint32_t)request->source << 5U);
+    if (request->kind == CONTROLLER_MOTION_GOAL)
+    {
+        if ((unsigned)request->value.goal.type > MOTION_GOAL_RETRACE) { return false; }
+        mail.header |= (uint32_t)request->value.goal.type << 8U;
+        mail.value.motion.mm = request->value.goal.mm;
+        mail.value.motion.mdeg = request->value.goal.mdeg;
+        mail.value.motion.speed_mm_s = request->value.goal.speed_mm_s;
+        mail.value.motion.timeout_ms = request->value.goal.timeout_ms;
+    }
+    else if (request->kind == CONTROLLER_MOTION_PROFILE)
+    {
+        if ((unsigned)request->value.profile > MOTION_PROFILE_CRUISE) { return false; }
+        mail.header |= (uint32_t)request->value.profile << 8U;
+    }
+    mail.value.motion.session = request->session;
+    mail.value.motion.id = request->id;
+    mail.value.motion.generation = request->generation;
+    mail.value.motion.created_ms = request->created_ms;
+    mail.value.motion.expires_ms = request->expires_ms;
+    return post(&mail);
 }
 bool controller_post_motion_result(const motion_goal_result_t *result)
 {
     controller_mail_t mail = {0};
-    if (!motion.bound || result == NULL) { return false; }
-    mail.kind = MAIL_RESULT; mail.value.result = *result; return post(&mail);
+    if (!motion.bound || result == NULL || (unsigned)result->code > MOTION_RESULT_FAULT)
+    { return false; }
+    mail.header = MAIL_RESULT | ((uint32_t)result->code << 3U) |
+        ((uint32_t)result->odometry_valid << 6U);
+    mail.value.result.id = result->goal_id;
+    mail.value.result.generation = result->authority_generation;
+    mail.value.result.mm = result->travelled_mm;
+    mail.value.result.mdeg = result->turned_mdeg;
+    return post(&mail);
 }
 bool controller_post_motion_stop(stop_reason_mask_t reasons, uint32_t evidence_id)
 {
     controller_mail_t mail = {0};
     if (!motion.bound || reasons == STOP_REASON_NONE) { return false; }
-    mail.kind = MAIL_SAFETY;
+    mail.header = MAIL_SAFETY;
     mail.value.safety.reasons = reasons; mail.value.safety.evidence_id = evidence_id;
     return post(&mail); /* Caller retains platform evidence until processed. */
 }

@@ -21,8 +21,27 @@ bool wheel_measurement_init(wheel_measurement_t *m,
 
 /* Rebase acquisition only: keep lifetime travel, never invent the lost
  * interval. Quality remains invalid until a complete subsequent good window. */
-static motion_status_t unavailable(wheel_measurement_t *m, const motion_encoder_snapshot_t *s)
+const char *wheel_reject_name(wheel_reject_reason_t reason)
 {
+    switch (reason) {
+    case WHEEL_REJECT_ACQUISITION: return "ACQUISITION_INVALID";
+    case WHEEL_REJECT_RESET: return "COUNTER_RESET";
+    case WHEEL_REJECT_GAP: return "SAMPLE_INTERVAL";
+    case WHEEL_REJECT_EDGE_RATE: return "EDGE_RATE";
+    case WHEEL_REJECT_BATCH_COUNT: return "BATCH_COUNT";
+    case WHEEL_REJECT_BATCH_RATE: return "BATCH_RATE";
+    case WHEEL_REJECT_BATCH_FRACTION: return "BATCH_FRACTION";
+    case WHEEL_REJECT_TRAVEL_RANGE: return "TRAVEL_RANGE";
+    case WHEEL_REJECT_SPEED_RANGE: return "SPEED_RANGE";
+    default: return "NONE";
+    }
+}
+
+static motion_status_t unavailable(wheel_measurement_t *m, const motion_encoder_snapshot_t *s,
+    wheel_reject_reason_t reason, uint8_t wheel_mask)
+{
+    m->reject.reason = reason;
+    m->reject.wheel_mask = wheel_mask;
     m->sample.speed_valid=false; m->sample.signed_speed_valid=false;
     m->sample.speed_um_s[0]=0U; m->sample.speed_um_s[1]=0U;
     m->window_us=0U;
@@ -43,11 +62,14 @@ motion_status_t wheel_measurement_update(wheel_measurement_t *m,
 {
     uint32_t dt;
     uint32_t delta[2], batches[2];
+    uint64_t travel_delta[2], remainder[2], speed[2] = {0U, 0U};
     uint64_t max_delta;
+    bool window_complete;
     unsigned i;
     if ((m == NULL) || (s == NULL) || (m->config.max_edge_rate == 0U))
     { return MOTION_INVALID; }
-    if (!s->acquisition_valid) { return unavailable(m,s); }
+    m->reject = (wheel_reject_t){0};
+    if (!s->acquisition_valid) { return unavailable(m,s,WHEEL_REJECT_ACQUISITION,0U); }
     if (!m->primed)
     {
         m->previous = *s;
@@ -62,51 +84,64 @@ motion_status_t wheel_measurement_update(wheel_measurement_t *m,
     delta[1] = s->right_count - m->previous.right_count;
     batches[0]=s->coalesced_batches[0]-m->previous.coalesced_batches[0];
     batches[1]=s->coalesced_batches[1]-m->previous.coalesced_batches[1];
+    m->reject.interval_us = dt;
+    memcpy(m->reject.edges, delta, sizeof(delta));
+    memcpy(m->reject.batches, batches, sizeof(batches));
+    for (i=0U;i<2U;++i) {
+        m->reject.window_edges[i] = m->window_edges[i] + delta[i];
+        m->reject.window_batches[i] = m->window_batches[i] + batches[i];
+    }
     max_delta = ((uint64_t)m->config.max_edge_rate * dt + 999999U) / 1000000U + 2U;
-    if ((s->reset_epoch != m->previous.reset_epoch) ||
-        (dt == 0U) || (dt > m->config.max_gap_us) ||
-        ((uint64_t)delta[0] > max_delta) || ((uint64_t)delta[1] > max_delta))
-    { return unavailable(m,s); }
+    if (s->reset_epoch != m->previous.reset_epoch)
+    { return unavailable(m,s,WHEEL_REJECT_RESET,0U); }
+    if (dt == 0U || dt > m->config.max_gap_us)
+    { return unavailable(m,s,WHEEL_REJECT_GAP,0U); }
+    if (delta[0] > max_delta || delta[1] > max_delta)
+    { return unavailable(m,s,WHEEL_REJECT_EDGE_RATE,
+        (uint8_t)((delta[0] > max_delta ? 1U : 0U) | (delta[1] > max_delta ? 2U : 0U))); }
+    window_complete = m->window_us + dt >= m->config.speed_window_us;
     for(i=0U;i<2U;++i) {
         /* Every batch represents TWO distinct latched polarities. It cannot
          * exceed its observed edge delta, even across counter wrap. */
         if((uint64_t)batches[i]*2U>delta[i] ||
             (batches[i]!=0U && m->config.max_batches_per_100ms==0U))
-        { return unavailable(m,s); }
-        m->window_edges[i]+=delta[i]; m->window_batches[i]+=batches[i];
-        if((uint64_t)m->window_batches[i]*100000U >
+        { return unavailable(m,s,WHEEL_REJECT_BATCH_COUNT,(uint8_t)(1U<<i)); }
+        if((uint64_t)m->reject.window_batches[i]*100000U >
             (uint64_t)m->config.max_batches_per_100ms*m->config.speed_window_us)
-        { return unavailable(m,s); }
+        { return unavailable(m,s,WHEEL_REJECT_BATCH_RATE,(uint8_t)(1U<<i)); }
+        if(window_complete && (uint64_t)m->reject.window_batches[i]*2000U >
+            (uint64_t)m->config.max_batched_edge_permille*m->reject.window_edges[i])
+        { return unavailable(m,s,WHEEL_REJECT_BATCH_FRACTION,(uint8_t)(1U<<i)); }
+        uint64_t denominator = (uint64_t)m->config.counts_per_rev[i] * 1000U;
+        uint64_t numerator = (uint64_t)delta[i] * m->config.diameter_mm * 3141593U + m->remainder[i];
+        travel_delta[i] = numerator / denominator;
+        remainder[i] = numerator % denominator;
+        if (UINT64_MAX - m->sample.travel_um[i] < travel_delta[i])
+        { return unavailable(m,s,WHEEL_REJECT_TRAVEL_RANGE,(uint8_t)(1U<<i)); }
+        if (window_complete) {
+            speed[i] = (m->window_um[i] + travel_delta[i]) * 1000000U / (m->window_us + dt);
+            if (speed[i] > 2000000U)
+            { return unavailable(m,s,WHEEL_REJECT_SPEED_RANGE,(uint8_t)(1U<<i)); }
+        }
     }
     if (s->direction_epoch != m->window_direction_epoch)
     { m->direction_changed = true; m->sample.signed_speed_valid = false; }
     for (i = 0U; i < 2U; ++i)
     {
-        uint64_t denominator = (uint64_t)m->config.counts_per_rev[i] * 1000U;
-        uint64_t numerator = (uint64_t)delta[i] * m->config.diameter_mm * 3141593U + m->remainder[i];
-        uint64_t um = numerator / denominator;
-        m->remainder[i] = numerator % denominator;
-        if (UINT64_MAX - m->sample.travel_um[i] < um)
-        { return unavailable(m,s); }
-        m->sample.travel_um[i] += um;
-        m->window_um[i] += um;
+        m->remainder[i] = remainder[i];
+        m->sample.travel_um[i] += travel_delta[i];
+        m->window_um[i] += travel_delta[i];
+        m->window_edges[i] = m->reject.window_edges[i];
+        m->window_batches[i] = m->reject.window_batches[i];
     }
     m->window_us += dt;
     m->sample.command_sign[0] = s->left_command_sign;
     m->sample.command_sign[1] = s->right_command_sign;
-    if (m->window_us >= m->config.speed_window_us)
+    if (window_complete)
     {
-        for(i=0U;i<2U;++i) {
-            if((uint64_t)m->window_batches[i]*2000U >
-                (uint64_t)m->config.max_batched_edge_permille*m->window_edges[i])
-            { return unavailable(m,s); }
-        }
         for (i = 0U; i < 2U; ++i)
         {
-            uint64_t speed = m->window_um[i] * 1000000U / m->window_us;
-            if (speed > 2000000U)
-            { return unavailable(m,s); }
-            m->sample.speed_um_s[i] = (uint32_t)speed;
+            m->sample.speed_um_s[i] = (uint32_t)speed[i];
             m->window_um[i] = 0U;
             m->sample.window_batches[i]=m->window_batches[i];
             m->window_batches[i]=0U; m->window_edges[i]=0U;

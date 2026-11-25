@@ -135,7 +135,7 @@ const char *av_config_check(const av_config_t *c) {
     if (!(c->line_align_cm >= 0.0f)) return "line_align_cm must be >= 0";
     if (!(c->strip_extra_cm >= 0.0f)) return "strip_extra_cm must be >= 0";
     if (!(c->return_extra_cm >= 0.0f)) return "return_extra_cm must be >= 0";
-    if (c->sweep_max_deg < 0 || c->sweep_max_deg > 60) return "sweep_max_deg must be within 0..60";
+    if (c->sweep_max_deg < 0 || c->sweep_max_deg > 90) return "sweep_max_deg must be within 0..90";
     if (c->sweep_max_deg > 0 && (c->sweep_step_deg < 1 || c->sweep_step_deg > c->sweep_max_deg))
         return "sweep_step_deg must be within 1..sweep_max_deg";
     if (c->line_align_min_deg < 0 || c->line_align_min_deg > 89)
@@ -234,9 +234,28 @@ static bool is_blocked(range_reading_t r, float threshold_cm) {
 
 typedef enum { TAKE_PENDING, TAKE_READY, TAKE_ABORTED } take_result_t;
 
+static take_result_t measure_at_servo(av_t *a, uint32_t now,
+                                     range_reading_t *out, bool scanning) {
+    *out = scanning && a->hw.measure_scan != NULL
+        ? a->hw.measure_scan(a->hw.ctx) : a->hw.measure(a->hw.ctx);
+    a->last_reading = *out;
+    a->have_reading = true;
+    if (out->status == RANGE_FAULT) {
+        a->metrics.sensor_faults++;
+        if (++a->fault_streak >= a->cfg.max_consecutive_faults) {
+            fail(a, now, "ultrasonic sensor fault");
+            return TAKE_ABORTED;
+        }
+    } else {
+        a->fault_streak = 0;
+    }
+    return TAKE_READY;
+}
+
 // Points the servo at angle and, once it has had time to settle, takes one
 // reading. Never blocks on the servo: returns TAKE_PENDING until settled.
-static take_result_t take(av_t *a, uint32_t now, int angle, range_reading_t *out) {
+static take_result_t take_reading(av_t *a, uint32_t now, int angle,
+                                  range_reading_t *out, bool scanning) {
     if (!a->step_pending || a->pending_angle != angle) {
         int delta = a->servo_known ? abs(angle - a->servo_deg) : 180;
         if (delta != 0) {
@@ -253,19 +272,25 @@ static take_result_t take(av_t *a, uint32_t now, int angle, range_reading_t *out
     }
 
     a->step_pending = false;
-    *out = a->hw.measure(a->hw.ctx);
-    a->last_reading = *out;
-    a->have_reading = true;
+    return measure_at_servo(a, now, out, scanning);
+}
 
-    if (out->status == RANGE_FAULT) {
-        a->metrics.sensor_faults++;
-        if (++a->fault_streak >= a->cfg.max_consecutive_faults) {
-            fail(a, now, "ultrasonic sensor fault");
-            return TAKE_ABORTED;
-        }
-    } else {
-        a->fault_streak = 0;
+static take_result_t take(av_t *a, uint32_t now, int angle, range_reading_t *out) {
+    return take_reading(a, now, angle, out, false);
+}
+
+static take_result_t take_scan(av_t *a, uint32_t now, int angle,
+                               range_reading_t *out, int retries) {
+    take_result_t result = take_reading(a, now, angle, out, true);
+    if (result != TAKE_READY) return result;
+    if (out->status == RANGE_NO_ECHO && a->fine_retries < retries) {
+        a->fine_retries++;
+        a->step_pending = true;
+        a->pending_angle = angle;
+        a->settle_until = now + 60U;
+        return TAKE_PENDING;
     }
+    a->fine_retries = 0;
     return TAKE_READY;
 }
 
@@ -318,6 +343,15 @@ static bool is_measured_hit(range_reading_t r) {
     return r.status == RANGE_OK || r.status == RANGE_TOO_CLOSE;
 }
 
+// Edges belong to the obstacle face in the rover's path. A much nearer
+// object is still relevant to turning clearance, but cannot extend this face.
+static bool is_profile_hit(const av_t *a, range_reading_t r, float dir) {
+    if (r.status != RANGE_OK) return false;
+    float forward = obstacle_polar_to_xy(dir, r.cm).y_cm;
+    return forward >= a->ahead_cm - a->cfg.edge_margin_cm &&
+           forward <= a->ahead_cm + a->cfg.edge_margin_cm;
+}
+
 static obstacle_edge_t make_edge(float dir, float cm, bool found) {
     obstacle_edge_t e;
     e.angle_deg = dir;
@@ -342,12 +376,16 @@ static void start_coarse(av_t *a) {
     a->leg_active = false;
     a->align_step = 0;
     a->pass_phase = 0;
+    a->fine_retries = 0;
+    a->exit_check_pending = false;
     enter(a, AV_STATE_COARSE_SCAN);
 }
 
 static void start_fine(av_t *a, av_state_t which) {
     a->fine_offset = a->cfg.fine_step_deg;
     a->fine_retries = 0;
+    a->fine_probe_offset = 0;
+    a->fine_probe_used = false;
     a->fine_open_seen = false;
     enter(a, which);
 }
@@ -485,10 +523,31 @@ static void on_coarse(av_t *a, uint32_t now) {
     if (a->coarse_idx < a->cfg.coarse_points) {
         int angle = coarse_angle(a, a->coarse_idx);
         range_reading_t r;
-        if (take(a, now, angle, &r) != TAKE_READY) return;
+        if (a->coarse_idx > 0 && a->hw.servo_sweep != NULL) {
+            int direction = a->cfg.left_deg > a->cfg.right_deg ? 1 : -1;
+            int along = direction * (a->hw.servo_position(a->hw.ctx) - angle);
+            bool last = a->coarse_idx == a->cfg.coarse_points - 1;
+            if (along < (last ? 0 : -1)) return;
+            if (last && !a->step_pending) {
+                a->step_pending = true;
+                a->pending_angle = angle;
+                a->settle_until = now + a->cfg.servo_settle_base_ms;
+            }
+            a->servo_deg = angle;
+            if (last) {
+                if (take_scan(a, now, angle, &r, 1) != TAKE_READY) return;
+            } else if (along > 3) {
+                // A delayed task woke after this angle. Leave the bin unknown.
+                r = (range_reading_t){RANGE_NO_ECHO, 0.0f};
+            } else if (measure_at_servo(a, now, &r, true) != TAKE_READY) return;
+        } else if (take_scan(a, now, angle, &r, a->hw.measure_scan != NULL ? 1 : 0)
+                   != TAKE_READY) return;
 
         a->coarse[a->coarse_idx++] = (scan_point_t){angle, r};
         emit_point(a, now, angle, r);
+        if (a->coarse_idx == 1 && a->hw.servo_sweep != NULL) {
+            a->hw.servo_sweep(a->hw.ctx, a->cfg.left_deg);
+        }
         if (a->coarse_idx < a->cfg.coarse_points) return;
     }
 
@@ -500,8 +559,11 @@ static void on_coarse(av_t *a, uint32_t now) {
     // sees the obstacle that triggered the stop, scan out from there.
     if (a->cfg.scan_from_center && near >= 0) {
         int mid = a->cfg.coarse_points / 2;
+        const scan_point_t *nearest = &a->coarse[near];
+        float nearest_cm = nearest->reading.status == RANGE_TOO_CLOSE ? 0.0f : nearest->reading.cm;
         if ((center.status == RANGE_OK &&
-             center.cm < a->cfg.detect_cm + a->cfg.clear_hysteresis_cm) ||
+             center.cm < a->cfg.detect_cm + a->cfg.clear_hysteresis_cm &&
+             center.cm <= nearest_cm + 4.0f) ||
             center.status == RANGE_TOO_CLOSE) {
             near = mid;
         }
@@ -522,7 +584,7 @@ static void on_coarse(av_t *a, uint32_t now) {
                 a->ahead_cm >= a->cfg.detect_cm + a->cfg.clear_hysteresis_cm;
     if (near < 0 && center.status != RANGE_OK) {
         range_reading_t r;
-        if (take(a, now, a->cfg.center_deg, &r) != TAKE_READY) return;
+        if (take_scan(a, now, a->cfg.center_deg, &r, 0) != TAKE_READY) return;
         emit_point(a, now, a->cfg.center_deg, r);
         if (is_measured_hit(r)) {
             a->coarse[a->cfg.coarse_points / 2].reading = r;
@@ -570,7 +632,7 @@ static void on_coarse(av_t *a, uint32_t now) {
     // is still there, and the scan goes on from that reading.
     if (a->clear_checks < a->cfg.clear_confirm_count) {
         range_reading_t r;
-        if (take(a, now, a->cfg.center_deg, &r) != TAKE_READY) return;
+        if (take_scan(a, now, a->cfg.center_deg, &r, 0) != TAKE_READY) return;
         if (!is_measured_hit(r)) {
             emit_point(a, now, a->cfg.center_deg, r);
             if (++a->clear_unknown >= a->cfg.clear_confirm_count + 1) {
@@ -614,24 +676,24 @@ static bool servo_found_a_way(const av_t *a) {
 static void on_fine(av_t *a, uint32_t now) {
     side_t side = a->state == AV_STATE_FINE_SCAN_RIGHT ? SIDE_RIGHT : SIDE_LEFT;
     int idx = side == SIDE_RIGHT ? EDGE_RIGHT : EDGE_LEFT;
-    int angle = servo_from(a, a->scan_base, side, a->fine_offset);
+    bool probing = a->fine_probe_offset != 0;
+    int offset = probing ? a->fine_probe_offset : a->fine_offset;
+    int angle = servo_from(a, a->scan_base, side, offset);
 
     if (abs(angle - a->cfg.center_deg) <= a->cfg.fine_half_range_deg) {
         range_reading_t r;
-        if (take(a, now, angle, &r) != TAKE_READY) return;
-        if (r.status == RANGE_NO_ECHO && a->fine_retries < a->cfg.fine_no_echo_retries) {
-            a->fine_retries++;
-            // Same angle again after an echo-clearing gap (take() waits).
-            a->step_pending = true;
-            a->pending_angle = angle;
-            a->settle_until = now + 60U;
-            return;
-        }
-        a->fine_retries = 0;
+        if (take_scan(a, now, angle, &r, probing ? 1 : a->cfg.fine_no_echo_retries) != TAKE_READY) return;
+        a->fine_probe_offset = 0;
         emit_point(a, now, angle, r);
 
         float dir = direction_of(a, angle);
         if (!is_measured_hit(r)) {
+            if (a->cfg.fine_probe_uncertain && !a->fine_probe_used &&
+                a->cfg.fine_step_deg > 1 && a->edge[idx].measured_hit) {
+                a->fine_probe_used = true;
+                a->fine_probe_offset = a->fine_offset - a->cfg.fine_step_deg / 2;
+                return;
+            }
             a->fine_open_seen = false;
             a->fine_offset += a->cfg.fine_step_deg;
             return;
@@ -652,7 +714,7 @@ static void on_fine(av_t *a, uint32_t now) {
             finish_edge(a, idx, true, 0.5f * (a->edge[idx].last_hit_dir + open_dir), open_cm);
         } else {
             a->fine_open_seen = false; // that open step was a missed echo
-            if (r.status == RANGE_OK) {
+            if (is_profile_hit(a, r, dir)) {
                 a->edge[idx].measured_hit = true;
                 a->edge[idx].last_hit_dir = dir;
                 a->edge[idx].last_hit_cm = r.cm;
@@ -663,7 +725,7 @@ static void on_fine(av_t *a, uint32_t now) {
         }
     }
 
-    if (a->fine_open_seen && !a->edge[idx].done) {
+    if (a->fine_open_seen && !a->edge[idx].done && !a->cfg.fine_probe_uncertain) {
         // Out of servo range after one open step: take it.
         a->fine_open_seen = false;
         finish_edge(a, idx, true, 0.5f * (a->edge[idx].last_hit_dir + a->fine_open_dir),
@@ -712,7 +774,7 @@ static void on_turn_scan(av_t *a, uint32_t now) {
         if (turn_to(a, now, a->origin_deg + s * next)) return;
 
         range_reading_t r;
-        if (take(a, now, a->cfg.center_deg, &r) != TAKE_READY) return;
+        if (take_scan(a, now, a->cfg.center_deg, &r, 0) != TAKE_READY) return;
         emit_point(a, now, a->cfg.center_deg, r);
         float dir = direction_of(a, a->cfg.center_deg);
         a->turn_mag = next;
@@ -722,7 +784,7 @@ static void on_turn_scan(av_t *a, uint32_t now) {
             a->edge[idx].clear_cm = range_effective_cm(r, a->cfg.max_range_cm);
             a->fine_offset = a->cfg.fine_step_deg;
         } else if (is_measured_hit(r)) {
-            if (r.status == RANGE_OK) {
+            if (is_profile_hit(a, r, dir)) {
                 a->edge[idx].measured_hit = true;
                 a->edge[idx].last_hit_dir = dir;
                 a->edge[idx].last_hit_cm = r.cm;
@@ -740,7 +802,7 @@ static void on_turn_scan(av_t *a, uint32_t now) {
     }
     int angle = servo_toward(a, opposite(side), a->fine_offset);
     range_reading_t r;
-    if (take(a, now, angle, &r) != TAKE_READY) return;
+    if (take_scan(a, now, angle, &r, 0) != TAKE_READY) return;
     emit_point(a, now, angle, r);
     float dir = direction_of(a, angle);
     if (!is_measured_hit(r)) {
@@ -756,13 +818,14 @@ static void on_turn_scan(av_t *a, uint32_t now) {
         a->fine_offset += a->cfg.fine_step_deg;
         return;
     }
-    if (r.status == RANGE_OK) {
+    bool matched = is_profile_hit(a, r, dir);
+    if (matched) {
         a->edge[idx].measured_hit = true;
         a->edge[idx].last_hit_dir = dir;
         a->edge[idx].last_hit_cm = r.cm;
     }
     note_hit(a, r);
-    finish_edge(a, idx, true, 0.5f * (a->edge[idx].last_hit_dir + a->clear_dir),
+    finish_edge(a, idx, matched, 0.5f * (a->edge[idx].last_hit_dir + a->clear_dir),
                 a->edge[idx].clear_cm);
     next_edge_stage(a, side);
 }
@@ -799,18 +862,36 @@ static void start_reverse(av_t *a, uint32_t now, float cm, int attempt) {
     emit(a, now, &e);
 }
 
+static bypass_plan_t plan_for_side(const av_t *a, side_t side) {
+    bypass_plan_t plan = obstacle_plan_bypass(&a->profile, side,
+        a->cfg.bypass_side_margin_cm, a->cfg.bypass_pass_cm,
+        a->cfg.bypass_min_turn_deg, a->cfg.bypass_max_turn_deg);
+    if (plan.lateral_cm < a->cfg.bypass_min_lateral_cm) {
+        point2_t unit = obstacle_polar_to_xy((float)plan.turn_deg, 1.0f);
+        plan.lateral_cm = a->cfg.bypass_min_lateral_cm;
+        if (unit.x_cm < 0.0f) plan.out_cm = plan.lateral_cm / -unit.x_cm;
+    }
+    if (a->cfg.turn_radius_cm > 0.0f) {
+        plan.out_cm = obstacle_arc_out_cm(&plan, a->cfg.turn_radius_cm);
+    }
+    return plan;
+}
+
 // Car trial 2026-11-10: the reading just past the left edge went through a
 // gap (39 cm) while the wider one beyond it read 19 cm; the car chose left
 // and its pivot met the blocker at 3 cm. Any coarse reading beyond the edge
 // that lies inside the strip the bypass drives through blocks that side.
-static bool strip_blocked(av_t *a, uint32_t now, side_t side) {
+static bool strip_blocked(av_t *a, uint32_t now, const bypass_plan_t *plan) {
+    side_t side = plan->side;
     const obstacle_edge_t *e = side == SIDE_LEFT ? &a->profile.left : &a->profile.right;
     if (!e->found) return false;
     float edge_x = e->pt.x_cm < 0.0f ? -e->pt.x_cm : e->pt.x_cm;
-    float strip = edge_x + a->cfg.bypass_side_margin_cm + a->cfg.strip_extra_cm;
+    float strip = plan->lateral_cm + a->cfg.strip_extra_cm;
+    float pass_end = obstacle_polar_to_xy((float)plan->turn_deg, plan->out_cm).y_cm +
+        plan->pass_cm;
     for (int i = 0; i < a->cfg.coarse_points; i++) {
         range_reading_t r = a->coarse[i].reading;
-        if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue; // no echo: open
+        if (r.status != RANGE_OK && r.status != RANGE_TOO_CLOSE) continue;
         float dir = scan_left_offset_deg(&a->geom, (float)a->coarse[i].angle_deg);
         bool beyond = side == SIDE_LEFT ? dir > e->angle_deg : dir < e->angle_deg;
         if (!beyond) continue;
@@ -828,8 +909,9 @@ static bool strip_blocked(av_t *a, uint32_t now, side_t side) {
         pt.y_cm += a->shift_cm; // the scan may be reused after a back-off
         float x = pt.x_cm < 0.0f ? -pt.x_cm : pt.x_cm;
         bool toward = side == SIDE_LEFT ? pt.x_cm <= 0.0f : pt.x_cm >= 0.0f;
-        // Outside the obstacle sideways (not its own corner), inside the strip.
-        if (toward && x > edge_x && x < strip && pt.y_cm > 0.0f) {
+        // Limit the blocker test to the planned outward and nominal pass
+        // legs. The live sonar guard still runs if the pass extends further.
+        if (toward && x > edge_x && x < strip && pt.y_cm > 0.0f && pt.y_cm <= pass_end) {
             av_event_t ev = event_of(AV_EVT_SIDE_BLOCKED);
             ev.side = side;
             ev.point = a->coarse[i];
@@ -838,6 +920,31 @@ static bool strip_blocked(av_t *a, uint32_t now, side_t side) {
         }
     }
     return false;
+}
+
+static void emit_decision(av_t *a, uint32_t now) {
+    av_event_t e = event_of(AV_EVT_DECISION);
+    e.side = a->choice.side;
+    e.profile = &a->profile;
+    e.choice = &a->choice;
+    emit(a, now, &e);
+}
+
+static void start_bypass(av_t *a, uint32_t now, bypass_plan_t plan) {
+    if (plan.side == SIDE_LEFT) {
+        a->metrics.bypass_left++;
+    } else {
+        a->metrics.bypass_right++;
+    }
+    a->exit_check_pending = a->cfg.confirm_bypass_exit;
+    if (!a->exit_check_pending) a->off_line = true;
+    a->plan = plan;
+    plan_legs(a);
+    enter(a, AV_STATE_BYPASS);
+    av_event_t e = event_of(AV_EVT_BYPASS_START);
+    e.side = plan.side;
+    e.plan = &a->plan;
+    emit(a, now, &e);
 }
 
 static void on_decide(av_t *a, uint32_t now) {
@@ -894,44 +1001,17 @@ static void on_decide(av_t *a, uint32_t now) {
 
     float left_clear = a->edge[EDGE_LEFT].clear_cm;
     float right_clear = a->edge[EDGE_RIGHT].clear_cm;
+    bypass_plan_t left_plan = plan_for_side(a, SIDE_LEFT);
+    bypass_plan_t right_plan = plan_for_side(a, SIDE_RIGHT);
     if (a->cfg.strip_extra_cm > 0.0f) {
-        if (strip_blocked(a, now, SIDE_LEFT)) left_clear = 0.0f;
-        if (strip_blocked(a, now, SIDE_RIGHT)) right_clear = 0.0f;
+        if (strip_blocked(a, now, &left_plan)) left_clear = 0.0f;
+        if (strip_blocked(a, now, &right_plan)) right_clear = 0.0f;
     }
     a->choice = obstacle_choose_side(&a->profile, left_clear, right_clear, a->cfg.min_clearance_cm);
-    av_event_t de = event_of(AV_EVT_DECISION);
-    de.side = a->choice.side;
-    de.profile = &a->profile;
-    de.choice = &a->choice;
-    emit(a, now, &de);
+    emit_decision(a, now);
 
     if (a->choice.side != SIDE_NONE) {
-        if (a->choice.side == SIDE_LEFT) {
-            a->metrics.bypass_left++;
-        } else {
-            a->metrics.bypass_right++;
-        }
-        a->off_line = true;
-        a->plan = obstacle_plan_bypass(&a->profile, a->choice.side, a->cfg.bypass_side_margin_cm,
-                                       a->cfg.bypass_pass_cm, a->cfg.bypass_min_turn_deg,
-                                       a->cfg.bypass_max_turn_deg);
-        // A floor on the sidestep: an edge read too close to the centre
-        // (beam correction, a weak echo) must not shrink it to a few cm
-        // (car trial 2026-11-10: a 4 cm out leg ran the car into the box).
-        if (a->plan.lateral_cm < a->cfg.bypass_min_lateral_cm) {
-            point2_t unit = obstacle_polar_to_xy((float)a->plan.turn_deg, 1.0f);
-            a->plan.lateral_cm = a->cfg.bypass_min_lateral_cm;
-            if (-unit.x_cm > 0.0f) a->plan.out_cm = a->plan.lateral_cm / -unit.x_cm;
-        }
-        if (a->cfg.turn_radius_cm > 0.0f) {
-            a->plan.out_cm = obstacle_arc_out_cm(&a->plan, a->cfg.turn_radius_cm);
-        }
-        plan_legs(a);
-        enter(a, AV_STATE_BYPASS);
-        av_event_t be = event_of(AV_EVT_BYPASS_START);
-        be.side = a->choice.side;
-        be.plan = &a->plan;
-        emit(a, now, &be);
+        start_bypass(a, now, a->choice.side == SIDE_LEFT ? left_plan : right_plan);
         return;
     }
 
@@ -1218,6 +1298,41 @@ static void finish_pass(av_t *a) {
     a->legs[LEG_RETURN_DRIVE].cm = (cm < lo ? lo : (cm > hi ? hi : cm)) + a->cfg.return_extra_cm;
 }
 
+static bool confirm_exit(av_t *a, uint32_t now, int angle) {
+    range_reading_t r;
+    if (take_scan(a, now, angle, &r, 1) != TAKE_READY) return false;
+    float required = a->plan.out_cm + a->cfg.bypass_side_margin_cm;
+    if (required < a->cfg.min_clearance_cm) required = a->cfg.min_clearance_cm;
+    bool clear = r.status == RANGE_OK && r.cm >= required;
+    av_event_t e = event_of(AV_EVT_EXIT_CHECK);
+    e.point = (scan_point_t){angle, r};
+    e.side = a->plan.side;
+    e.heading_deg = a->heading_deg;
+    e.exit_required_cm = required;
+    e.reason = clear ? "clear" : is_blocked(r, required) ? "blocked" : "unknown";
+    emit(a, now, &e);
+    a->exit_check_pending = false;
+    if (clear) {
+        a->off_line = true;
+        return true;
+    }
+    float left = a->plan.side == SIDE_LEFT ? 0.0f : a->choice.left_clear_cm;
+    float right = a->plan.side == SIDE_RIGHT ? 0.0f : a->choice.right_clear_cm;
+    a->choice = obstacle_choose_side(&a->profile, left, right, a->cfg.min_clearance_cm);
+    if (a->choice.side != SIDE_NONE) {
+        emit_decision(a, now);
+        start_bypass(a, now, plan_for_side(a, a->choice.side));
+        return false;
+    }
+    if (a->reverses >= a->cfg.max_reverses) {
+        fail(a, now, "bypass exit clearance unconfirmed");
+    } else {
+        a->reverses++;
+        start_reverse(a, now, a->cfg.reverse_cm, a->reverses);
+    }
+    return false;
+}
+
 static void on_bypass(av_t *a, uint32_t now) {
     if (a->align_step != 0) {
         on_align(a, now);
@@ -1228,6 +1343,11 @@ static void on_bypass(av_t *a, uint32_t now) {
         return;
     }
     int i = a->leg_idx;
+    // A stationary servo check preserves the usual outward arc when both
+    // edges were measured and the leg lies within servo travel.
+    if (i == 0 && a->exit_check_pending && a->profile.left.found && a->profile.right.found &&
+        a->heading_deg == a->origin_deg && a->plan.turn_deg <= a->cfg.fine_half_range_deg &&
+        !confirm_exit(a, now, servo_toward(a, a->plan.side, a->plan.turn_deg))) return;
     if (!a->legs[i].forward) {
         if (i == LEG_RETURN_TURN) {
             av_event_t e = event_of(AV_EVT_BYPASS_RETURN);
@@ -1240,6 +1360,7 @@ static void on_bypass(av_t *a, uint32_t now) {
     }
 
     if (!a->leg_active) {
+        if (i == 1 && a->exit_check_pending && !confirm_exit(a, now, a->cfg.center_deg)) return;
         float cm = a->legs[i].cm;
         if (i == LEG_PASS) {
             start_pass(a);
@@ -1285,13 +1406,30 @@ static bool sweep_for_line(av_t *a, uint32_t now) {
         rejoin_line(a, now);
         return true;
     }
-    int n = 2 * (a->cfg.sweep_max_deg / a->cfg.sweep_step_deg);
-    if (a->sweep_idx < n) {
+    int limit = a->cfg.sweep_max_deg;
+    int near_limit = limit < 45 ? limit : 45;
+    int near_steps = 2 * (near_limit / a->cfg.sweep_step_deg);
+    int steps = near_steps + (limit > near_limit ? 3 : 0);
+    if (a->sweep_idx < steps) {
         int first = side_sign(opposite(a->choice.side)); // + = left
-        int k = a->sweep_idx / 2 + 1;
-        int sign = a->sweep_idx % 2 == 0 ? first : -first;
+        int target;
+        if (a->sweep_idx < near_steps) {
+            int k = a->sweep_idx / 2 + 1;
+            int sign = a->sweep_idx % 2 == 0 ? first : -first;
+            target = sign * k * a->cfg.sweep_step_deg;
+        } else {
+            // Widen from the last side, then cross via centre to keep every
+            // individual pivot at or below 90 degrees.
+            int far_step = a->sweep_idx - near_steps;
+            target = (far_step - 1) * first * limit;
+        }
         a->sweep_idx++;
-        turn_to(a, now, sign * k * a->cfg.sweep_step_deg);
+        if (turn_to(a, now, target)) {
+            av_event_t e = event_of(AV_EVT_REACQUIRE_SWEEP);
+            e.attempt = a->sweep_idx;
+            e.heading_deg = target;
+            emit(a, now, &e);
+        }
         return true;
     }
     a->sweep_done = true; // not found: the search below turns back to 0 first
@@ -1359,7 +1497,8 @@ bool av_init(av_t *a, const av_config_t *cfg, const av_platform_t *hw) {
     if (a == NULL) return false;
     memset(a, 0, sizeof *a);
     a->state = AV_STATE_FAILED;
-    if (av_config_check(cfg) != NULL || !platform_ok(hw)) {
+    if (av_config_check(cfg) != NULL || !platform_ok(hw) ||
+        ((hw->servo_sweep == NULL) != (hw->servo_position == NULL))) {
         a->fail_reason = "invalid configuration";
         return false;
     }
@@ -1459,7 +1598,8 @@ bool av_last_reading(const av_t *a, range_reading_t *out) {
 
 bool av_turn_rounds_obstacle(const av_t *a) {
     // on_bypass moves leg_idx on before issuing a turn: legs 0, 2, 4 -> 1, 3, 5.
-    return a->state == AV_STATE_BYPASS && a->align_step == 0 && a->leg_idx <= LEG_RETURN_DRIVE;
+    return a->state == AV_STATE_BYPASS && a->align_step == 0 &&
+        !a->exit_check_pending && a->leg_idx <= LEG_RETURN_DRIVE;
 }
 
 bool av_line_expected(const av_t *a) {

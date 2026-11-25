@@ -41,6 +41,8 @@ ER tk_dly_tsk(unsigned int delay){
   last_telemetry=p.created_ms;++telemetry_count;
  }
  if(b1_network_take(B1_HEARTBEAT,&p)){
+  assert(p.length==B1_HEARTBEAT_SIZE&&(unsigned char)p.text[0]==0xb1);
+  assert(p.text[1]==1&&p.text[2]==5&&p.text[3]==B1_DEMO);
   assert(count<4);times[count++]=p.created_ms;
  }
  network_reading=0;clock_ms+=delay;

@@ -22,5 +22,20 @@ int main(int argc, char **argv) {
  s.s5.last_status=4;s.present=16;assert(!b1_binary_valid(&s));s.present=15;
  n=b1_encode_telemetry(wire,sizeof(wire),&s,7,1000,1);assert(n);
  if(argc==2){FILE *f=fopen(argv[1],"wb");assert(f);assert(fwrite(wire,1,n,f)==n);fclose(f);}
+ b1_binary_cache cache={0};
+ unsigned char cached[B1_BINARY_MAX];
+ for(unsigned mask=0;mask<16;mask++){
+  s.present=mask;
+  assert(b1_cache_snapshot(&cache,&s,NULL));
+  n=b1_encode_telemetry(wire,sizeof(wire),&s,UINT32_MAX,0,0);
+  assert(n==b1_encode_cached(cached,sizeof(cached),&cache,UINT32_MAX,0,0));
+  assert(n&&memcmp(wire,cached,n)==0);
+ }
+ b1_binary_cache valid=cache;
+ s.s3.adc=4096;
+ assert(!b1_cache_section(&cache,3,&s.s3,0,NULL));
+ assert(!b1_cache_snapshot(&cache,&s,NULL));
+ assert(!b1_cache_base(&cache,101,0,NULL));
+ assert(memcmp(&valid,&cache,sizeof(cache))==0);
  puts("PASS binary telemetry boundaries and golden fixture");return 0;
 }

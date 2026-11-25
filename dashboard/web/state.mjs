@@ -2,6 +2,7 @@ import {decodeLiveStatus} from './live-status.mjs?v=route-slots-1';
 import {decodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {decodeDiagnostics,newDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
 import {mapFromHex} from './route-map.mjs?v=barcode-digital-4';
+import {decodeControlWire} from './control-wire.mjs';
 export function validateCommand(command) {
  if(command==='START'||command==='STOP') return command;
  throw new Error('Only START and STOP are supported');
@@ -35,9 +36,10 @@ export class RobotState {
   if(topic==='diagnostics'){
    const d=decodeDiagnostics(payload);this.diagnostics.device=d;this.diagnostics.deviceAt=now;this.received++;return true;
   }
-  const binary=topic==='telemetry'&&payload instanceof Uint8Array&&payload[0]===0xb1;
-  const text=typeof payload==='string'?payload:new TextDecoder('utf-8',{fatal:true}).decode(binary?new Uint8Array():payload);
-  const v=binary?decodeTelemetry(payload):JSON.parse(text);
+  const wire=payload instanceof Uint8Array&&payload[0]===0xb1;
+  const binary=topic==='telemetry'&&wire;
+  const v=wire?(binary?decodeTelemetry(payload):decodeControlWire(topic,payload)):
+   JSON.parse(typeof payload==='string'?payload:new TextDecoder('utf-8',{fatal:true}).decode(payload));
   if(!v||Array.isArray(v)||!(binary?[2,3]:[1]).includes(v.schema)||typeof v.demo!=='boolean')throw new Error('Invalid schema or demo flag');
   if(topic==='heartbeat'){
    if(!Number.isSafeInteger(v.seq)||v.seq<0)throw new Error('Invalid heartbeat sequence');
