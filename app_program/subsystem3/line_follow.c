@@ -4,12 +4,13 @@
 
 /* 2-of-3 majority vote over the last three samples. A single noisy sample
  * cannot flip the result; the cost is at most 2 samples (2 ms) of delay. */
-static bool majority(uint8_t *history, bool sample)
+static uint8_t update_history(uint8_t history, bool sample)
 {
-    uint8_t bits;
+    return (uint8_t)(((history << 1) | (sample ? 1U : 0U)) & 0x07U);
+}
 
-    *history = (uint8_t)(((*history << 1) | (sample ? 1U : 0U)) & 0x07U);
-    bits = *history;
+static bool majority(uint8_t bits)
+{
     return ((bits & 1U) + ((bits >> 1) & 1U) + ((bits >> 2) & 1U)) >= 2U;
 }
 
@@ -73,8 +74,10 @@ line_status_t line_follow_update(
         return empty;
     }
 
-    left_black = majority(&lf->history_left, left_raw);
-    right_black = majority(&lf->history_right, right_raw);
+    lf->history_left = update_history(lf->history_left, left_raw);
+    lf->history_right = update_history(lf->history_right, right_raw);
+    left_black = majority(lf->history_left);
+    right_black = majority(lf->history_right);
     lf->status.left_black = left_black ? 1U : 0U;
     lf->status.right_black = right_black ? 1U : 0U;
 

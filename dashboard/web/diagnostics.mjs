@@ -55,9 +55,15 @@ export function renderDiagnostics(state,time,build){
  $('diagnostic-browser-note').textContent=d.lastRxError?`Last browser rejection: ${d.lastRxError.reason}`:'Browser counters cover this dashboard session only.';
  const terrain=state.telemetry?.buddies?.[4];
  $('diagnostic-clamped').textContent=terrain?`Last Buddy 4 frame: ${terrain.clamped?'one or more fields saturated to fit':'no saturation flag'}.`:'No Buddy 4 saturation report available.';
- $('diagnostic-build').textContent=build?.verified?'Recorded static RAM comparison':'Build comparison pending';
- $('diagnostic-before').textContent=build?.verified?`${build.before.static_ram_bytes.toLocaleString()} B`:'—';
- $('diagnostic-after').textContent=build?.verified?`${build.after.static_ram_bytes.toLocaleString()} B`:'—';
- $('diagnostic-delta').textContent=build?.verified?`${build.after.static_ram_bytes-build.before.static_ram_bytes>=0?'+':''}${(build.after.static_ram_bytes-build.before.static_ram_bytes).toLocaleString()} B`:'—';
- $('diagnostic-ram-note').textContent=build?.verified?`${build.profile} · .data + .bss from matched builds. Excludes runtime stack/heap usage; not live RAM.`:'No live stack/heap measurement is available. RAM will appear after matching builds.';
+ $('diagnostic-build').textContent='Recorded static RAM';
+ const matched=build?.verified&&typeof build.source_base==='string'&&typeof build.effective_profile==='string';
+ $('diagnostic-before').textContent=matched?`${build.before.static_ram_bytes.toLocaleString()} B`:'—';
+ $('diagnostic-after').textContent=matched?`${build.after.static_ram_bytes.toLocaleString()} B`:'—';
+ const delta=matched?build.after.static_ram_bytes-build.before.static_ram_bytes:0;
+ $('diagnostic-delta').textContent=matched?`${delta>=0?'+':''}${delta.toLocaleString()} B`:'—';
+ const ramNote=$('diagnostic-ram-note');
+ ramNote.textContent=matched
+  ?`${build.measured_date} · ${build.profile} · base ${build.source_base.slice(0,7)} (matched working trees). ELF .data + .bss. Captures reserved memory in those sections. Live stack and heap usage are unmeasured.`
+  :'Awaiting matched ELF measurements. Live stack and heap usage are unmeasured.';
+ ramNote.title=matched?build.effective_profile:'';
 }

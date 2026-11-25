@@ -3,7 +3,12 @@
 /* Fixed widths and checked bounds: zero bytes and endianness are unambiguous. */
 static void put32(unsigned char *p,uint32_t v){for(unsigned int i=0;i<4;i++)p[i]=(unsigned char)(v>>(8*i));}
 static void bits(unsigned char *p,unsigned int *at,uint32_t value,unsigned int n){
- for(unsigned int i=0;i<n;i++,(*at)++)if((value>>i)&1u)p[*at/8]|=(unsigned char)(1u<<(*at%8));
+ while(n){
+  unsigned shift=*at%8U, count=8U-shift;
+  if(count>n)count=n;
+  p[*at/8U]|=(uint8_t)((value&((1U<<count)-1U))<<shift);
+  value>>=count;*at+=count;n-=count;
+ }
 }
 static int reject(b1_validation_error *e,uint32_t section,uint32_t field,uint32_t reason,
  int64_t value,int64_t minimum,int64_t maximum){
@@ -257,5 +262,89 @@ unsigned int b1_encode_telemetry(unsigned char *out,unsigned int capacity,
  if(s->present&1){out[at]=3;out[at+1]=17;put32(out+at+2,s->s3_at_ms);pack3(out+at+6,&s->s3);at+=23;}
  if(s->present&2){out[at]=4;out[at+1]=17;put32(out+at+2,s->s4_at_ms);memcpy(out+at+6,s->s4,17);at+=23;}
  if(s->present&4){out[at]=5;out[at+1]=138;put32(out+at+2,s->s5_at_ms);pack5(out+at+6,&s->s5);at+=144;}
+ return n;
+}
+
+static const uint8_t section_at[6]={0,0,19,62,85,108};
+static const uint8_t section_size[6]={0,0,37,17,17,138};
+static const uint8_t section_flag[6]={0,0,8,1,2,4};
+
+static void copy_cached_section(b1_binary_cache *cache,unsigned id,const void *section,uint32_t at){
+ unsigned char *p=cache->bytes+section_at[id];
+ p[0]=(uint8_t)id;p[1]=section_size[id];put32(p+2,at);
+ memset(p+6,0,p[1]);
+ switch(id){
+  case 2: pack2(p+6,section); break;
+  case 3: pack3(p+6,section); break;
+  case 4: memcpy(p+6,section,17); break;
+  case 5: pack5(p+6,section); break;
+ }
+ cache->bytes[3]|=(uint8_t)(section_flag[id]<<2);
+}
+
+static void cache_faults(b1_binary_cache *cache,uint32_t faults){
+ for(unsigned i=0;i<3;i++)cache->bytes[12+i]=(uint8_t)(faults>>(8*i));
+}
+
+int b1_cache_base(b1_binary_cache *cache,uint32_t speed,uint32_t distance,b1_validation_error *e){
+ if(speed>100U)return reject(e,1,2,2,speed,0,100);
+ if(distance>100000U)return reject(e,1,3,2,distance,0,100000);
+ cache->bytes[3]|=2U;cache->bytes[15]=(uint8_t)speed;
+ for(unsigned i=0;i<3;i++)cache->bytes[16+i]=(uint8_t)(distance>>(8*i));
+ return 1;
+}
+
+int b1_cache_snapshot(b1_binary_cache *cache,const b1_binary_snapshot *s,b1_validation_error *e){
+ if(!b1_binary_validate(s,e))return 0;
+ memset(cache->bytes,0,19);
+ (void)b1_cache_base(cache,s->speed_percent,s->distance_cm,0);
+ if(!s->base_valid)cache->bytes[3]&=(uint8_t)~2U;
+ cache_faults(cache,s->fault_mask);
+ if(s->present&B1_SECTION_2)copy_cached_section(cache,2,&s->s2,s->s2_at_ms);
+ if(s->present&B1_SECTION_3)copy_cached_section(cache,3,&s->s3,s->s3_at_ms);
+ if(s->present&B1_SECTION_4)copy_cached_section(cache,4,s->s4,s->s4_at_ms);
+ if(s->present&B1_SECTION_5)copy_cached_section(cache,5,&s->s5,s->s5_at_ms);
+ return 1;
+}
+
+int b1_cache_section(b1_binary_cache *cache,unsigned id,const void *section,uint32_t at,
+ b1_validation_error *e){
+ if(!section)return reject(e,1,0,1,0,0,0);
+ switch(id){
+  case 2: {
+   const b1_s2_telemetry *s=section;
+   if(s->hardware_faults>1048575U)return reject(e,1,4,2,s->hardware_faults,0,1048575);
+   if(!valid2(s,e))return 0;
+   cache_faults(cache,s->hardware_faults);
+   break;
+  }
+  case 3: if(!valid3(section,e))return 0; break;
+  case 4: {
+   const uint8_t *p=section;
+   if(p[0]!=0x21)return reject(e,4,1,3,p[0],0x21,0x21);
+   break;
+  }
+  case 5: if(!valid5(section,e))return 0; break;
+  default: return 0;
+ }
+ copy_cached_section(cache,id,section,at);
+ return 1;
+}
+
+unsigned b1_encode_cached(uint8_t *out,unsigned capacity,const b1_binary_cache *cache,
+ uint32_t seq,uint32_t uptime_ms,int demo){
+ unsigned n=19;
+ for(unsigned id=2;id<=5;id++)
+  if(cache->bytes[3]&(section_flag[id]<<2))n+=6U+section_size[id];
+ if(!out||capacity<n)return 0;
+ memcpy(out,cache->bytes,19);
+ out[0]=0xb1;out[1]=3;out[2]=1;out[3]|=(uint8_t)(demo?1:0);
+ put32(out+4,seq);put32(out+8,uptime_ms);
+ unsigned at=19;
+ for(unsigned id=2;id<=5;id++){
+  if(!(cache->bytes[3]&(section_flag[id]<<2)))continue;
+  unsigned size=6U+section_size[id];
+  memcpy(out+at,cache->bytes+section_at[id],size);at+=size;
+ }
  return n;
 }

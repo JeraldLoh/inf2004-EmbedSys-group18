@@ -620,6 +620,48 @@ static void test_barcode_left_turn(void)
 static uint32_t test_map_revision;
 static uint32_t read_test_map_revision(void) { return test_map_revision; }
 
+static void test_mapped_barcode_waits_for_next_junction(void)
+{
+    controller_service_t service;
+    fake_junction_t f;
+    controller_event_t stop = {CONTROLLER_EVENT_LATCH_STOP, SYSTEM_MODE_STOPPED,
+        STOP_REASON_REMOTE, MISSION_IDLE, false};
+    start_junctions(&service, &f);
+    publish_route(&f, ROUTE_COMMAND_LEFT);
+    f.route.until_junction = true;
+    f.route.expires_ms = 0U;
+    controller_service_tick(&service, 1000U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
+    controller_service_tick(&service, 60000U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
+    assert(f.goal_count == 0U);
+
+    /* Exercise the same pause-and-choose branch used by the demo firmware. */
+    publish_junction(&f, true, true);
+    service.pause_junction = f.junction;
+    f.junction_ready = false;
+    service.junction_phase = CONTROLLER_JUNCTION_PAUSE;
+    service.phase_since_ms = 60000U;
+    controller_service_tick(&service, 60000U + service.junction.pause_ms);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_RESERVED);
+    assert(f.goal_count == 1U);
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 62000U);
+    assert(f.goal_count == 2U && f.goals[1].type == MOTION_GOAL_PIVOT_LEFT);
+    f.goal_code = MOTION_RESULT_COMPLETED;
+    controller_service_tick(&service, 63000U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_CONSUMED);
+    assert(f.goal_count == 2U);
+
+    publish_route(&f, ROUTE_COMMAND_RIGHT);
+    f.route.until_junction = true;
+    f.route.expires_ms = 0U;
+    controller_service_tick(&service, 64000U);
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
+    assert(controller_service_handle(&service, &stop));
+    assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_CANCELLED);
+}
+
 static void test_map_change_drops_only_pending_route(void)
 {
     controller_service_t service;
@@ -628,6 +670,8 @@ static void test_map_change_drops_only_pending_route(void)
     service.read_route_map_revision = read_test_map_revision;
     test_map_revision = 2U;
     publish_route(&f, ROUTE_COMMAND_LEFT);
+    f.route.until_junction = true;
+    f.route.expires_ms = 0U;
     controller_service_tick(&service, 100U);
     assert(service.controller.route_lifecycle == ROUTE_LIFECYCLE_PENDING);
     test_map_revision = 4U;
@@ -1114,6 +1158,7 @@ int main(void)
     test_line_search_off_by_default();
     test_bind_junction_needs_every_output();
     test_barcode_left_turn();
+    test_mapped_barcode_waits_for_next_junction();
     test_map_change_drops_only_pending_route();
     test_straight_and_right_and_uturn();
     test_route_published_between_takes();

@@ -89,7 +89,7 @@ static uint32_t s3_kernel_ms(void) { SYSTIM t; (void)tk_get_otm(&t); return t.lo
 #endif
 #define S3_BARCODE_FIXED_LOW 350U
 #define S3_BARCODE_FIXED_HIGH 450U
-#define S3_ROUTE_VALID_MS 10000U /* TBD: measure barcode-to-junction time */
+#define S3_PROBE_ROUTE_VALID_MS 10000U /* inferred junction-probe result only */
 #define S3_DEBUG_PERIOD_MS 100U
 
 #ifndef S3_GROUND_LOG
@@ -291,7 +291,8 @@ LOCAL void s3_publish_route(route_command_t command, char character, uint32_t no
     route.command = command;
     route.decoded_character = character;
     route.decoded_ms = now_ms;
-    route.expires_ms = now_ms + S3_ROUTE_VALID_MS;
+    route.until_junction = character != '-'; /* '-' is the inferred probe route */
+    route.expires_ms = route.until_junction ? 0U : now_ms + S3_PROBE_ROUTE_VALID_MS;
     route.valid = true;
 
     (void)tk_loc_mtx(s3_mtx, TMO_FEVR);

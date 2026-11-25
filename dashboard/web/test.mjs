@@ -2,6 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {RobotState, validateCommand} from './state.mjs';
 import {mqttString, packet, extractPackets, decodePublish, validateConnection} from './mqtt.mjs';
+test('compact heartbeat and map vectors coexist with legacy results',()=>{
+ const s=new RobotState();s.connectionRestored();
+ const bytes=hex=>Uint8Array.from(Buffer.from(hex,'hex'));
+ const heartbeat=bytes('b1010501ffffffff78563412');
+ assert.equal(s.receive('heartbeat',heartbeat,4,true),false);
+ assert.equal(s.receive('heartbeat',heartbeat,5),true);
+ assert.equal(s.status(19.9),'online');
+ const map=bytes('b1010614fffffffffeffffff'+'00'.repeat(14));
+ s.receive('command_result',map,6);
+ assert.equal(s.result.command_id,0xffffffff);
+ assert.equal(s.routeMapRevision,0xfffffffe);
+ const invalid=map.slice();invalid[12]=9;
+ assert.throws(()=>s.receive('command_result',invalid,10));
+ assert.equal(s.routeMapAt,6);
+ assert.throws(()=>s.receive('heartbeat',heartbeat.slice(0,11),19));
+ assert.equal(s.status(20),'offline');
+ s.receive('command_result','{"schema":1,"demo":false,"status":"queued","command_id":28}',21);
+ assert.equal(s.result.command_id,28);
+});
 test('heartbeat expires exactly at 15 seconds; telemetry cannot refresh it',()=>{
  const s=new RobotState();assert.equal(s.status(0),'disconnected');s.connected=true;
  assert.equal(s.status(0),'waiting');

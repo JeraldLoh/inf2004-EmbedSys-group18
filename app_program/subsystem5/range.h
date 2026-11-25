@@ -26,6 +26,9 @@ typedef struct {
 // more conservative one (TOO_CLOSE > FAULT > NO_ECHO).
 range_reading_t range_combine(const range_reading_t *samples, size_t count);
 
+// Stationary scan: use the nearest pair that agrees, or leave a split echo unknown.
+range_reading_t range_combine_scan(const range_reading_t *samples, size_t count);
+
 // Distance to use in comparisons: NO_ECHO counts as max_cm (open),
 // TOO_CLOSE and FAULT count as 0 (blocked).
 float range_effective_cm(range_reading_t r, float max_cm);

@@ -47,6 +47,31 @@ range_reading_t range_combine(const range_reading_t *samples, size_t count) {
     return out;
 }
 
+range_reading_t range_combine_scan(const range_reading_t *samples, size_t count) {
+    range_reading_t combined = range_combine(samples, count);
+    if (combined.status != RANGE_OK) return combined;
+
+    // Start with a 3 cm absolute allowance, then 10% at longer ranges.
+    range_reading_t nearest = {RANGE_NO_ECHO, 0.0f};
+    for (size_t i = 0; i < count; ++i) {
+        float a = samples[i].cm;
+        if (samples[i].status != RANGE_OK || !isfinite(a) || a < 0.0f) continue;
+        for (size_t j = i + 1; j < count; ++j) {
+            float b = samples[j].cm;
+            if (samples[j].status != RANGE_OK || !isfinite(b) || b < 0.0f) continue;
+            float near = a < b ? a : b;
+            float far = a < b ? b : a;
+            float tolerance = near < 30.0f ? 3.0f : near * 0.1f;
+            float mean = (a + b) * 0.5f;
+            if (far - near <= tolerance &&
+                (nearest.status != RANGE_OK || mean < nearest.cm)) {
+                nearest = (range_reading_t){RANGE_OK, mean};
+            }
+        }
+    }
+    return nearest;
+}
+
 float range_effective_cm(range_reading_t r, float max_cm) {
     switch (r.status) {
         case RANGE_OK: return r.cm;

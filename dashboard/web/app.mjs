@@ -1,6 +1,6 @@
 import {renderBarcodeStatus} from './barcode-status.mjs?v=barcode-retry-1';
 import {robotEvents,lineSearchEvents,calibrationEvents} from './robot-events.mjs?v=barcode-digital-4';
-import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=barcode-digital-4';
+import {renderDiagnostics,encodeDiagnostics} from './diagnostics.mjs?v=recorded-static-ram-1';
 import {encodeLiveStatus} from './live-status.mjs?v=barcode-digital-4';
 import {encodeTelemetry} from './binary.mjs?v=barcode-digital-4';
 import {encodeCommand,decodeCommand} from './commands.mjs?v=barcode-digital-4';
@@ -9,7 +9,7 @@ import {renderSensorHighlights} from './sensor-panels.mjs?v=route-slots-1';
 import {renderRoverOverview} from './rover-overview.mjs?v=overview-1';
 import {createHumpLog,updateHumpLog,renderHumpLog} from './hump-log.mjs?v=humps-1';
 let humpLog=createHumpLog();
-import {RobotState,validateCommand} from './state.mjs?v=route-slots-1';
+import {RobotState,validateCommand} from './state.mjs?v=compact-control-1';
 import {MqttConnection,validateConnection} from './mqtt.mjs?v=combined-1';
 import {ASSIGNABLE_ACTIONS,editableRouteMap,charIndex,encodeMapSet,encodeMapShow,decodeMapCommand,mapToHex,sameMap,assignDirection,lettersForDirection} from './route-map.mjs?v=route-no-straight-1';
 const $=id=>document.getElementById(id),now=()=>performance.now()/1000;

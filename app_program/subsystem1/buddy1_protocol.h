@@ -26,4 +26,15 @@ int b1_parse_map(const char *data,unsigned int length,b1_map_command *out);
 unsigned int b1_map_entry(const uint8_t packed[B1_MAP_BYTES],unsigned int index);
 void b1_map_put(uint8_t packed[B1_MAP_BYTES],unsigned int index,unsigned int value);
 char b1_map_character(unsigned int index);   /* 0..25 'A'..'Z', 26..35 '0'..'9' */
+
+#define B1_HEARTBEAT_SIZE 12U
+#define B1_RESULT_SIZE 8U
+#define B1_RESULT_MAP_SIZE (12U + B1_MAP_BYTES)
+enum b1_result_code {
+ B1_RESULT_SIMULATED, B1_RESULT_QUEUED, B1_RESULT_REJECTED,
+ B1_RESULT_QUEUE_FULL, B1_RESULT_APPLIED
+};
+unsigned b1_encode_heartbeat(uint8_t *out,unsigned cap,uint32_t seq,uint32_t uptime,unsigned demo);
+unsigned b1_encode_result(uint8_t *out,unsigned cap,uint32_t id,unsigned status,unsigned demo,
+ const uint8_t map[B1_MAP_BYTES],uint32_t revision);
 #endif

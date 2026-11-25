@@ -16,6 +16,17 @@ static void median_of_unsorted_input(void) {
     CHECK_NEAR(range_combine(s, 5).cm, 30.0f, 1e-6);
 }
 
+static void stationary_scan_uses_nearest_agreeing_echoes(void) {
+    range_reading_t near[] = {ok(9.0f), ok(35.0f), ok(10.0f)};
+    range_reading_t split[] = {ok(9.0f), ok(35.0f), st(RANGE_NO_ECHO)};
+    range_reading_t background[] = {ok(9.0f), ok(34.0f), ok(35.0f)};
+    range_reading_t bad[] = {st(RANGE_FAULT), st(RANGE_FAULT), ok(12.0f)};
+    CHECK_NEAR(range_combine_scan(near, 3).cm, 9.5f, 1e-6);
+    CHECK_INT(range_combine_scan(split, 3).status, RANGE_NO_ECHO);
+    CHECK_NEAR(range_combine_scan(background, 3).cm, 34.5f, 1e-6);
+    CHECK_INT(range_combine_scan(bad, 3).status, RANGE_FAULT);
+}
+
 static void even_count_averages_middle_pair(void) {
     range_reading_t s[] = {ok(12.0f), st(RANGE_NO_ECHO), ok(10.0f), st(RANGE_NO_ECHO)};
     range_reading_t r = range_combine(s, 4);
@@ -81,6 +92,7 @@ static void echo_width_to_distance(void) {
 void run_range_tests(void) {
     RUN(median_rejects_single_spike);
     RUN(median_of_unsorted_input);
+    RUN(stationary_scan_uses_nearest_agreeing_echoes);
     RUN(even_count_averages_middle_pair);
     RUN(failure_majority_wins);
     RUN(failure_tie_is_conservative);

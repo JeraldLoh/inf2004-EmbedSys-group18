@@ -655,6 +655,17 @@ static void sync_route_map(controller_service_t *service)
     }
 }
 
+/* Buddy 3 and the controller stamp on their own clocks. Only a timed
+ * instruction needs its remaining lifetime translated. */
+static void stamp_route(route_instruction_t *route, system_time_ms_t now_ms)
+{
+    if (!route->until_junction)
+    {
+        route->expires_ms = now_ms + (route->expires_ms - route->decoded_ms);
+    }
+    route->decoded_ms = now_ms;
+}
+
 /* Take Buddy 3's latest junction and route and hand them to the controller. */
 static void junction_poll(controller_service_t *service, system_time_ms_t now_ms)
 {
@@ -682,9 +693,7 @@ static void junction_poll(controller_service_t *service, system_time_ms_t now_ms
 
     if (have_route)
     {
-        /* Buddy 3 stamps routes on its own clock: keep the lifetime only. */
-        route.expires_ms = now_ms + (route.expires_ms - route.decoded_ms);
-        route.decoded_ms = now_ms;
+        stamp_route(&route, now_ms);
         if (vehicle_controller_receive_route(controller, &route, now_ms))
         {
             service->status.routes_accepted++;
@@ -760,7 +769,7 @@ static void pause_finish(controller_service_t *service, system_time_ms_t now_ms)
     vehicle_controller_t *controller = &service->controller;
     controller_action_t action;
     bool live = (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
-        (now_ms <= controller->route.expires_ms);
+        !route_instruction_expired(&controller->route, now_ms);
 
     if (live)
     {
@@ -892,9 +901,7 @@ static void junction_tick(controller_service_t *service, system_time_ms_t now_ms
             sync_route_map(service);
             if (have_route && revision == service->route_map_revision)
             {
-                pause_route.expires_ms = now_ms +
-                    (pause_route.expires_ms - pause_route.decoded_ms);
-                pause_route.decoded_ms = now_ms;
+                stamp_route(&pause_route, now_ms);
                 if (vehicle_controller_receive_route(&service->controller,
                         &pause_route, now_ms))
                 {

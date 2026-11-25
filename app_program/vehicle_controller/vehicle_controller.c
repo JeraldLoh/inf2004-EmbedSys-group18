@@ -57,6 +57,16 @@ static bool route_is_available(
     return available;
 }
 
+static void cancel_route_for_run_end(vehicle_controller_t *controller)
+{
+    if (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED ||
+        (controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING &&
+         controller->route.until_junction))
+    {
+        controller->route_lifecycle = ROUTE_LIFECYCLE_CANCELLED;
+    }
+}
+
 void vehicle_controller_init(vehicle_controller_t *controller)
 {
     if (controller != NULL)
@@ -87,10 +97,7 @@ controller_action_t vehicle_controller_set_mode(
     controller->active_goal = false;
     controller->active_goal_id = 0U;
 
-    if (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED)
-    {
-        controller->route_lifecycle = ROUTE_LIFECYCLE_CANCELLED;
-    }
+    cancel_route_for_run_end(controller);
 
     controller->mode = requested_mode;
     controller->mission = (requested_mode == SYSTEM_MODE_AUTO)
@@ -119,10 +126,7 @@ controller_action_t vehicle_controller_latch_stop(
     controller->mode = SYSTEM_MODE_STOPPED;
     controller->mission = MISSION_SAFE_STOP;
 
-    if (controller->route_lifecycle == ROUTE_LIFECYCLE_RESERVED)
-    {
-        controller->route_lifecycle = ROUTE_LIFECYCLE_CANCELLED;
-    }
+    cancel_route_for_run_end(controller);
 
     return make_action(controller, CONTROLLER_ACTION_STOP_MOTION);
 }
@@ -180,14 +184,14 @@ bool vehicle_controller_receive_route(
     if ((controller == NULL) || (instruction == NULL) ||
         !instruction->valid ||
         (instruction->command == ROUTE_COMMAND_NONE) ||
-        (now_ms > instruction->expires_ms))
+        route_instruction_expired(instruction, now_ms))
     {
         return false;
     }
 
-    /* A barcode with no junction after it must not block the next one. */
+    /* A timed instruction from a junction probe can be superseded on expiry. */
     if ((controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
-        (now_ms > controller->route.expires_ms))
+        route_instruction_expired(&controller->route, now_ms))
     {
         controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
     }
@@ -233,11 +237,11 @@ controller_action_t vehicle_controller_on_junction(
     }
 
     if ((controller->route_lifecycle != ROUTE_LIFECYCLE_PENDING) ||
-        (now_ms > controller->route.expires_ms) ||
+        route_instruction_expired(&controller->route, now_ms) ||
         !route_is_available(controller->route.command, junction))
     {
         if ((controller->route_lifecycle == ROUTE_LIFECYCLE_PENDING) &&
-            (now_ms > controller->route.expires_ms))
+            route_instruction_expired(&controller->route, now_ms))
         {
             controller->route_lifecycle = ROUTE_LIFECYCLE_EXPIRED;
         }

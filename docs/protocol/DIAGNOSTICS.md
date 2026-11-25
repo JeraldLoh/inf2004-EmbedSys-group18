@@ -48,11 +48,10 @@ Retained packets are ignored without changing counts. Diagnostic packets cannot
 refresh the heartbeat or replace sensor telemetry. Last report age is displayed;
 disconnection or age >=3 seconds marks it stale. Old values remain historical.
 
-The RAM panel uses `build-memory.json` and the actual linked ELF evidence in
-`STATIC_RAM_COMPARISON.md`. It is historical `.data + .bss`, not live RAM or a
-stack/heap high-water measurement. The measured increase includes new features
-and buffers, so it is not a claim of binary-only savings. Regenerate evidence
-after firmware changes before using it as a current comparison.
+The Recorded static RAM panel reads `build-memory.json`. It reports
+`.data + .bss` from matched linked ELFs, with the build date, profile and source
+base. Live stack and heap usage are unmeasured. Regenerate the evidence after
+firmware changes before treating it as current. [Matched build comparison](STATIC_RAM_COMPARISON.md)
 
 Verified with portable C rejection/bridge tests, browser unit tests, a real
 isolated local MQTT/WebSocket diagnostics roundtrip, headless desktop/mobile

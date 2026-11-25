@@ -2,6 +2,22 @@ import unittest
 from model import RobotState, validate_command
 
 class StateTests(unittest.TestCase):
+    def test_compact_control_and_legacy_vectors(self):
+        s = RobotState(broker_connected=True)
+        s.receive("heartbeat", bytes.fromhex("b1010501ffffffff78563412"), 4)
+        self.assertEqual(s.status(18.9), "online")
+        result = bytes.fromhex("b1010614fffffffffeffffff" + "00" * 14)
+        s.receive("command_result", result, 5)
+        self.assertEqual(s.result["command_id"], 0xffffffff)
+        self.assertEqual(s.result["map_revision"], 0xfffffffe)
+        broken = bytearray(result)
+        broken[12] = 9
+        with self.assertRaises(ValueError):
+            s.receive("command_result", broken, 6)
+        self.assertEqual(s.result["map_revision"], 0xfffffffe)
+        s.receive("command_result", b'{"schema":1,"demo":false,"status":"queued"}', 7)
+        self.assertEqual(s.result["status"], "queued")
+        self.assertEqual(s.status(19), "offline")
     def test_no_heartbeat_and_exact_timeout(self):
         s = RobotState()
         self.assertEqual(s.status(0), "broker disconnected")

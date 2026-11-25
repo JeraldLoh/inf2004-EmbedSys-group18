@@ -46,7 +46,14 @@ typedef struct
     system_time_ms_t decoded_ms;
     system_time_ms_t expires_ms;
     bool valid;
+    bool until_junction;    /* mapped barcode in the current run */
 } route_instruction_t;
+
+static inline bool route_instruction_expired(const route_instruction_t *route,
+    system_time_ms_t now_ms)
+{
+    return !route->until_junction && now_ms > route->expires_ms;
+}
 
 typedef struct
 {

@@ -159,34 +159,36 @@ static bool ping(drv_sonar_t *sonar, range_reading_t *out)
     return true;
 }
 
-range_reading_t drv_sonar_read(drv_sonar_t *sonar, size_t samples,
-    UINT spacing_ms)
+size_t drv_sonar_samples(drv_sonar_t *sonar, range_reading_t *out,
+    size_t count, UINT spacing_ms)
 {
-    range_reading_t buf[RANGE_MAX_SAMPLES];
-    range_reading_t fault = {RANGE_FAULT, 0.0f};
     size_t taken = 0U;
     size_t attempts = 0U;
 
-    if ((sonar == NULL) || !sonar->attached)
+    if (sonar == NULL || !sonar->attached || out == NULL ||
+        count == 0U || count > RANGE_MAX_SAMPLES)
     {
-        return fault;
+        return 0U;
     }
-    if ((samples == 0U) || (samples > RANGE_MAX_SAMPLES))
-    {
-        samples = 1U;
-    }
-    while ((taken < samples) &&
-        (attempts < samples * SONAR_MAX_ATTEMPTS_PER_SAMPLE))
+    while (taken < count && attempts < count * SONAR_MAX_ATTEMPTS_PER_SAMPLE)
     {
         if (attempts > 0U)
         {
             (void)tk_dly_tsk(spacing_ms); /* let stray echoes die out */
         }
         attempts++;
-        if (ping(sonar, &buf[taken]))
+        if (ping(sonar, &out[taken]))
         {
             taken++;
         }
     }
-    return (taken == 0U) ? fault : range_combine(buf, taken);
+    return taken;
+}
+
+range_reading_t drv_sonar_read(drv_sonar_t *sonar, size_t samples,
+    UINT spacing_ms)
+{
+    range_reading_t buf[RANGE_MAX_SAMPLES];
+    if (samples == 0U || samples > RANGE_MAX_SAMPLES) samples = 1U;
+    return range_combine(buf, drv_sonar_samples(sonar, buf, samples, spacing_ms));
 }

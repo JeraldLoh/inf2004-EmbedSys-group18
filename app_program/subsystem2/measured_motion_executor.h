@@ -46,6 +46,7 @@ typedef struct
     /* Set only after real direction/load/STOP/speed/pivot qualification.
      * Test fixtures setting true are NOT physical qualification evidence. */
     bool qualified;
+    bool line_encoder_retry;
 } measured_motion_executor_config_t;
 
 typedef struct
@@ -68,6 +69,10 @@ typedef enum {
     MOTION_DETAIL_PID_INPUT, MOTION_DETAIL_NO_PROGRESS,
     MOTION_DETAIL_WATCHDOG_ARM, MOTION_DETAIL_OUTPUT_IO
 } motion_detail_reason_t;
+typedef enum {
+    MOTION_ENCODER_HOLD, MOTION_ENCODER_RECOVERED,
+    MOTION_ENCODER_STOPPED, MOTION_ENCODER_INTERRUPTED
+} motion_encoder_event_t;
 const char *measured_motion_detail_name(motion_detail_reason_t reason);
 typedef struct
 {
@@ -87,6 +92,9 @@ typedef struct
     int32_t detail_target_um_s[2];
     uint32_t detail_speed_um_s[2];
     bool detail_speed_valid;
+    uint32_t encoder_event_seq, encoder_elapsed_us;
+    motion_encoder_event_t encoder_event;
+    wheel_reject_t encoder_reject;
 } measured_motion_executor_status_t;
 
 /* Single task/state owner, or externally serialized. All normal PWM commits
@@ -124,6 +132,8 @@ typedef struct
     bool primed, transition, goal_started, settling;
     bool calibration_authorized;
     uint32_t calibration_until_us;
+    uint32_t encoder_hold_started_us;
+    bool encoder_hold, encoder_hold_watchdog;
 } measured_motion_executor_t;
 
 /* No tuned default. Caller supplies measured calibration/control configuration. */

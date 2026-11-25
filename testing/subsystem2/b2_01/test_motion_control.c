@@ -128,6 +128,81 @@ static void measurement(void) {
     s.acquired_us+=20000U; s.coalesced_edges_seen=false; assert(wheel_measurement_update(&m,&s)==MOTION_OK);
     s.acquired_us+=200001U; assert(wheel_measurement_update(&m,&s)==MOTION_UNAVAILABLE);
 }
+static void encoder_grace(void) {
+    for (unsigned outcome = 0U; outcome < 5U; ++outcome) {
+        fixture_t f;
+        motion_continuous_request_t line = {0};
+        motion_motor_state_t before, after;
+        init(&f);
+        f.executor.config.line_encoder_retry = true;
+        if (outcome == 4U) {
+            start_goal(&f, MOTION_GOAL_PIVOT_RIGHT);
+            tick(&f, 450U, 0U);
+            assert(!f.executor.encoder_hold && !f.executor.status.authorized);
+            assert(f.executor.status.encoder_reject.reason == WHEEL_REJECT_EDGE_RATE);
+            fake_assert_safe(&f.fake);
+            continue;
+        }
+        assert(measured_motion_executor_authorize(&f.executor, 1U) == MOTION_OK);
+        line.authority_generation = 1U;
+        line.command_id = 1U;
+        line.source = MOTION_SOURCE_LINE;
+        line.speed_mm_s = 80;
+        assert(measured_motion_executor_continuous(&f.executor, &line, 0U, 1000000U) == MOTION_OK);
+        for (unsigned i = 0U; i < 8U; ++i) { tick(&f, 0U, 0U); }
+        assert(drv_motor_read(&f.motor, &before) == MOTION_OK && before.left_effort > 0);
+        uint32_t deadline = f.watchdog_deadline;
+        uint64_t travel = f.executor.measurement.sample.travel_um[0];
+        tick(&f, 450U, 0U);
+        assert(f.executor.status.authorized && !f.executor.status.wheels.speed_valid);
+        assert(f.executor.status.encoder_event == MOTION_ENCODER_HOLD);
+        assert(f.executor.status.encoder_reject.reason == WHEEL_REJECT_EDGE_RATE);
+        assert(f.executor.status.encoder_reject.wheel_mask == 1U);
+        assert(f.executor.status.encoder_reject.interval_us == 20000U);
+        assert(f.executor.measurement.sample.travel_um[0] == travel);
+        assert(f.watchdog_deadline == deadline);
+        assert(drv_motor_read(&f.motor, &after) == MOTION_OK &&
+            after.left_effort == before.left_effort && after.right_effort == before.right_effort);
+        if (outcome == 1U) {
+            tick(&f, 0U, 450U);
+            assert(!f.executor.status.authorized);
+            assert(f.executor.status.encoder_event == MOTION_ENCODER_STOPPED);
+            assert(f.executor.status.encoder_reject.wheel_mask == 2U);
+        } else if (outcome == 2U) {
+            f.pending = true;
+            tick(&f, 2U, 2U);
+            assert(!f.executor.status.authorized);
+            assert(f.executor.status.encoder_event == MOTION_ENCODER_INTERRUPTED);
+        } else if (outcome == 3U) {
+            line.command_id++;
+            line.speed_cap_mm_s = 1U;
+            assert(measured_motion_executor_continuous(&f.executor, &line,
+                f.fake.now_us, 1000000U) == MOTION_OK);
+            tick(&f, 2U, 2U);
+            assert(!f.executor.status.authorized);
+            assert(f.executor.status.encoder_event == MOTION_ENCODER_INTERRUPTED);
+        } else {
+            tick(&f, 2U, 2U);
+            assert(f.watchdog_deadline > deadline && f.executor.encoder_hold);
+            deadline = f.watchdog_deadline;
+            for (unsigned i = 0U; i < 3U; ++i) {
+                tick(&f, 2U, 2U);
+                assert(f.watchdog_deadline == deadline && f.executor.encoder_hold);
+                assert(drv_motor_read(&f.motor, &after) == MOTION_OK &&
+                    after.left_effort == before.left_effort && after.right_effort == before.right_effort);
+            }
+            tick(&f, 2U, 2U);
+            assert(f.executor.status.authorized && f.executor.status.wheels.speed_valid);
+            assert(f.executor.status.encoder_event == MOTION_ENCODER_RECOVERED);
+            assert(f.executor.status.encoder_elapsed_us == 100000U);
+            assert(f.executor.status.detail_sequence == 0U);
+            tick(&f, 0U, 450U);
+            assert(!f.executor.status.authorized);
+            assert(f.executor.status.encoder_event == MOTION_ENCODER_STOPPED);
+        }
+        fake_assert_safe(&f.fake);
+    }
+}
 static void pid(void) {
     wheel_pid_t p,q;
     wheel_pid_config_t c={1000U,1000U,0U,0U,100U,50U,0U,0U};
@@ -306,6 +381,7 @@ int main(int argc,char **argv) {
     const char *name=argc>1?argv[1]:"";
     if(strcmp(name,"transition_watchdog")==0) { transition_watchdog(); }
     else if(strcmp(name,"measurement")==0) { measurement(); }
+    else if(strcmp(name,"encoder_grace")==0) { encoder_grace(); }
     else if(strcmp(name,"pid")==0) { pid(); }
     else if(strcmp(name,"admission")==0) { admission(); }
     else if(strcmp(name,"forward")==0 || strcmp(name,"both_wheels")==0) { finite(MOTION_GOAL_FORWARD,strcmp(name,"both_wheels")==0); }

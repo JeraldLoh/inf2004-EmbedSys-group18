@@ -31,8 +31,8 @@ static uint32_t b5_wifi_at;
 #define B5_LINE_ALIGN_MIN_DEG 20
 #define B5_LINE_ALIGN_CM 13.0f          /* line sensors to wheel axle, measured */
 #define B5_RETURN_EXTRA_CM 8.0f
-#define B5_SWEEP_STEP_DEG 10
-#define B5_SWEEP_MAX_DEG 30
+#define B5_SWEEP_STEP_DEG 15
+#define B5_SWEEP_MAX_DEG 90
 #define B5_REACQUIRE_TIMEOUT_MS 2000U   /* was 3000 x 3 attempts */
 #define B5_REACQUIRE_ATTEMPTS 2
 #define B5_SEARCH_CURVATURE_U1_M 5000000 /* 5 /m: ~20 cm radius */
@@ -132,14 +132,17 @@ static uint32_t cb_now_ms(void *ctx)
  * target at B5_SERVO_MDEG_PER_MS; avoidance's servo_ms_per_deg waits for
  * the sweep before reading. */
 #define B5_SERVO_MDEG_PER_MS 300 /* 300 deg/s */
+#define B5_SCAN_MDEG_PER_MS 30 /* 30 deg/s during echo capture */
+#define B5_SWEEP_POINTS 13 /* one echo group per 10 degrees across 30..150 */
 static int32_t servo_target_mdeg;
 static int32_t servo_pos_mdeg;
+static int32_t servo_rate = B5_SERVO_MDEG_PER_MS;
 static uint32_t servo_step_ms;
 
 static void servo_service(uint32_t now)
 {
     uint32_t dt = now - servo_step_ms;
-    int32_t limit = (int32_t)(dt > 100U ? 100U : dt) * B5_SERVO_MDEG_PER_MS;
+    int32_t limit = (int32_t)(dt > 100U ? 100U : dt) * servo_rate;
     int32_t diff = servo_target_mdeg - servo_pos_mdeg;
     servo_step_ms = now;
     if (diff == 0) { return; }
@@ -152,14 +155,62 @@ static void servo_service(uint32_t now)
 static void cb_servo_set(void *ctx, int angle_deg)
 {
     (void)ctx;
+    servo_rate = B5_SERVO_MDEG_PER_MS;
     servo_target_mdeg = (int32_t)angle_deg * 1000;
     servo_service(cb_now_ms(NULL));
 }
 
-static range_reading_t cb_measure(void *ctx)
+static void cb_servo_sweep(void *ctx, int end_deg)
 {
     (void)ctx;
-    range_reading_t reading=drv_sonar_read(&sonar, B5_SAMPLES, B5_SAMPLE_SPACING_MS);
+    servo_service(cb_now_ms(NULL));
+    servo_rate = B5_SCAN_MDEG_PER_MS;
+    servo_target_mdeg = end_deg * 1000;
+}
+
+static int cb_servo_position(void *ctx)
+{
+    (void)ctx;
+    return (int)((servo_pos_mdeg + 500) / 1000);
+}
+
+static int cm_to_mm(float cm);
+
+static int echo_mm(range_reading_t r)
+{
+    return r.status == RANGE_OK ? cm_to_mm(r.cm) : -1;
+}
+
+static range_reading_t measure(bool scanning)
+{
+    range_reading_t raw[B5_SAMPLES] = {{RANGE_NO_ECHO, 0.0f},
+        {RANGE_NO_ECHO, 0.0f}, {RANGE_NO_ECHO, 0.0f}};
+    bool sweeping = scanning && servo_rate == B5_SCAN_MDEG_PER_MS &&
+        servo_pos_mdeg != servo_target_mdeg;
+    size_t count = 0;
+    if (sweeping)
+    {
+        for (size_t i = 0; i < B5_SAMPLES; ++i)
+        {
+            if (i != 0) (void)tk_dly_tsk(B5_SAMPLE_SPACING_MS);
+            servo_service(cb_now_ms(NULL));
+            count += drv_sonar_samples(&sonar, &raw[count], 1U, B5_SAMPLE_SPACING_MS);
+        }
+    }
+    else
+    {
+        count = drv_sonar_samples(&sonar, raw, B5_SAMPLES, B5_SAMPLE_SPACING_MS);
+    }
+    range_reading_t reading = scanning ? range_combine_scan(raw, count) : range_combine(raw, count);
+    if (scanning)
+    {
+        tm_printf((UB*)"[B5 ECHO] servo=%d moving=%u heading=%d n=%u raw=%s/%d,%s/%d,%s/%d picked=%s/%d mm\n",
+            av.servo_deg, (unsigned)sweeping, av.heading_deg, (unsigned)count,
+            range_status_name(raw[0].status), echo_mm(raw[0]),
+            range_status_name(raw[1].status), echo_mm(raw[1]),
+            range_status_name(raw[2].status), echo_mm(raw[2]),
+            range_status_name(reading.status), echo_mm(reading));
+    }
 #if APP_CAR_MQTT
     {
         uint32_t at=cb_now_ms(NULL), mm=0;
@@ -176,6 +227,18 @@ static range_reading_t cb_measure(void *ctx)
     }
 #endif
     return reading;
+}
+
+static range_reading_t cb_measure(void *ctx)
+{
+    (void)ctx;
+    return measure(false);
+}
+
+static range_reading_t cb_measure_scan(void *ctx)
+{
+    (void)ctx;
+    return measure(true);
 }
 
 /* ---- Moves: Buddy 2 goals (CAR_RUN, b5_motion.c) or refused (B5_RUN) ---- */
@@ -553,7 +616,8 @@ static void wifi_progress(void)
     b5_wifi.reverses = (av.reverses <= 3) ? (uint32_t)av.reverses : 3U;
     b5_wifi.reacquire_attempts = (av.reacquire_attempts <= 3) ?
         (uint32_t)av.reacquire_attempts : 3U;
-    b5_wifi.coarse_index = (av.coarse_idx <= 7) ? (uint32_t)av.coarse_idx : 7U;
+    /* The wire format has five progress units. */
+    b5_wifi.coarse_index = (uint32_t)av.coarse_idx * 5U / (uint32_t)av.cfg.coarse_points;
     b5_wifi.turn_magnitude_deg = ((av.turn_mag >= 0) && (av.turn_mag <= 70)) ?
         (uint32_t)av.turn_mag : 0U;
     b5_wifi.refining = av.refining ? 1U : 0U;
@@ -616,6 +680,16 @@ static void cb_on_event(void *ctx, const av_event_t *e)
         case AV_EVT_SIDE_BLOCKED:
             tm_printf((UB*)"[B5] %s blocked: %d cm at servo %d is inside the bypass strip\n",
                 side_name(e->side), (int)e->point.reading.cm, e->point.angle_deg);
+            break;
+        case AV_EVT_REACQUIRE_SWEEP:
+            tm_printf((UB*)"[B5 REJOIN SWEEP] step=%d target_deg=%d\n",
+                e->attempt, e->heading_deg);
+            break;
+        case AV_EVT_EXIT_CHECK:
+            tm_printf((UB*)"[B5 EXIT] side=%s heading=%d servo=%d result=%s status=%s mm=%d required_mm=%d\n",
+                side_name(e->side), e->heading_deg, e->point.angle_deg, e->reason,
+                range_status_name(e->point.reading.status), echo_mm(e->point.reading),
+                cm_to_mm(e->exit_required_cm));
             break;
         case AV_EVT_PASS_CLEAR:
             tm_printf((UB*)"[B5] passed the back corner: side %d mm, depth %d mm (-10 = unknown)\n",
@@ -899,7 +973,7 @@ EXPORT ER subsystem5_init(void)
         cb_motion_turn, cb_motion_forward, cb_motion_reverse,
         cb_motion_search_line, cb_motion_resume, cb_motion_done,
         cb_motion_failed, cb_line_detected, cb_on_event,
-        cb_motion_travelled,
+        cb_motion_travelled, NULL, NULL, NULL,
     };
     T_CTSK ctsk = {0};
     b5_motion_config_t motion_cfg;
@@ -922,6 +996,12 @@ EXPORT ER subsystem5_init(void)
     cfg.fine_half_range_deg = B5_FINE_HALF_RANGE_DEG;
     if (has_motion())
     {
+        platform.measure_scan = cb_measure_scan;
+        platform.servo_sweep = cb_servo_sweep;
+        platform.servo_position = cb_servo_position;
+        cfg.coarse_points = B5_SWEEP_POINTS;
+        cfg.fine_probe_uncertain = true;
+        cfg.confirm_bypass_exit = true;
         /* Rejoin: centre the turning point on the line and turn along it
          * before handing over (avoidance.c line_align_cm): the line sensors
          * to wheel axle distance, measured 13 cm on the car (2026-11-10).
@@ -930,7 +1010,7 @@ EXPORT ER subsystem5_init(void)
         cfg.line_align_min_deg = B5_LINE_ALIGN_MIN_DEG;
         /* Finding the line again (car trial 2026-11-10: the arc search ran
          * off course): drive a little past the expected crossing, then pivot
-         * in place +/-10..30 deg before a smaller, shorter arc search. */
+         * at 15, 30 and 45 deg each way, then out to 90 deg if needed. */
         cfg.return_extra_cm = B5_RETURN_EXTRA_CM;
         cfg.sweep_step_deg = B5_SWEEP_STEP_DEG;
         cfg.sweep_max_deg = B5_SWEEP_MAX_DEG;

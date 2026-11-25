@@ -150,11 +150,24 @@ static void path_advance(measured_motion_executor_t *e)
 #endif
 }
 
+static void encoder_event(measured_motion_executor_t *e, motion_encoder_event_t event,
+    uint32_t elapsed_us)
+{
+    ++e->status.encoder_event_seq;
+    e->status.encoder_event = event;
+    e->status.encoder_elapsed_us = elapsed_us;
+    e->encoder_hold = event == MOTION_ENCODER_HOLD;
+}
+
 static motion_status_t stop_output(measured_motion_executor_t *e, bool inhibit)
 {
     unsigned i;
     motion_status_t result = inhibit ? drv_motor_stop(e->motor) :
         drv_motor_apply(e->motor, e->status.generation, 0, 0);
+    if (e->encoder_hold) {
+        encoder_event(e, MOTION_ENCODER_INTERRUPTED,
+            e->last_step_us - e->encoder_hold_started_us);
+    }
     if (!inhibit && result == MOTION_INHIBITED && e->status.authorized)
     {
         motion_motor_state_t state;
@@ -323,6 +336,13 @@ static uint32_t continuous_wheel_limit_mm_s(const measured_motion_executor_t *e,
     return e->config.max_speed_mm_s;
 }
 
+static uint32_t continuous_target_cap(const measured_motion_executor_t *e)
+{
+    uint32_t cap = continuous_wheel_limit_mm_s(e, &e->continuous);
+    uint32_t request_cap = e->continuous.speed_cap_mm_s;
+    return (request_cap != 0U && request_cap < cap ? request_cap : cap) * 1000U;
+}
+
 motion_status_t measured_motion_executor_continuous(measured_motion_executor_t *e,
     const motion_continuous_request_t *r, uint32_t now, uint32_t ttl)
 {
@@ -424,6 +444,31 @@ static bool driver_ready(measured_motion_executor_t *e)
     return true;
 }
 
+#define LINE_ENCODER_HOLD_US 130000U
+#define LINE_ENCODER_STABLE_US 500000U
+
+static bool can_hold_line(measured_motion_executor_t *e, uint32_t now)
+{
+    motion_motor_state_t output;
+    uint32_t cap = continuous_target_cap(e);
+    return e->config.line_encoder_retry && e->status.authorized && !e->transition &&
+        e->status.state == MOTION_EXEC_CONTINUOUS && e->continuous.source == MOTION_SOURCE_LINE &&
+        e->continuous.speed_mm_s > 0 && !reached(now, e->continuous_until_us) &&
+        magnitude(e->status.target_um_s[0]) <= cap && magnitude(e->status.target_um_s[1]) <= cap &&
+        !e->io.stop_pending(e->io.context) && drv_motor_read(e->motor, &output) == MOTION_OK &&
+        output.ready && output.armed && !output.inhibited && !output.io_fault &&
+        output.stop_sequence == e->permit_ticket &&
+        output.left_effort >= 0 && output.right_effort >= 0 &&
+        (output.left_effort > 0 || output.right_effort > 0);
+}
+
+static bool retryable_encoder_rejection(wheel_reject_reason_t reason)
+{
+    return reason == WHEEL_REJECT_EDGE_RATE || reason == WHEEL_REJECT_BATCH_COUNT ||
+        reason == WHEEL_REJECT_BATCH_RATE || reason == WHEEL_REJECT_BATCH_FRACTION ||
+        reason == WHEEL_REJECT_SPEED_RANGE;
+}
+
 motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
 {
     motion_encoder_snapshot_t raw;
@@ -436,7 +481,8 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
 #endif
     int8_t sign[2] = {1, 1};
     int16_t effort[2] = {0, 0};
-    bool complete = true;
+    bool complete = true, had_speed;
+    motion_status_t measurement_result;
     unsigned i;
     if (e == NULL || e->motor == NULL) { return MOTION_INVALID; }
     if (drv_encoder_capture(e->encoder, e->motor, &raw) != MOTION_OK)
@@ -446,11 +492,57 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     now = raw.acquired_us;
     dt = e->primed ? now-e->last_step_us : e->config.period_us;
     if (e->primed && dt < e->config.period_us) { return MOTION_OK; }
-    if (wheel_measurement_update(&e->measurement, &raw) != MOTION_OK)
-    { e->status.wheels=e->measurement.sample;
-      finish_detail(e, MOTION_RESULT_ABORTED, MOTION_DETAIL_MEASUREMENT_QUALITY, 3U); return MOTION_UNAVAILABLE; }
+    had_speed = e->measurement.sample.speed_valid;
+    measurement_result = wheel_measurement_update(&e->measurement, &raw);
     e->last_step_us = now; e->primed = true;
     e->status.wheels = e->measurement.sample;
+    if (measurement_result != MOTION_OK) {
+        uint32_t elapsed = e->encoder_hold ? now - e->encoder_hold_started_us : 0U;
+        bool recently_recovered = e->status.encoder_event == MOTION_ENCODER_RECOVERED &&
+            (now - e->encoder_hold_started_us - e->status.encoder_elapsed_us) < LINE_ENCODER_STABLE_US;
+        e->status.encoder_reject = e->measurement.reject;
+        if (!e->encoder_hold && !recently_recovered && had_speed && dt < e->config.watchdog_us &&
+            retryable_encoder_rejection(e->measurement.reject.reason) && can_hold_line(e, now)) {
+            e->encoder_hold_started_us = now;
+            e->encoder_hold_watchdog = false;
+            path_clear(e); /* A later retrace cannot cross the unmeasured interval. */
+            encoder_event(e, MOTION_ENCODER_HOLD, 0U);
+            return MOTION_OK;
+        }
+        if (e->status.authorized) { encoder_event(e, MOTION_ENCODER_STOPPED, elapsed); }
+        finish_detail(e, MOTION_RESULT_ABORTED, MOTION_DETAIL_MEASUREMENT_QUALITY,
+            e->measurement.reject.wheel_mask);
+        return MOTION_UNAVAILABLE;
+    }
+    if (e->encoder_hold) {
+        uint32_t elapsed = now - e->encoder_hold_started_us;
+        if (!can_hold_line(e, now)) {
+            finish_detail(e, MOTION_RESULT_CANCELLED, MOTION_DETAIL_DRIVER_INHIBIT, 0U);
+            return MOTION_INHIBITED;
+        }
+        if (elapsed >= LINE_ENCODER_HOLD_US) {
+            encoder_event(e, MOTION_ENCODER_STOPPED, elapsed);
+            finish_detail(e, MOTION_RESULT_ABORTED, MOTION_DETAIL_MEASUREMENT_QUALITY,
+                e->status.encoder_reject.wheel_mask);
+            return MOTION_UNAVAILABLE;
+        }
+        if (e->status.wheels.speed_valid) {
+            encoder_event(e, MOTION_ENCODER_RECOVERED, elapsed);
+        } else {
+            /* The first clean interval may extend the existing powered
+             * watchdog once, and only up to the fixed recovery deadline. */
+            if (!e->encoder_hold_watchdog) {
+                uint32_t remaining = LINE_ENCODER_HOLD_US - elapsed;
+                uint32_t cutoff = remaining < e->config.watchdog_us ? remaining : e->config.watchdog_us;
+                if (!e->io.arm_watchdog(e->io.context, cutoff)) {
+                    finish_detail(e, MOTION_RESULT_FAULT, MOTION_DETAIL_WATCHDOG_ARM, 0U);
+                    return MOTION_IO_ERROR;
+                }
+                e->encoder_hold_watchdog = true;
+            }
+            return MOTION_OK;
+        }
+    }
     if (e->status.authorized && e->calibration_authorized && reached(now,e->calibration_until_us))
     { finish_detail(e,MOTION_RESULT_TIMEOUT,MOTION_DETAIL_AUTHORITY_DEADLINE,0U); return MOTION_OK; }
     if (e->status.state != MOTION_EXEC_CONTINUOUS && e->status.state != MOTION_EXEC_GOAL)
@@ -504,14 +596,12 @@ motion_status_t measured_motion_executor_step(measured_motion_executor_t *e)
     }
     if (e->status.state == MOTION_EXEC_CONTINUOUS)
     {
-        uint32_t cap = continuous_wheel_limit_mm_s(e, &e->continuous)*1000U;
+        uint32_t cap = continuous_target_cap(e);
         int64_t speed = (int64_t)e->continuous.speed_mm_s*1000;
         int64_t correction = speed*e->continuous.curvature_u1_m*e->config.track_width_mm/2000;
         uint32_t largest;
         desired[0] = (uint32_t)(speed+correction);
         desired[1] = (uint32_t)(speed-correction);
-        if (e->continuous.speed_cap_mm_s != 0U && e->continuous.speed_cap_mm_s < cap/1000U)
-        { cap = e->continuous.speed_cap_mm_s*1000U; }
 #if defined(APP_CAR_B2_TRIAL) && APP_CAR_B2_TRIAL
         line_target_cap = cap;
         /* Transfer the progressive inside reduction to the outside wheel:

@@ -44,4 +44,8 @@ ER drv_sonar_deinit(drv_sonar_t *sonar);
 range_reading_t drv_sonar_read(drv_sonar_t *sonar, size_t samples,
     UINT spacing_ms);
 
+/* Collect raw pings for stationary scanning. The caller supplies count slots. */
+size_t drv_sonar_samples(drv_sonar_t *sonar, range_reading_t *out,
+    size_t count, UINT spacing_ms);
+
 #endif
